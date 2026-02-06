@@ -1,7 +1,7 @@
 // RAG / Gemini File Search manager - ported from obsidian-gemini-helper (Drive-based version)
 
 import { GoogleGenAI } from "@google/genai";
-import { readFile, listFiles } from "./google-drive.server";
+import { readFile, listFiles, findFolderByNameRecursive } from "./google-drive.server";
 import type { RagSetting, RagFileInfo } from "~/types/settings";
 
 export interface SyncResult {
@@ -110,27 +110,65 @@ export async function smartSync(
   };
 
   // Get files from target folders or root
-  const foldersToScan = ragSetting.targetFolders.length > 0 ? ragSetting.targetFolders : [rootFolderId];
+  const targetFolders = Array.isArray(ragSetting.targetFolders) ? ragSetting.targetFolders : [];
   const allDriveFiles: Array<{ id: string; name: string }> = [];
+  const excludePatterns = Array.isArray(ragSetting.excludePatterns) ? ragSetting.excludePatterns : [];
 
-  for (const folderId of foldersToScan) {
-    const files = await listFiles(accessToken, folderId);
-    for (const f of files) {
-      // Apply exclude patterns
-      let excluded = false;
-      for (const pattern of ragSetting.excludePatterns) {
+  // Resolve target folder entries: accept both folder names and folder IDs
+  const resolvedFolderIds: string[] = [];
+  if (targetFolders.length === 0) {
+    resolvedFolderIds.push(rootFolderId);
+  } else {
+    for (const entry of targetFolders) {
+      if (!entry) continue;
+      // Google Drive IDs are typically 20+ alphanumeric chars with hyphens/underscores
+      const looksLikeDriveId = /^[a-zA-Z0-9_-]{20,}$/.test(entry);
+      if (looksLikeDriveId) {
+        resolvedFolderIds.push(entry);
+      } else {
+        // Treat as folder name — search by name
         try {
-          if (new RegExp(pattern).test(f.name)) {
-            excluded = true;
-            break;
+          const folder = await findFolderByNameRecursive(accessToken, entry, rootFolderId);
+          if (folder) {
+            resolvedFolderIds.push(folder.id);
+          } else {
+            result.errors.push({ path: entry, error: `Folder not found: "${entry}"` });
           }
-        } catch {
-          // Invalid regex
+        } catch (error) {
+          result.errors.push({
+            path: entry,
+            error: `Failed to resolve folder "${entry}": ${error instanceof Error ? error.message : "Unknown error"}`,
+          });
         }
       }
-      if (!excluded) {
-        allDriveFiles.push({ id: f.id, name: f.name });
+    }
+  }
+
+  for (const folderId of resolvedFolderIds) {
+    try {
+      const files = await listFiles(accessToken, folderId);
+      for (const f of files) {
+        // Apply exclude patterns
+        let excluded = false;
+        for (const pattern of excludePatterns) {
+          try {
+            if (new RegExp(pattern).test(f.name)) {
+              excluded = true;
+              break;
+            }
+          } catch {
+            // Invalid regex
+          }
+        }
+        if (!excluded) {
+          allDriveFiles.push({ id: f.id, name: f.name });
+        }
       }
+    } catch (error) {
+      result.errors.push({
+        path: folderId,
+        error: `Failed to list folder "${folderId}": ${error instanceof Error ? error.message : "Unknown error"}`,
+      });
     }
   }
 

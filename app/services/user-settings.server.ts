@@ -5,8 +5,9 @@ import { DEFAULT_USER_SETTINGS, type UserSettings } from "~/types/settings";
 
 const SETTINGS_FILE_NAME = "settings.json";
 
-// In-memory cache per request (avoid repeated reads within the same request)
-const settingsCache = new Map<string, { settings: UserSettings; fileId: string | null }>();
+// In-memory cache keyed by rootFolderId (stable across token refreshes)
+const settingsCache = new Map<string, { settings: UserSettings; fileId: string | null; cachedAt: number }>();
+const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Find or create the settings.json file ID in the root folder
@@ -27,16 +28,16 @@ export async function getSettings(
   accessToken: string,
   rootFolderId: string
 ): Promise<UserSettings> {
-  const cacheKey = `${accessToken}:${rootFolderId}`;
+  const cacheKey = rootFolderId;
   const cached = settingsCache.get(cacheKey);
-  if (cached) {
+  if (cached && Date.now() - cached.cachedAt < SETTINGS_CACHE_TTL) {
     return cached.settings;
   }
 
   try {
     const fileId = await getSettingsFileId(accessToken, rootFolderId);
     if (!fileId) {
-      settingsCache.set(cacheKey, { settings: DEFAULT_USER_SETTINGS, fileId: null });
+      settingsCache.set(cacheKey, { settings: DEFAULT_USER_SETTINGS, fileId: null, cachedAt: Date.now() });
       return DEFAULT_USER_SETTINGS;
     }
 
@@ -62,7 +63,7 @@ export async function getSettings(
       },
     };
 
-    settingsCache.set(cacheKey, { settings, fileId });
+    settingsCache.set(cacheKey, { settings, fileId, cachedAt: Date.now() });
     return settings;
   } catch {
     return DEFAULT_USER_SETTINGS;
@@ -87,8 +88,8 @@ export async function saveSettings(
   }
 
   // Update cache
-  const cacheKey = `${accessToken}:${rootFolderId}`;
-  settingsCache.set(cacheKey, { settings, fileId });
+  const cacheKey = rootFolderId;
+  settingsCache.set(cacheKey, { settings, fileId, cachedAt: Date.now() });
 }
 
 /**

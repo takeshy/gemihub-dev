@@ -5,7 +5,7 @@ import { chatWithToolsStream, generateImageStream } from "~/services/gemini-chat
 import { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES, executeDriveTool } from "~/services/drive-tools.server";
 import { getMcpToolDefinitions, executeMcpTool } from "~/services/mcp-tools.server";
 import { isImageGenerationModel } from "~/types/settings";
-import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
+import type { ToolDefinition, McpServerConfig, ModelType, EditHistorySettings } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
 import { getSettings } from "~/services/user-settings.server";
 
@@ -95,7 +95,7 @@ export async function action({ request }: Route.ActionArgs) {
   const mcpToolNames = new Set(mcpToolDefs.map((t) => t.name));
 
   // Load edit history settings for drive tools
-  let editHistorySettings;
+  let editHistorySettings: EditHistorySettings | undefined;
   try {
     const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
     editHistorySettings = settings.editHistory;

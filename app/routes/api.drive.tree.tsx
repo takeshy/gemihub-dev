@@ -12,17 +12,24 @@ interface TreeNode {
   children?: TreeNode[];
 }
 
+const HIDDEN_ROOT_ITEMS = new Set(["settings.json", "history"]);
+
 async function fetchTreeRecursive(
   accessToken: string,
-  folderId: string
+  folderId: string,
+  isRoot: boolean = false
 ): Promise<TreeNode[]> {
   const [folders, files] = await Promise.all([
     listFolders(accessToken, folderId),
     listFiles(accessToken, folderId),
   ]);
 
+  const visibleFolders = isRoot
+    ? folders.filter((f) => !HIDDEN_ROOT_ITEMS.has(f.name))
+    : folders;
+
   const folderNodes = await Promise.all(
-    folders.map(async (f) => {
+    visibleFolders.map(async (f) => {
       const children = await fetchTreeRecursive(accessToken, f.id);
       return {
         id: f.id,
@@ -34,7 +41,11 @@ async function fetchTreeRecursive(
     })
   );
 
-  const fileNodes = files
+  const visibleFiles = isRoot
+    ? files.filter((f) => !HIDDEN_ROOT_ITEMS.has(f.name))
+    : files;
+
+  const fileNodes = visibleFiles
     .filter((f) => f.mimeType !== "application/vnd.google-apps.folder")
     .map((f) => ({
       id: f.id,
@@ -58,6 +69,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     return Response.json({ error: "Missing folderId" }, { status: 400 });
   }
 
-  const items = await fetchTreeRecursive(validTokens.accessToken, folderId);
+  const isRoot = url.searchParams.get("isRoot") === "true";
+  const items = await fetchTreeRecursive(validTokens.accessToken, folderId, isRoot);
   return Response.json({ items });
 }

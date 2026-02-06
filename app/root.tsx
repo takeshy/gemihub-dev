@@ -25,12 +25,17 @@ export const links: Route.LinksFunction = () => [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var f=localStorage.getItem("gemini-hub-fontSize");var l=localStorage.getItem("gemini-hub-language");if(f)document.documentElement.style.fontSize=f+"px";if(l)document.documentElement.lang=l;}catch(e){}})();`,
+          }}
+        />
       </head>
       <body>
         {children}

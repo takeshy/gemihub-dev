@@ -24,8 +24,13 @@ export async function action({ request }: Route.ActionArgs) {
     );
   }
 
-  const body = await request.json();
-  const { ragSettingName } = body as { ragSettingName?: string };
+  let ragSettingName: string | undefined;
+  try {
+    const body = await request.json();
+    ragSettingName = (body as { ragSettingName?: string }).ragSettingName;
+  } catch {
+    // body may be empty when called without JSON payload
+  }
 
   const settings = await getSettings(
     validTokens.accessToken,
@@ -106,12 +111,16 @@ export async function action({ request }: Route.ActionArgs) {
           settings
         );
 
+        const errorDetails = result.errors.length > 0
+          ? "\n" + result.errors.map((e) => `  - ${e.path}: ${e.error}`).join("\n")
+          : "";
         sendEvent("complete", {
-          message: `Sync complete. Uploaded: ${result.uploaded.length}, Skipped: ${result.skipped.length}, Deleted: ${result.deleted.length}, Errors: ${result.errors.length}`,
+          message: `Sync complete. Uploaded: ${result.uploaded.length}, Skipped: ${result.skipped.length}, Deleted: ${result.deleted.length}, Errors: ${result.errors.length}${errorDetails}`,
           uploaded: result.uploaded.length,
           skipped: result.skipped.length,
           deleted: result.deleted.length,
           errors: result.errors.length,
+          errorDetails: result.errors,
         });
       } catch (error) {
         sendEvent("error", {

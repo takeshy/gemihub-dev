@@ -72,7 +72,7 @@ export async function ensureRootFolder(accessToken: string, folderName?: string)
 }
 
 // Ensure a subfolder exists
-async function ensureSubFolder(
+export async function ensureSubFolder(
   accessToken: string,
   parentId: string,
   folderName: string
@@ -244,6 +244,18 @@ export async function renameFile(
   return res.json();
 }
 
+// Move a file to a different parent folder
+export async function moveFile(
+  accessToken: string,
+  fileId: string,
+  newParentId: string,
+  oldParentId: string
+): Promise<DriveFile> {
+  const url = `${DRIVE_API}/files/${fileId}?addParents=${encodeURIComponent(newParentId)}&removeParents=${encodeURIComponent(oldParentId)}&fields=id,name,mimeType,parents`;
+  const res = await driveRequest(url, accessToken, { method: "PATCH" });
+  return res.json();
+}
+
 // Delete a file
 export async function deleteFile(
   accessToken: string,
@@ -274,6 +286,38 @@ export async function searchFiles(
   );
   const data: DriveListResponse = await res.json();
   return data.files;
+}
+
+// Find a folder by name (searches recursively under a parent)
+export async function findFolderByName(
+  accessToken: string,
+  name: string,
+  parentId?: string
+): Promise<DriveFile | null> {
+  let query = `name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  if (parentId) {
+    query += ` and '${parentId}' in parents`;
+  }
+  const res = await driveRequest(
+    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType)&pageSize=1`,
+    accessToken
+  );
+  const data: DriveListResponse = await res.json();
+  return data.files.length > 0 ? data.files[0] : null;
+}
+
+// Find a folder by name, searching recursively through all subfolders
+export async function findFolderByNameRecursive(
+  accessToken: string,
+  name: string,
+  rootId: string
+): Promise<DriveFile | null> {
+  // First check direct children
+  const direct = await findFolderByName(accessToken, name, rootId);
+  if (direct) return direct;
+
+  // Then search without parent constraint (within drive.file scope)
+  return findFolderByName(accessToken, name);
 }
 
 // List folders under a parent

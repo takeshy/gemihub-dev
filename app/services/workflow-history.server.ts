@@ -1,5 +1,6 @@
 import {
   getHistoryFolderId,
+  ensureSubFolder,
   listFiles,
   readFile,
   createFile,
@@ -8,40 +9,14 @@ import {
 } from "./google-drive.server";
 import type { ExecutionRecord, ExecutionRecordItem } from "~/engine/types";
 
-const EXEC_HISTORY_FOLDER = "execution-history";
-const DRIVE_API = "https://www.googleapis.com/drive/v3";
+const EXEC_HISTORY_FOLDER = "execution";
 
 async function ensureExecHistoryFolderId(
   accessToken: string,
   rootFolderId: string
 ): Promise<string> {
   const historyFolderId = await getHistoryFolderId(accessToken, rootFolderId);
-
-  const query = `name='${EXEC_HISTORY_FOLDER}' and '${historyFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-  const res = await fetch(
-    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  const data = await res.json();
-
-  if (data.files && data.files.length > 0) {
-    return data.files[0].id;
-  }
-
-  const createRes = await fetch(`${DRIVE_API}/files`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      name: EXEC_HISTORY_FOLDER,
-      mimeType: "application/vnd.google-apps.folder",
-      parents: [historyFolderId],
-    }),
-  });
-  const folder = await createRes.json();
-  return folder.id;
+  return ensureSubFolder(accessToken, historyFolderId, EXEC_HISTORY_FOLDER);
 }
 
 export async function saveExecutionRecord(

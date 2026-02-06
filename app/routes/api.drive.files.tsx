@@ -10,6 +10,7 @@ import {
   updateFile,
   deleteFile,
   renameFile,
+  moveFile,
   searchFiles,
   getFileMetadata,
   getWorkflowsFolderId,
@@ -79,7 +80,7 @@ export async function action({ request }: Route.ActionArgs) {
   const { tokens: validTokens } = await getValidTokens(request, tokens);
 
   const body = await request.json();
-  const { action: actionType, fileId, name, content, password, folderId, mimeType } = body;
+  const { action: actionType, fileId, name, content, password, folderId, mimeType, newParentId, oldParentId } = body;
 
   const workflowsFolderId = await getWorkflowsFolderId(
     validTokens.accessToken,
@@ -136,6 +137,13 @@ export async function action({ request }: Route.ActionArgs) {
         md5Checksum: file.md5Checksum,
         editHistoryEntry,
       });
+    }
+    case "move": {
+      if (!fileId || !newParentId || !oldParentId) {
+        return Response.json({ error: "Missing fileId, newParentId, or oldParentId" }, { status: 400 });
+      }
+      const movedFile = await moveFile(validTokens.accessToken, fileId, newParentId, oldParentId);
+      return Response.json({ file: movedFile });
     }
     case "delete": {
       if (!fileId) return Response.json({ error: "Missing fileId" }, { status: 400 });

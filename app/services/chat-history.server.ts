@@ -6,48 +6,22 @@ import {
   createFile,
   updateFile,
   deleteFile,
+  getHistoryFolderId,
+  ensureSubFolder,
 } from "./google-drive.server";
 import type { ChatHistory, ChatHistoryItem } from "~/types/chat";
 
 const CHATS_FOLDER = "chats";
 
 /**
- * Ensure the chats subfolder exists
+ * Ensure the chats subfolder exists under history/
  */
 async function ensureChatsFolderId(
   accessToken: string,
   rootFolderId: string
 ): Promise<string> {
-  // Import ensureSubFolder functionality inline
-  const DRIVE_API = "https://www.googleapis.com/drive/v3";
-
-  const query = `name='${CHATS_FOLDER}' and '${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-  const res = await fetch(
-    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`,
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }
-  );
-  const data = await res.json();
-
-  if (data.files && data.files.length > 0) {
-    return data.files[0].id;
-  }
-
-  const createRes = await fetch(`${DRIVE_API}/files`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      name: CHATS_FOLDER,
-      mimeType: "application/vnd.google-apps.folder",
-      parents: [rootFolderId],
-    }),
-  });
-  const folder = await createRes.json();
-  return folder.id;
+  const historyFolderId = await getHistoryFolderId(accessToken, rootFolderId);
+  return ensureSubFolder(accessToken, historyFolderId, CHATS_FOLDER);
 }
 
 /**
@@ -60,23 +34,30 @@ export async function listChatHistories(
   const chatsFolderId = await ensureChatsFolderId(accessToken, rootFolderId);
   const files = await listFiles(accessToken, chatsFolderId);
 
-  const items: ChatHistoryItem[] = [];
-  for (const file of files) {
-    if (!file.name.endsWith(".json")) continue;
+  const jsonFiles = files.filter((f) => f.name.endsWith(".json"));
 
-    try {
-      const content = await readFile(accessToken, file.id);
-      const chat = JSON.parse(content) as ChatHistory;
-      items.push({
-        id: chat.id,
-        fileId: file.id,
-        title: chat.title,
-        createdAt: chat.createdAt,
-        updatedAt: chat.updatedAt,
-        isEncrypted: chat.isEncrypted,
-      });
-    } catch {
-      // Skip invalid files
+  // Read all chat files in parallel (batched to avoid rate limits)
+  const BATCH_SIZE = 10;
+  const items: ChatHistoryItem[] = [];
+
+  for (let i = 0; i < jsonFiles.length; i += BATCH_SIZE) {
+    const batch = jsonFiles.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(async (file) => {
+        const content = await readFile(accessToken, file.id);
+        const chat = JSON.parse(content) as ChatHistory;
+        return {
+          id: chat.id,
+          fileId: file.id,
+          title: chat.title,
+          createdAt: chat.createdAt,
+          updatedAt: chat.updatedAt,
+          isEncrypted: chat.isEncrypted,
+        } as ChatHistoryItem;
+      })
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled") items.push(r.value);
     }
   }
 

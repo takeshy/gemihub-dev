@@ -232,7 +232,7 @@ export function ExecutionHistoryModal({
                                       {step.error}
                                     </span>
                                   )}
-                                  {step.output && !step.error && (
+                                  {!!step.output && !step.error && (
                                     <span className="truncate text-gray-400">
                                       {typeof step.output === "string"
                                         ? step.output.slice(0, 80)

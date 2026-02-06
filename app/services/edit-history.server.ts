@@ -7,10 +7,12 @@ import {
   updateFile,
   deleteFile,
   listFiles,
+  getHistoryFolderId,
+  ensureSubFolder,
 } from "./google-drive.server";
 import type { EditHistorySettings } from "~/types/settings";
 
-const EDIT_HISTORY_FOLDER = "edit-history";
+const EDIT_HISTORY_FOLDER = "files";
 
 export interface EditHistoryEntry {
   id: string;
@@ -37,39 +39,14 @@ export interface EditHistoryStats {
 }
 
 /**
- * Ensure edit-history subfolder exists
+ * Ensure edit-history subfolder exists under history/
  */
 async function ensureEditHistoryFolderId(
   accessToken: string,
   rootFolderId: string
 ): Promise<string> {
-  const DRIVE_API = "https://www.googleapis.com/drive/v3";
-
-  const query = `name='${EDIT_HISTORY_FOLDER}' and '${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-  const res = await fetch(
-    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  const data = await res.json();
-
-  if (data.files && data.files.length > 0) {
-    return data.files[0].id;
-  }
-
-  const createRes = await fetch(`${DRIVE_API}/files`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      name: EDIT_HISTORY_FOLDER,
-      mimeType: "application/vnd.google-apps.folder",
-      parents: [rootFolderId],
-    }),
-  });
-  const folder = await createRes.json();
-  return folder.id;
+  const historyFolderId = await getHistoryFolderId(accessToken, rootFolderId);
+  return ensureSubFolder(accessToken, historyFolderId, EDIT_HISTORY_FOLDER);
 }
 
 function generateId(): string {
@@ -307,8 +284,6 @@ export async function saveEdit(
     model?: string;
   }
 ): Promise<EditHistoryEntry | null> {
-  if (!settings.enabled) return null;
-
   const historyFolderId = await ensureEditHistoryFolderId(accessToken, rootFolderId);
 
   const { content: snapshot, fileId: snapshotFileId } = await loadSnapshot(
@@ -494,4 +469,27 @@ export async function getStats(
   }
 
   return { totalFiles, totalEntries };
+}
+
+/**
+ * Clear all history for a specific file (history + snapshot)
+ */
+export async function clearHistory(
+  accessToken: string,
+  rootFolderId: string,
+  filePath: string
+): Promise<void> {
+  const historyFolderId = await ensureEditHistoryFolderId(accessToken, rootFolderId);
+
+  const historyFileName = pathToHistoryFileName(filePath);
+  const historyFileId = await findFileByName(accessToken, historyFolderId, historyFileName);
+  if (historyFileId) {
+    await deleteFile(accessToken, historyFileId);
+  }
+
+  const snapshotFileName = pathToSnapshotFileName(filePath);
+  const snapshotFileId = await findFileByName(accessToken, historyFolderId, snapshotFileName);
+  if (snapshotFileId) {
+    await deleteFile(accessToken, snapshotFileId);
+  }
 }
