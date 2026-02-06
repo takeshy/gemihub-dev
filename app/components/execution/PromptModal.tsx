@@ -1,5 +1,9 @@
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, FileText, Folder, FolderOpen, ChevronRight, ChevronDown } from "lucide-react";
+import {
+  getCachedFileTree,
+  type CachedTreeNode,
+} from "~/services/indexeddb-cache";
 
 interface PromptModalProps {
   data: Record<string, unknown>;
@@ -14,8 +18,16 @@ export function PromptModal({ data, onSubmit, onCancel }: PromptModalProps) {
   const [selectedOptions, setSelectedOptions] = useState<string[]>(
     (data.defaults as { selected?: string[] })?.selected || []
   );
+  const [treeNodes, setTreeNodes] = useState<CachedTreeNode[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [selectedFile, setSelectedFile] = useState<{
+    id: string;
+    name: string;
+    mimeType: string;
+  } | null>(null);
 
   const promptType = data.type as string;
+  const extensions = (data.extensions as string[]) || [];
   const title = (data.title as string) || "Input Required";
   const message = (data.message as string) || "";
   const options = (data.options as string[]) || [];
@@ -25,7 +37,47 @@ export function PromptModal({ data, onSubmit, onCancel }: PromptModalProps) {
   const inputTitle = data.inputTitle as string | undefined;
   const multiline = data.multiline === true;
 
+  useEffect(() => {
+    if (promptType !== "drive-file") return;
+    (async () => {
+      const cached = await getCachedFileTree();
+      if (!cached) return;
+      setTreeNodes(cached.items);
+      // Expand all folders by default
+      const folderIds = new Set<string>();
+      const collectFolderIds = (nodes: CachedTreeNode[]) => {
+        for (const n of nodes) {
+          if (n.isFolder) {
+            folderIds.add(n.id);
+            if (n.children) collectFolderIds(n.children);
+          }
+        }
+      };
+      collectFolderIds(cached.items);
+      setExpandedFolders(folderIds);
+    })();
+  }, [promptType]);
+
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
+  const matchesExtensions = (name: string) => {
+    if (extensions.length === 0) return true;
+    return extensions.some((ext) => name.endsWith(`.${ext}`));
+  };
+
   const handleSubmit = () => {
+    if (promptType === "drive-file") {
+      if (!selectedFile) return;
+      onSubmit(JSON.stringify(selectedFile));
+      return;
+    }
     if (promptType === "dialog") {
       onSubmit(
         JSON.stringify({
@@ -87,6 +139,31 @@ export function PromptModal({ data, onSubmit, onCancel }: PromptModalProps) {
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {message}
             </p>
+          )}
+
+          {/* Drive File Picker */}
+          {promptType === "drive-file" && (
+            <div className="max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md">
+              {treeNodes.length === 0 ? (
+                <p className="p-3 text-sm text-gray-400">Loading files...</p>
+              ) : (
+                <DriveFilePickerTree
+                  nodes={treeNodes}
+                  depth={0}
+                  expandedFolders={expandedFolders}
+                  toggleFolder={toggleFolder}
+                  selectedFileId={selectedFile?.id ?? null}
+                  matchesExtensions={matchesExtensions}
+                  onSelectFile={(node) =>
+                    setSelectedFile({
+                      id: node.id,
+                      name: node.name,
+                      mimeType: node.mimeType,
+                    })
+                  }
+                />
+              )}
+            </div>
           )}
 
           {/* Options */}
@@ -156,12 +233,94 @@ export function PromptModal({ data, onSubmit, onCancel }: PromptModalProps) {
           )}
           <button
             onClick={handleSubmit}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={promptType === "drive-file" && !selectedFile}
           >
             {button1}
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function DriveFilePickerTree({
+  nodes,
+  depth,
+  expandedFolders,
+  toggleFolder,
+  selectedFileId,
+  matchesExtensions,
+  onSelectFile,
+}: {
+  nodes: CachedTreeNode[];
+  depth: number;
+  expandedFolders: Set<string>;
+  toggleFolder: (id: string) => void;
+  selectedFileId: string | null;
+  matchesExtensions: (name: string) => boolean;
+  onSelectFile: (node: CachedTreeNode) => void;
+}) {
+  return (
+    <>
+      {nodes.map((node) => {
+        if (node.isFolder) {
+          const expanded = expandedFolders.has(node.id);
+          return (
+            <div key={node.id}>
+              <button
+                onClick={() => toggleFolder(node.id)}
+                className="flex w-full items-center gap-1.5 px-2 py-1 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                style={{ paddingLeft: `${depth * 16 + 8}px` }}
+              >
+                {expanded ? (
+                  <ChevronDown size={12} className="text-gray-400 flex-shrink-0" />
+                ) : (
+                  <ChevronRight size={12} className="text-gray-400 flex-shrink-0" />
+                )}
+                {expanded ? (
+                  <FolderOpen size={14} className="text-yellow-500 flex-shrink-0" />
+                ) : (
+                  <Folder size={14} className="text-yellow-500 flex-shrink-0" />
+                )}
+                <span className="truncate text-gray-700 dark:text-gray-300">
+                  {node.name}
+                </span>
+              </button>
+              {expanded && node.children && (
+                <DriveFilePickerTree
+                  nodes={node.children}
+                  depth={depth + 1}
+                  expandedFolders={expandedFolders}
+                  toggleFolder={toggleFolder}
+                  selectedFileId={selectedFileId}
+                  matchesExtensions={matchesExtensions}
+                  onSelectFile={onSelectFile}
+                />
+              )}
+            </div>
+          );
+        }
+
+        if (!matchesExtensions(node.name)) return null;
+
+        const isSelected = node.id === selectedFileId;
+        return (
+          <button
+            key={node.id}
+            onClick={() => onSelectFile(node)}
+            className={`flex w-full items-center gap-1.5 px-2 py-1 text-left text-sm ${
+              isSelected
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+            }`}
+            style={{ paddingLeft: `${depth * 16 + 28}px` }}
+          >
+            <FileText size={14} className="text-gray-400 flex-shrink-0" />
+            <span className="truncate">{node.name}</span>
+          </button>
+        );
+      })}
+    </>
   );
 }

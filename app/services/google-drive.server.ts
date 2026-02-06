@@ -306,6 +306,24 @@ export async function findFolderByName(
   return data.files.length > 0 ? data.files[0] : null;
 }
 
+// Find a file by exact name (not folder). Optionally restrict to a parent folder.
+export async function findFileByExactName(
+  accessToken: string,
+  name: string,
+  parentId?: string
+): Promise<DriveFile | null> {
+  let query = `name='${name.replace(/'/g, "\\'")}' and mimeType!='application/vnd.google-apps.folder' and trashed=false`;
+  if (parentId) {
+    query += ` and '${parentId}' in parents`;
+  }
+  const res = await driveRequest(
+    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,modifiedTime,md5Checksum)&pageSize=1`,
+    accessToken
+  );
+  const data: DriveListResponse = await res.json();
+  return data.files.length > 0 ? data.files[0] : null;
+}
+
 // Find a folder by name, searching recursively through all subfolders
 export async function findFolderByNameRecursive(
   accessToken: string,

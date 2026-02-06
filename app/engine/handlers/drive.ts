@@ -27,7 +27,12 @@ export async function handleDriveFileNode(
     fileName,
     false
   );
-  const existingFile = existingFiles.find(f => f.name === fileName);
+  let existingFile = existingFiles.find(f => f.name === fileName);
+
+  // Fallback: exact name match (handles special chars and files in subfolders)
+  if (!existingFile) {
+    existingFile = await driveService.findFileByExactName(accessToken, fileName) ?? undefined;
+  }
 
   let finalContent = content;
   if (mode === "create") {
@@ -88,7 +93,15 @@ export async function handleDriveReadNode(
   // Search by file name
   const folderId = serviceContext.driveWorkflowsFolderId;
   const files = await driveService.searchFiles(accessToken, folderId, path, false);
-  const file = files.find(f => f.name === path || f.name === `${path}.md`);
+  let file = files.find(f => f.name === path || f.name === `${path}.md`);
+
+  // Fallback: exact name match (handles special chars and files in subfolders)
+  if (!file) {
+    file = await driveService.findFileByExactName(accessToken, path) ?? undefined;
+    if (!file && !path.endsWith(".md")) {
+      file = await driveService.findFileByExactName(accessToken, `${path}.md`) ?? undefined;
+    }
+  }
 
   if (!file) throw new Error(`File not found on Drive: ${path}`);
 

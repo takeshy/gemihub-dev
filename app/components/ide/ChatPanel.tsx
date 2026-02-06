@@ -503,7 +503,7 @@ export function ChatPanel({
         models={availableModels}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
-        ragSettings={settings.ragEnabled ? settings.ragSettings : undefined}
+        ragSettings={Object.keys(settings.ragSettings ?? {}).length > 0 ? settings.ragSettings : undefined}
         selectedRagSetting={selectedRagSetting}
         onRagSettingChange={handleRagSettingChange}
         onStop={handleStop}

@@ -890,9 +890,10 @@ function RagTab({ settings }: { settings: UserSettings }) {
     setSyncMsg(null);
     try {
       // Save settings to Drive first so the sync API can find them
+      const hasSettings = Object.keys(ragSettings).length > 0;
       const fd = new FormData();
       fd.set("_action", "saveRag");
-      fd.set("ragEnabled", settings.ragEnabled ? "on" : "off");
+      fd.set("ragEnabled", hasSettings ? "on" : "off");
       fd.set("ragTopK", String(ragTopK));
       fd.set("ragSettings", JSON.stringify(ragSettings));
       fd.set("selectedRagSetting", selectedRagSetting || "");
@@ -949,17 +950,18 @@ function RagTab({ settings }: { settings: UserSettings }) {
     } finally {
       setSyncing(false);
     }
-  }, [selectedRagSetting, ragSettings, ragTopK, settings.ragEnabled]);
+  }, [selectedRagSetting, ragSettings, ragTopK]);
 
   const handleSubmit = useCallback(() => {
+    const hasSettings = Object.keys(ragSettings).length > 0;
     const fd = new FormData();
     fd.set("_action", "saveRag");
-    fd.set("ragEnabled", settings.ragEnabled ? "on" : "off");
+    fd.set("ragEnabled", hasSettings ? "on" : "off");
     fd.set("ragTopK", String(ragTopK));
     fd.set("ragSettings", JSON.stringify(ragSettings));
     fd.set("selectedRagSetting", selectedRagSetting || "");
     fetcher.submit(fd, { method: "post" });
-  }, [fetcher, settings.ragEnabled, ragTopK, ragSettings, selectedRagSetting]);
+  }, [fetcher, ragTopK, ragSettings, selectedRagSetting]);
 
   return (
     <SectionCard>
