@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Save, Code, Eye } from "lucide-react";
 import type { UserSettings } from "~/types/settings";
 import { MermaidPreview } from "~/components/flow/MermaidPreview";
-import { ExecutionPanel } from "~/components/execution/ExecutionPanel";
+
 
 interface WorkflowEditorProps {
   fileId: string;
@@ -176,8 +176,6 @@ export function WorkflowEditor({
           </div>
         )}
 
-        {/* Execution Panel */}
-        <ExecutionPanel workflowId={fileId} />
       </div>
     </div>
   );

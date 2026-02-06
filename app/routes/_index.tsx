@@ -170,6 +170,10 @@ function IDELayout({
       setActiveFileId(fileId);
       setActiveFileName(fileName);
       setActiveFileMimeType(mimeType);
+      // Auto-switch to workflow tab for YAML files
+      if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
+        setRightPanel("workflow");
+      }
       // Update URL without triggering React Router navigation/loader
       const url = new URL(window.location.href);
       url.searchParams.set("file", fileId);
