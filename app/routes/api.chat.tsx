@@ -1,0 +1,191 @@
+import type { Route } from "./+types/api.chat";
+import { requireAuth } from "~/services/session.server";
+import { getValidTokens } from "~/services/google-auth.server";
+import { chatWithToolsStream, generateImageStream } from "~/services/gemini-chat.server";
+import { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES, executeDriveTool } from "~/services/drive-tools.server";
+import { getMcpToolDefinitions, executeMcpTool } from "~/services/mcp-tools.server";
+import { isImageGenerationModel } from "~/types/settings";
+import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
+import type { Message, StreamChunk } from "~/types/chat";
+import { getSettings } from "~/services/user-settings.server";
+
+// ---------------------------------------------------------------------------
+// POST handler -- Chat SSE streaming API
+// ---------------------------------------------------------------------------
+
+export async function action({ request }: Route.ActionArgs) {
+  if (request.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  const tokens = await requireAuth(request);
+  const { tokens: validTokens } = await getValidTokens(request, tokens);
+
+  const apiKey = validTokens.geminiApiKey;
+  if (!apiKey) {
+    return new Response(
+      JSON.stringify({ error: "Gemini API key not configured" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const body = await request.json();
+  const {
+    messages,
+    model,
+    systemPrompt,
+    ragStoreIds,
+    enableDriveTools,
+    driveToolMode: rawDriveToolMode,
+    enableMcp,
+    mcpServers,
+    webSearchEnabled,
+    settings: requestSettings,
+  } = body as {
+    messages: Message[];
+    model: ModelType;
+    systemPrompt?: string;
+    ragStoreIds?: string[];
+    enableDriveTools?: boolean;
+    driveToolMode?: "all" | "noSearch" | "none";
+    enableMcp?: boolean;
+    mcpServers?: McpServerConfig[];
+    webSearchEnabled?: boolean;
+    apiPlan?: string;
+    settings?: {
+      maxFunctionCalls?: number;
+      functionCallWarningThreshold?: number;
+      ragTopK?: number;
+    };
+  };
+
+  // Resolve driveToolMode: new field takes precedence, fall back to legacy enableDriveTools
+  const driveToolMode = rawDriveToolMode ?? (enableDriveTools === false ? "none" : "all");
+
+  if (!messages || messages.length === 0) {
+    return new Response(
+      JSON.stringify({ error: "No messages provided" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // Build tools array
+  const tools: ToolDefinition[] = [];
+
+  if (driveToolMode !== "none") {
+    if (driveToolMode === "noSearch") {
+      tools.push(...DRIVE_TOOL_DEFINITIONS.filter(t => !DRIVE_SEARCH_TOOL_NAMES.has(t.name)));
+    } else {
+      tools.push(...DRIVE_TOOL_DEFINITIONS);
+    }
+  }
+
+  let mcpToolDefs: ToolDefinition[] = [];
+  if (enableMcp && mcpServers && mcpServers.length > 0) {
+    try {
+      mcpToolDefs = await getMcpToolDefinitions(mcpServers);
+      tools.push(...mcpToolDefs);
+    } catch (error) {
+      console.error("Failed to get MCP tool definitions:", error);
+    }
+  }
+
+  // Build executeToolCall dispatcher
+  const driveToolNames = new Set(DRIVE_TOOL_DEFINITIONS.map((t) => t.name));
+  const mcpToolNames = new Set(mcpToolDefs.map((t) => t.name));
+
+  // Load edit history settings for drive tools
+  let editHistorySettings;
+  try {
+    const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+    editHistorySettings = settings.editHistory;
+  } catch { /* ignore */ }
+
+  const executeToolCall = async (
+    name: string,
+    args: Record<string, unknown>
+  ): Promise<unknown> => {
+    if (driveToolNames.has(name)) {
+      return executeDriveTool(
+        name,
+        args,
+        validTokens.accessToken,
+        validTokens.rootFolderId,
+        editHistorySettings
+      );
+    }
+
+    if (mcpToolNames.has(name) && mcpServers) {
+      return executeMcpTool(mcpServers, name, args);
+    }
+
+    return { error: `Unknown tool: ${name}` };
+  };
+
+  // Create SSE stream
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder();
+
+      const sendChunk = (chunk: StreamChunk) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+      };
+
+      try {
+        let generator: AsyncGenerator<StreamChunk>;
+
+        if (isImageGenerationModel(model)) {
+          // Image generation mode
+          generator = generateImageStream(
+            apiKey,
+            messages,
+            model,
+            systemPrompt
+          );
+        } else {
+          // Chat with tools mode
+          generator = chatWithToolsStream(
+            apiKey,
+            model,
+            messages,
+            tools,
+            systemPrompt,
+            tools.length > 0 ? executeToolCall : undefined,
+            ragStoreIds,
+            {
+              ragTopK: requestSettings?.ragTopK,
+              functionCallLimits: {
+                maxFunctionCalls: requestSettings?.maxFunctionCalls,
+                functionCallWarningThreshold:
+                  requestSettings?.functionCallWarningThreshold,
+              },
+              webSearchEnabled,
+            }
+          );
+        }
+
+        for await (const chunk of generator) {
+          sendChunk(chunk);
+        }
+      } catch (error) {
+        sendChunk({
+          type: "error",
+          error:
+            error instanceof Error ? error.message : "Stream processing error",
+        });
+        sendChunk({ type: "done" });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
+}

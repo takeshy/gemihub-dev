@@ -1,0 +1,97 @@
+import type { WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks } from "../types";
+import { replaceVariables } from "./utils";
+import * as driveService from "~/services/google-drive.server";
+import { saveEdit } from "~/services/edit-history.server";
+
+// Handle drive-file node (was: note) - write content to a Drive file
+export async function handleDriveFileNode(
+  node: WorkflowNode,
+  context: ExecutionContext,
+  serviceContext: ServiceContext,
+  _promptCallbacks?: PromptCallbacks
+): Promise<void> {
+  const path = replaceVariables(node.properties["path"] || "", context);
+  const content = replaceVariables(node.properties["content"] || "", context);
+  const mode = node.properties["mode"] || "overwrite";
+
+  if (!path) throw new Error("drive-file node missing 'path' property");
+
+  const fileName = path.endsWith(".md") ? path : `${path}.md`;
+  const accessToken = serviceContext.driveAccessToken;
+  const folderId = serviceContext.driveWorkflowsFolderId;
+
+  // Search for existing file
+  const existingFiles = await driveService.searchFiles(
+    accessToken,
+    folderId,
+    fileName,
+    false
+  );
+  const existingFile = existingFiles.find(f => f.name === fileName);
+
+  let finalContent = content;
+  if (mode === "create") {
+    if (existingFile) return; // File exists, skip
+    await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
+  } else if (mode === "append") {
+    if (existingFile) {
+      const currentContent = await driveService.readFile(accessToken, existingFile.id);
+      finalContent = currentContent + "\n" + content;
+      await driveService.updateFile(accessToken, existingFile.id, finalContent, "text/markdown");
+    } else {
+      await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
+    }
+  } else {
+    // overwrite
+    if (existingFile) {
+      await driveService.updateFile(accessToken, existingFile.id, content, "text/markdown");
+    } else {
+      await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
+    }
+  }
+
+  // Save edit history
+  if (serviceContext.editHistorySettings) {
+    try {
+      await saveEdit(
+        accessToken,
+        serviceContext.driveRootFolderId,
+        serviceContext.editHistorySettings,
+        { path: fileName, modifiedContent: finalContent, source: "workflow" }
+      );
+    } catch { /* don't fail workflow on history error */ }
+  }
+}
+
+// Handle drive-read node (was: note-read) - read file from Drive
+export async function handleDriveReadNode(
+  node: WorkflowNode,
+  context: ExecutionContext,
+  serviceContext: ServiceContext
+): Promise<void> {
+  const pathRaw = node.properties["path"] || "";
+  const saveTo = node.properties["saveTo"];
+
+  if (!saveTo) throw new Error("drive-read node missing 'saveTo' property");
+  if (!pathRaw.trim()) throw new Error("drive-read node missing 'path' property");
+
+  const path = replaceVariables(pathRaw, context);
+  const accessToken = serviceContext.driveAccessToken;
+
+  // Check if path is a Drive file ID (no extension, long alphanumeric)
+  if (!path.includes(".") && path.length > 20) {
+    const content = await driveService.readFile(accessToken, path);
+    context.variables.set(saveTo, content);
+    return;
+  }
+
+  // Search by file name
+  const folderId = serviceContext.driveWorkflowsFolderId;
+  const files = await driveService.searchFiles(accessToken, folderId, path, false);
+  const file = files.find(f => f.name === path || f.name === `${path}.md`);
+
+  if (!file) throw new Error(`File not found on Drive: ${path}`);
+
+  const content = await driveService.readFile(accessToken, file.id);
+  context.variables.set(saveTo, content);
+}

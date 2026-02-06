@@ -1,0 +1,797 @@
+import { useState, useEffect, useCallback } from "react";
+import {
+  GitBranch,
+  Plus,
+  FileCode,
+  Loader2,
+  RefreshCw,
+  Pencil,
+  Trash2,
+  Play,
+  Square,
+  Clock,
+  CheckCircle,
+  XCircle,
+  ArrowRight,
+  ChevronDown,
+  ChevronRight,
+  Info,
+  Sparkles,
+} from "lucide-react";
+import type { Workflow, WorkflowNode } from "~/engine/types";
+import { parseWorkflowYaml, serializeWorkflow } from "~/engine/parser";
+import {
+  getNodeSummary,
+  getNodeTypeLabel,
+  getNodeTypeColor,
+} from "~/utils/workflow-node-summary";
+import { buildOutgoingMap } from "~/utils/workflow-connections";
+import { NodeEditorModal } from "./NodeEditorModal";
+import { ExecutionHistoryModal } from "./ExecutionHistoryModal";
+import yaml from "js-yaml";
+import { useFileWithCache } from "~/hooks/useFileWithCache";
+
+interface WorkflowFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  modifiedTime?: string;
+}
+
+interface WorkflowPropsPanelProps {
+  activeFileId: string | null;
+  activeFileName: string | null;
+  onNewWorkflow: () => void;
+  onSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
+  onWorkflowChanged?: () => void;
+  onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
+}
+
+function isWorkflowFile(name: string | null): boolean {
+  if (!name) return false;
+  return name.endsWith(".yaml") || name.endsWith(".yml");
+}
+
+export function WorkflowPropsPanel({
+  activeFileId,
+  activeFileName,
+  onNewWorkflow,
+  onSelectFile,
+  onWorkflowChanged,
+  onModifyWithAI,
+}: WorkflowPropsPanelProps) {
+  if (isWorkflowFile(activeFileName) && activeFileId) {
+    return (
+      <WorkflowNodeListView
+        fileId={activeFileId}
+        fileName={activeFileName!}
+        onWorkflowChanged={onWorkflowChanged}
+        onModifyWithAI={onModifyWithAI}
+      />
+    );
+  }
+
+  return (
+    <WorkflowListView
+      onNewWorkflow={onNewWorkflow}
+      onSelectFile={onSelectFile}
+    />
+  );
+}
+
+// ─── Workflow Node List View (YAML active) ───────────────────────────────────
+
+interface LogEntry {
+  nodeId: string;
+  nodeType: string;
+  message: string;
+  status: "info" | "success" | "error";
+  timestamp: string;
+}
+
+function WorkflowNodeListView({
+  fileId,
+  fileName,
+  onWorkflowChanged,
+  onModifyWithAI,
+}: {
+  fileId: string;
+  fileName: string;
+  onWorkflowChanged?: () => void;
+  onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
+}) {
+  const { content: rawContent, loading: fileLoading, error: fileError, save, refresh } = useFileWithCache(fileId);
+
+  const [workflow, setWorkflow] = useState<Workflow | null>(null);
+  const [workflowName, setWorkflowName] = useState("");
+  const [rawYaml, setRawYaml] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  // Parse workflow content during render for instant display
+  const [prevRawContent, setPrevRawContent] = useState<string | null>(null);
+  if (rawContent !== null && rawContent !== prevRawContent) {
+    setPrevRawContent(rawContent);
+    setRawYaml(rawContent);
+    try {
+      const parsed = parseWorkflowYaml(rawContent);
+      setWorkflow(parsed);
+      setError(null);
+      try {
+        const yamlData = yaml.load(rawContent) as Record<string, unknown>;
+        setWorkflowName(
+          typeof yamlData?.name === "string" ? yamlData.name : fileName.replace(/\.ya?ml$/, "")
+        );
+      } catch {
+        setWorkflowName(fileName.replace(/\.ya?ml$/, ""));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to parse workflow");
+      setWorkflow(null);
+    }
+  }
+
+  // Node editor
+  const [editingNode, setEditingNode] = useState<Partial<WorkflowNode> | null>(null);
+  const [isNewNode, setIsNewNode] = useState(false);
+  const [editingNextInfo, setEditingNextInfo] = useState<{
+    next?: string;
+    trueNext?: string;
+    falseNext?: string;
+  }>({});
+
+  // History
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Execution
+  const [executionId, setExecutionId] = useState<string | null>(null);
+  const [executionStatus, setExecutionStatus] = useState<
+    "idle" | "running" | "completed" | "error" | "waiting-prompt"
+  >("idle");
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+  const eventSourceRef = useState<EventSource | null>(null);
+
+  const saveWorkflow = useCallback(
+    async (updated: Workflow) => {
+      try {
+        const yamlContent = serializeWorkflow(updated, workflowName);
+        await save(yamlContent);
+        setWorkflow(updated);
+        setRawYaml(yamlContent);
+        onWorkflowChanged?.();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to save");
+      }
+    },
+    [save, workflowName, onWorkflowChanged]
+  );
+
+  const handleAddNode = useCallback(() => {
+    setEditingNode({});
+    setIsNewNode(true);
+    setEditingNextInfo({});
+  }, []);
+
+  const handleEditNode = useCallback(
+    (node: WorkflowNode) => {
+      if (!workflow) return;
+      setEditingNode(node);
+      setIsNewNode(false);
+      // Build current next info from edges
+      const outgoing = workflow.edges.filter((e) => e.from === node.id);
+      const nextInfo: { next?: string; trueNext?: string; falseNext?: string } =
+        {};
+      if (node.type === "if" || node.type === "while") {
+        nextInfo.trueNext =
+          outgoing.find((e) => e.label === "true")?.to || "";
+        nextInfo.falseNext =
+          outgoing.find((e) => e.label === "false")?.to || "";
+      } else {
+        nextInfo.next = outgoing.find((e) => !e.label)?.to || "";
+      }
+      setEditingNextInfo(nextInfo);
+    },
+    [workflow]
+  );
+
+  const handleDeleteNode = useCallback(
+    (nodeId: string) => {
+      if (!workflow) return;
+      if (!confirm(`Delete node "${nodeId}"?`)) return;
+
+      const updated: Workflow = {
+        ...workflow,
+        nodes: new Map(workflow.nodes),
+        edges: workflow.edges.filter(
+          (e) => e.from !== nodeId && e.to !== nodeId
+        ),
+      };
+      updated.nodes.delete(nodeId);
+      if (updated.startNode === nodeId) {
+        const remaining = Array.from(updated.nodes.keys());
+        updated.startNode = remaining.length > 0 ? remaining[0] : null;
+      }
+      saveWorkflow(updated);
+    },
+    [workflow, saveWorkflow]
+  );
+
+  const handleSaveNode = useCallback(
+    (
+      node: WorkflowNode,
+      nextInfo: { next?: string; trueNext?: string; falseNext?: string }
+    ) => {
+      if (!workflow) return;
+
+      const updated: Workflow = {
+        ...workflow,
+        nodes: new Map(workflow.nodes),
+        edges: [...workflow.edges],
+      };
+
+      // Add/update node
+      updated.nodes.set(node.id, node);
+
+      // If new and workflow was empty, set as start
+      if (isNewNode && !updated.startNode) {
+        updated.startNode = node.id;
+      }
+
+      // Remove old edges from this node
+      updated.edges = updated.edges.filter((e) => e.from !== node.id);
+
+      // Add new edges
+      if (node.type === "if" || node.type === "while") {
+        if (nextInfo.trueNext && nextInfo.trueNext !== "end") {
+          updated.edges.push({
+            from: node.id,
+            to: nextInfo.trueNext,
+            label: "true",
+          });
+        }
+        if (nextInfo.falseNext && nextInfo.falseNext !== "end") {
+          updated.edges.push({
+            from: node.id,
+            to: nextInfo.falseNext,
+            label: "false",
+          });
+        }
+      } else {
+        if (nextInfo.next && nextInfo.next !== "end") {
+          updated.edges.push({ from: node.id, to: nextInfo.next });
+        }
+      }
+
+      saveWorkflow(updated);
+      setEditingNode(null);
+    },
+    [workflow, isNewNode, saveWorkflow]
+  );
+
+  // Execution
+  const startExecution = useCallback(async () => {
+    setLogs([]);
+    setExecutionStatus("running");
+    setShowLogs(true);
+
+    try {
+      const res = await fetch(`/api/workflow/${fileId}/execute`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      const newExecId = data.executionId;
+      setExecutionId(newExecId);
+
+      const es = new EventSource(
+        `/api/workflow/${fileId}/execute?executionId=${newExecId}`
+      );
+      eventSourceRef[1](es);
+
+      es.addEventListener("log", (e) => {
+        const log = JSON.parse(e.data);
+        setLogs((prev) => [...prev, log]);
+      });
+      es.addEventListener("complete", () => {
+        setExecutionStatus("completed");
+        es.close();
+      });
+      es.addEventListener("error", (e) => {
+        if (e instanceof MessageEvent) {
+          const data = JSON.parse(e.data);
+          setLogs((prev) => [
+            ...prev,
+            {
+              nodeId: "system",
+              nodeType: "system",
+              message: data.error || "Execution error",
+              status: "error" as const,
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+        }
+        setExecutionStatus("error");
+        es.close();
+      });
+      es.addEventListener("status", (e) => {
+        const data = JSON.parse(e.data);
+        setExecutionStatus(data.status);
+      });
+      es.onerror = () => {
+        if (es.readyState === EventSource.CLOSED) {
+          setExecutionStatus((prev) => (prev === "running" ? "error" : prev));
+        }
+      };
+    } catch {
+      setExecutionStatus("error");
+    }
+  }, [fileId, eventSourceRef]);
+
+  const stopExecution = useCallback(() => {
+    eventSourceRef[0]?.close();
+    setExecutionStatus("error");
+  }, [eventSourceRef]);
+
+  // Current executing nodeId from logs
+  const currentNodeId =
+    executionStatus === "running" && logs.length > 0
+      ? logs[logs.length - 1].nodeId
+      : null;
+  const completedNodeIds = new Set(
+    logs.filter((l) => l.status === "success").map((l) => l.nodeId)
+  );
+  const errorNodeIds = new Set(
+    logs.filter((l) => l.status === "error").map((l) => l.nodeId)
+  );
+
+  if (rawContent === null && !fileError && !error) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <Loader2 size={16} className="animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  if (!workflow) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-8">
+        {(fileError || error) ? (
+          <p className="text-xs text-red-500 mb-2">{fileError || error}</p>
+        ) : (
+          <p className="text-xs text-gray-400 mb-2">Failed to parse workflow</p>
+        )}
+        <button
+          onClick={refresh}
+          className="text-xs text-blue-600 hover:underline"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const nodeOrder = getNodeOrder(workflow);
+  const outgoingMap = buildOutgoingMap(workflow);
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-gray-800">
+        <span
+          className="truncate text-xs font-semibold text-gray-700 dark:text-gray-300"
+          title={workflowName}
+        >
+          {workflowName}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={refresh}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            title="Refresh"
+          >
+            <RefreshCw size={12} />
+          </button>
+          <button
+            onClick={handleAddNode}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            title="Add Node"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* Node List */}
+      <div className="flex-1 overflow-y-auto py-1">
+        {nodeOrder.length === 0 ? (
+          <div className="flex flex-col items-center justify-center px-4 py-8">
+            <GitBranch
+              size={24}
+              className="mb-2 text-gray-300 dark:text-gray-600"
+            />
+            <p className="mb-2 text-center text-xs text-gray-500">
+              No nodes yet
+            </p>
+            <button
+              onClick={handleAddNode}
+              className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
+            >
+              <Plus size={12} />
+              Add Node
+            </button>
+          </div>
+        ) : (
+          nodeOrder.map((nodeId) => {
+            const node = workflow.nodes.get(nodeId);
+            if (!node) return null;
+            const summary = getNodeSummary(node);
+            const typeLabel = getNodeTypeLabel(node.type);
+            const typeColor = getNodeTypeColor(node.type);
+            const outgoing = outgoingMap.get(nodeId) || [];
+
+            const isExecuting = currentNodeId === nodeId;
+            const isCompleted = completedNodeIds.has(nodeId);
+            const isError = errorNodeIds.has(nodeId);
+
+            let borderClass = "border-gray-200 dark:border-gray-800";
+            if (isExecuting)
+              borderClass = "border-blue-500 dark:border-blue-400";
+            else if (isError)
+              borderClass = "border-red-400 dark:border-red-500";
+            else if (isCompleted)
+              borderClass = "border-green-400 dark:border-green-500";
+
+            return (
+              <div key={nodeId} className="px-2 py-0.5">
+                <div
+                  className={`rounded border ${borderClass} bg-white px-2 py-1.5 dark:bg-gray-900 transition-colors`}
+                >
+                  {/* Node header */}
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`inline-block rounded px-1 py-0.5 text-[10px] font-medium leading-none ${typeColor}`}
+                    >
+                      {typeLabel}
+                    </span>
+                    <span className="flex-1 truncate text-xs font-medium text-gray-800 dark:text-gray-200">
+                      {nodeId}
+                    </span>
+                    {isCompleted && !isError && (
+                      <CheckCircle
+                        size={12}
+                        className="flex-shrink-0 text-green-500"
+                      />
+                    )}
+                    {isError && (
+                      <XCircle
+                        size={12}
+                        className="flex-shrink-0 text-red-500"
+                      />
+                    )}
+                    {isExecuting && (
+                      <Loader2
+                        size={12}
+                        className="flex-shrink-0 animate-spin text-blue-500"
+                      />
+                    )}
+                    <button
+                      onClick={() => handleEditNode(node)}
+                      className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
+                      title="Edit"
+                    >
+                      <Pencil size={11} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteNode(nodeId)}
+                      className="rounded p-0.5 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900"
+                      title="Delete"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                  {/* Summary */}
+                  {summary && (
+                    <p className="mt-0.5 truncate text-[11px] text-gray-500 dark:text-gray-400">
+                      {summary}
+                    </p>
+                  )}
+                </div>
+                {/* Outgoing edges */}
+                {outgoing.length > 0 && (
+                  <div className="ml-3 mt-0.5 mb-0.5">
+                    {outgoing.map((edge, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500"
+                      >
+                        {edge.label ? (
+                          <span
+                            className={
+                              edge.label === "true"
+                                ? "text-green-500"
+                                : "text-red-400"
+                            }
+                          >
+                            {edge.label === "true" ? "T" : "F"}
+                          </span>
+                        ) : (
+                          <ArrowRight size={9} />
+                        )}
+                        <span>{edge.to}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Execution Logs (collapsible) */}
+      {logs.length > 0 && (
+        <div className="border-t border-gray-200 dark:border-gray-800">
+          <button
+            onClick={() => setShowLogs(!showLogs)}
+            className="flex w-full items-center gap-1 px-3 py-1 text-[10px] text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            {showLogs ? (
+              <ChevronDown size={10} />
+            ) : (
+              <ChevronRight size={10} />
+            )}
+            Logs ({logs.length})
+          </button>
+          {showLogs && (
+            <div className="max-h-32 overflow-y-auto px-2 pb-1 font-mono text-[10px]">
+              {logs.map((log, i) => (
+                <div
+                  key={i}
+                  className={`flex items-start gap-1 py-0.5 ${
+                    log.status === "error"
+                      ? "text-red-500"
+                      : log.status === "success"
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-gray-500"
+                  }`}
+                >
+                  {log.status === "error" ? (
+                    <XCircle size={10} className="mt-0.5 flex-shrink-0" />
+                  ) : log.status === "success" ? (
+                    <CheckCircle size={10} className="mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <Info size={10} className="mt-0.5 flex-shrink-0" />
+                  )}
+                  <span className="text-gray-400">[{log.nodeId}]</span>
+                  <span className="break-all">{log.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Footer: Execute + History */}
+      <div className="flex items-center gap-2 border-t border-gray-200 px-3 py-2 dark:border-gray-800">
+        {executionStatus === "running" ||
+        executionStatus === "waiting-prompt" ? (
+          <button
+            onClick={stopExecution}
+            className="flex items-center gap-1 rounded bg-red-100 px-2 py-1 text-xs text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800"
+          >
+            <Square size={12} />
+            Stop
+          </button>
+        ) : (
+          <button
+            onClick={startExecution}
+            className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
+          >
+            <Play size={12} />
+            Execute
+          </button>
+        )}
+        <button
+          onClick={() => setShowHistory(true)}
+          className="flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+        >
+          <Clock size={12} />
+          History
+        </button>
+        {onModifyWithAI && rawYaml && (
+          <button
+            onClick={() => onModifyWithAI(rawYaml, workflowName)}
+            className="flex items-center gap-1 rounded bg-purple-100 px-2 py-1 text-xs text-purple-700 hover:bg-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:hover:bg-purple-900/60"
+            title="Modify with AI"
+          >
+            <Sparkles size={12} />
+            AI
+          </button>
+        )}
+        {executionStatus !== "idle" && (
+          <span className="ml-auto">
+            {executionStatus === "running" && (
+              <Loader2
+                size={14}
+                className="animate-spin text-blue-500"
+              />
+            )}
+            {executionStatus === "completed" && (
+              <CheckCircle size={14} className="text-green-500" />
+            )}
+            {executionStatus === "error" && (
+              <XCircle size={14} className="text-red-500" />
+            )}
+            {executionStatus === "waiting-prompt" && (
+              <Loader2
+                size={14}
+                className="animate-spin text-yellow-500"
+              />
+            )}
+          </span>
+        )}
+      </div>
+
+      {/* Node Editor Modal */}
+      {editingNode !== null && (
+        <NodeEditorModal
+          node={isNewNode ? editingNode : editingNode}
+          existingNodeIds={Array.from(workflow.nodes.keys())}
+          allNodeIds={Array.from(workflow.nodes.keys())}
+          onSave={handleSaveNode}
+          onCancel={() => setEditingNode(null)}
+          initialNext={editingNextInfo}
+        />
+      )}
+
+      {/* Execution History Modal */}
+      {showHistory && (
+        <ExecutionHistoryModal
+          workflowId={fileId}
+          workflowName={workflowName}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function getNodeOrder(workflow: Workflow): string[] {
+  if (!workflow.startNode) return Array.from(workflow.nodes.keys());
+
+  const order: string[] = [];
+  const visited = new Set<string>();
+  const queue = [workflow.startNode];
+
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    order.push(id);
+    const edges = workflow.edges.filter((e) => e.from === id);
+    for (const edge of edges) {
+      if (!visited.has(edge.to)) queue.push(edge.to);
+    }
+  }
+
+  // Add unreachable nodes
+  for (const id of workflow.nodes.keys()) {
+    if (!visited.has(id)) order.push(id);
+  }
+
+  return order;
+}
+
+// ─── Workflow List View (no YAML active) ─────────────────────────────────────
+
+function WorkflowListView({
+  onNewWorkflow,
+  onSelectFile,
+}: {
+  onNewWorkflow: () => void;
+  onSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
+}) {
+  const [workflows, setWorkflows] = useState<WorkflowFile[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchWorkflows = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/drive/files?action=list");
+      if (res.ok) {
+        const data = await res.json();
+        const yamlFiles = (data.files as WorkflowFile[]).filter(
+          (f) => f.name.endsWith(".yaml") || f.name.endsWith(".yml")
+        );
+        setWorkflows(yamlFiles);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchWorkflows();
+  }, [fetchWorkflows]);
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-gray-800">
+        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          Workflows
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={fetchWorkflows}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            title="Refresh"
+          >
+            <RefreshCw size={12} />
+          </button>
+          <button
+            onClick={onNewWorkflow}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            title="New Workflow"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 size={16} className="animate-spin text-gray-400" />
+          </div>
+        ) : workflows.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center px-4 py-8">
+            <GitBranch
+              size={32}
+              className="mb-3 text-gray-300 dark:text-gray-600"
+            />
+            <p className="mb-3 text-center text-sm text-gray-500 dark:text-gray-400">
+              No workflows yet.
+            </p>
+            <button
+              onClick={onNewWorkflow}
+              className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+            >
+              <Plus size={14} />
+              New Workflow
+            </button>
+          </div>
+        ) : (
+          <div className="py-1">
+            {workflows.map((wf) => (
+              <button
+                key={wf.id}
+                onClick={() =>
+                  onSelectFile(wf.id, wf.name, wf.mimeType || "text/yaml")
+                }
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <FileCode
+                  size={14}
+                  className="flex-shrink-0 text-orange-500"
+                />
+                <span className="truncate text-gray-700 dark:text-gray-300">
+                  {wf.name}
+                </span>
+              </button>
+            ))}
+            <button
+              onClick={onNewWorkflow}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            >
+              <Plus size={14} className="flex-shrink-0" />
+              <span>New Workflow</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

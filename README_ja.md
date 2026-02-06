@@ -1,0 +1,250 @@
+# Gemini Hub
+
+Google Gemini AI と Google Drive を統合したセルフホスト型 Web アプリケーションです。ビジュアルワークフロー、AIチャット、リッチエディタによるDriveファイル管理など、あらゆる機能を一つの画面で利用できます。
+
+[English README](./README.md)
+
+## 機能一覧
+
+- **AIチャット** — Geminiモデルとのストリーミング会話、Function Calling、思考表示、画像生成、ファイル添付
+- **ビジュアルワークフローエディタ** — ドラッグ&ドロップのノードベースワークフロービルダー（React Flow）、YAML入出力、SSEによるリアルタイム実行
+- **AIワークフロー生成** — 自然言語でワークフローの作成・修正をAIに依頼（ストリーミング生成・思考表示・ビジュアルプレビュー・差分表示・繰り返し改善）
+- **Google Drive連携** — すべてのデータ（ワークフロー、チャット履歴、設定、変更履歴）を自分のGoogle Driveに保存
+- **リッチMarkdownエディタ** — wysimark-liteによるWYSIWYGファイル作成・編集
+- **RAG（検索拡張生成）** — DriveファイルをGemini File Searchに同期し、コンテキストを考慮したAI応答を実現
+- **MCP（Model Context Protocol）** — 外部MCPサーバーをAIチャットのツールとして接続
+- **暗号化** — チャット履歴・ワークフローログのハイブリッド暗号化（RSA + AES）に対応
+- **変更履歴** — unified diff形式によるワークフロー・Driveファイルの変更追跡
+- **オフラインキャッシュ & 同期** — IndexedDBベースのファイルキャッシュとmd5ハッシュ比較によるデバイス間Push/Pull同期
+- **マルチモデル対応** — Gemini 3, 2.5, Flash, Pro, Lite, Gemma。有料/無料プラン別モデルリスト
+- **画像生成** — Gemini 2.5 Flash Image / 3 Pro Image モデルで画像を生成
+
+## アーキテクチャ
+
+| レイヤー | 技術 |
+|---------|------|
+| フロントエンド | React 19, React Router 7, Tailwind CSS v4, React Flow |
+| バックエンド | React Router サーバー（SSR + APIルート） |
+| AI | Google Gemini API (`@google/genai`) |
+| ストレージ | Google Drive API |
+| 認証 | Google OAuth 2.0 → セッションCookie |
+| エディタ | wysimark-lite（Slateベース WYSIWYG） |
+
+### プロジェクト構成
+
+```
+app/
+├── routes/           # ページ & APIエンドポイント
+│   ├── _index.tsx        # ダッシュボード
+│   ├── chat.tsx          # チャット（親レイアウト）
+│   ├── chat.$id.tsx      # チャットセッション
+│   ├── settings.tsx      # 設定（5タブUI）
+│   ├── workflow.$id.tsx  # ワークフローエディタ
+│   ├── drive.file.new.tsx      # 新規ファイル（WYSIWYG）
+│   ├── drive.file.$id.edit.tsx # ファイル編集（WYSIWYG）
+│   ├── api.chat.tsx            # チャットSSEストリーミング
+│   ├── api.chat.history.tsx    # チャット履歴CRUD
+│   ├── api.settings.*.tsx      # 設定API群
+│   └── ...
+├── services/         # サーバーサイドビジネスロジック
+│   ├── gemini-chat.server.ts    # Geminiストリーミングクライアント
+│   ├── chat-history.server.ts   # チャットCRUD（Drive）
+│   ├── user-settings.server.ts  # 設定CRUD（Drive）
+│   ├── drive-tools.server.ts    # Drive Function Callingツール
+│   ├── mcp-client.server.ts     # MCPプロトコルクライアント
+│   ├── mcp-tools.server.ts      # MCP → Gemini統合
+│   ├── file-search.server.ts    # RAG / File Search
+│   ├── crypto.server.ts         # ハイブリッド暗号化
+│   ├── edit-history.server.ts   # diff形式の変更履歴
+│   ├── sync-meta.server.ts      # Push/Pull同期メタデータ
+│   ├── indexeddb-cache.ts       # ブラウザ側IndexedDBキャッシュ
+│   └── ...
+├── hooks/            # Reactフック
+│   ├── useFileWithCache.ts  # キャッシュ優先ファイル読み書き
+│   └── useSync.ts           # Push/Pull同期ロジック
+├── components/       # Reactコンポーネント
+│   ├── chat/             # チャットUI（レイアウト、サイドバー、メッセージ、入力）
+│   ├── editor/           # Markdownエディタラッパー
+│   ├── flow/             # ワークフローキャンバス＆ノード
+│   ├── execution/        # ワークフロー実行パネル
+│   └── ide/              # IDEレイアウト、同期UI、コンフリクトダイアログ
+├── types/            # TypeScript型定義
+│   ├── settings.ts       # 設定、モデル、MCP、RAG、暗号化
+│   └── chat.ts           # メッセージ、ストリーミング、履歴
+└── engine/           # ワークフロー実行エンジン
+```
+
+## はじめかた
+
+### 前提条件
+
+- Node.js 22以上
+- Google Cloudプロジェクト（下記手順で設定）
+- Gemini APIキー
+
+### 1. Google Cloud の設定
+
+[Google Cloud Console](https://console.cloud.google.com/) で以下を行います。
+
+#### プロジェクト作成
+1. 左上「プロジェクトを選択」→「新しいプロジェクト」→ 名前を付けて作成
+
+#### Google Drive API を有効化
+1. 「APIとサービス」→「ライブラリ」
+2. "Google Drive API" を検索して「有効にする」
+
+#### OAuth 同意画面の設定
+1. 「APIとサービス」→「OAuth 同意画面」
+2. User Type: **外部** を選択
+3. アプリ名（例: Gemini Hub）、ユーザーサポートメール、デベロッパー連絡先を入力
+4. スコープ追加: `https://www.googleapis.com/auth/drive`
+5. テストユーザーに自分のGmailアドレスを追加（公開前は自分しかアクセスできません）
+
+#### OAuth 認証情報の作成
+1. 「APIとサービス」→「認証情報」→「＋認証情報を作成」→「OAuthクライアントID」
+2. アプリケーションの種類: **ウェブアプリケーション**
+3. 名前: 任意（例: Gemini Hub Local）
+4. **承認済みリダイレクトURI** に追加: `http://localhost:5170/auth/google/callback`
+5. 作成後、**クライアントID** と **クライアントシークレット** をメモ
+
+### 2. Gemini APIキーの取得
+
+1. [Google AI Studio](https://aistudio.google.com/) にアクセス
+2. 左メニュー「APIキー」→「APIキーを作成」
+3. キーをメモ（あとでアプリの設定画面から入力します）
+
+### 3. クローンとインストール
+
+```bash
+git clone <repository-url>
+cd gemini-hub
+npm install
+```
+
+### 4. 環境変数の設定
+
+```bash
+cp .env.example .env
+```
+
+`.env` を編集:
+
+```env
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret
+GOOGLE_REDIRECT_URI=http://localhost:5170/auth/google/callback
+SESSION_SECRET=<ランダム文字列>
+```
+
+`SESSION_SECRET` の生成:
+
+```bash
+ruby -rsecurerandom -e 'puts SecureRandom.hex(32)'
+# または
+openssl rand -hex 32
+```
+
+### 5. 開発サーバーを起動
+
+```bash
+npm run dev
+```
+
+### 6. 初回セットアップ
+
+1. ブラウザで `http://localhost:5170` を開く
+2. 「Sign in with Google」をクリック → Googleアカウントで認証
+3. 右上の歯車アイコン（Settings）をクリック
+4. **General** タブで Gemini API Key を入力して Save
+
+チャット、ワークフロー作成、ファイル編集が使えるようになります。
+
+> **Note:** 開発サーバーのポートは `vite.config.ts` で `5170` に設定されています。変更する場合は、設定ファイルと `.env` のリダイレクトURI、Google Cloud Consoleの承認済みリダイレクトURIも合わせて更新してください。
+
+## 本番環境
+
+### ビルド
+
+```bash
+npm run build
+npm run start
+```
+
+### Docker
+
+```bash
+docker build -t gemini-hub .
+docker run -p 8080:8080 \
+  -e GOOGLE_CLIENT_ID=... \
+  -e GOOGLE_CLIENT_SECRET=... \
+  -e GOOGLE_REDIRECT_URI=https://your-domain/auth/google/callback \
+  -e SESSION_SECRET=... \
+  gemini-hub
+```
+
+## 設定
+
+すべての設定はGoogle Driveのルートフォルダ（`gemini-hub/`）内の `settings.json` に保存されます。
+
+| タブ | 設定内容 |
+|------|---------|
+| **General** | APIキー、有料/無料プラン、デフォルトモデル、システムプロンプト、チャット履歴保存 |
+| **MCP Servers** | 外部MCPサーバーの追加・削除、接続テスト、サーバーごとの有効/無効切替 |
+| **RAG** | 有効/無効、Top-K、複数RAG設定の管理、DriveファイルのFile Search同期 |
+| **Encryption** | RSA鍵ペアの生成、チャット履歴・ワークフローログの暗号化切替 |
+| **Edit History** | 有効/無効、保持ポリシー（日数/件数）、diffコンテキスト行数、プルーン/統計 |
+
+## AIツール（Function Calling）
+
+チャット中、GeminiはFunction Callingを通じて以下のツールを使用できます。ツールの有効/無効はチャット入力欄のツールバーからメッセージごとに制御できます。
+
+### Driveツール
+
+Google Drive上のファイルを読み書きする組み込みツールです。「Drive Tools」設定（`all` / `noSearch` / `none`）で制御します。
+
+| ツール | 説明 |
+|--------|------|
+| `read_drive_file` | ファイルIDでファイル内容を読み取り |
+| `search_drive_files` | フォルダを指定して名前またはコンテンツでファイルを検索（Google Drive API の `fullText contains` / `name contains`） |
+| `list_drive_files` | フォルダ内のファイルとサブフォルダを一覧表示 |
+| `create_drive_file` | 新規ファイルを作成 |
+| `update_drive_file` | 既存ファイルの内容を更新（変更履歴の追跡付き） |
+
+### Gemini組み込みツール
+
+| ツール | 説明 |
+|--------|------|
+| Google検索 | Gemini組み込みの `googleSearch` ツールによるWeb検索。RAGと排他利用。 |
+| RAG（File Search） | Gemini File Searchに同期されたファイルを使った検索拡張生成。`topK` 設定可。 |
+
+### MCPツール（動的）
+
+設定済みMCPサーバーから動的に検出されるツールです。各ツールは `mcp_{サーバー名}_{ツール名}` として登録され、JSON-RPC 2.0（HTTP経由）で実行されます。MCPサーバーは設定画面で管理します。
+
+## データ保存先
+
+すべてのデータはGoogle Driveの `gemini-hub/` フォルダ配下に保存されます:
+
+```
+gemini-hub/
+├── settings.json        # ユーザー設定
+├── workflows/           # ワークフローYAMLファイル
+│   └── _sync-meta.json  # Push/Pull同期メタデータ
+├── chats/               # チャット履歴JSONファイル
+└── edit-history/        # 編集スナップショットとdiff履歴
+```
+
+### ブラウザキャッシュ & 同期
+
+ファイルはブラウザのIndexedDBにキャッシュされ、即座に表示されます。同期システムはmd5ハッシュ比較で変更を検出します:
+
+- **キャッシュ優先読み込み** — IndexedDBから即座にファイルを表示し、バックグラウンドでDriveのmd5Checksumと照合
+- **Push** — ローカルで変更されたファイルをDriveにアップロードし、リモート同期メタデータを更新
+- **Pull** — リモートで変更されたファイルをローカルキャッシュにダウンロード
+- **コンフリクト解決** — ローカルとリモートの両方が変更された場合、ファイルごとに「ローカルを保持」または「リモートを保持」を選択
+
+ヘッダーの同期ステータスバーでPush/Pull待ちの件数を確認でき、手動同期操作が可能です。
+
+## ライセンス
+
+MIT

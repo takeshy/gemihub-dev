@@ -1,0 +1,387 @@
+import type {
+  Workflow,
+  WorkflowNode,
+  ExecutionContext,
+  ExecutionLog,
+  ExecutionRecord,
+  WorkflowInput,
+  PromptCallbacks,
+  ServiceContext,
+} from "./types";
+import { getNextNodes } from "./parser";
+import { replaceVariables } from "./handlers/utils";
+import { handleVariableNode, handleSetNode, handleIfNode, handleWhileNode, handleSleepNode } from "./handlers/controlFlow";
+import { handleHttpNode } from "./handlers/http";
+import { handleDriveFileNode, handleDriveReadNode } from "./handlers/drive";
+import { handleDriveSearchNode } from "./handlers/driveSearch";
+import { handleDriveListNode, handleDriveFolderListNode } from "./handlers/driveListing";
+import { handleDriveSaveNode } from "./handlers/driveSave";
+import { handleCommandNode } from "./handlers/command";
+import { handlePromptValueNode, handleDialogNode, handlePreviewNode, handleDriveFilePickerNode } from "./handlers/prompt";
+import { handleWorkflowNode, handleJsonNode } from "./handlers/integration";
+import { handleMcpNode } from "./handlers/mcp";
+
+const MAX_ITERATIONS = 1000;
+
+export interface ExecuteOptions {
+  workflowId?: string;
+  workflowName?: string;
+  abortSignal?: AbortSignal;
+}
+
+export interface ExecuteResult {
+  context: ExecutionContext;
+  historyRecord?: ExecutionRecord;
+}
+
+export async function executeWorkflow(
+  workflow: Workflow,
+  input: WorkflowInput,
+  serviceContext: ServiceContext,
+  onLog?: (log: ExecutionLog) => void,
+  options?: ExecuteOptions,
+  promptCallbacks?: PromptCallbacks
+): Promise<ExecuteResult> {
+  const context: ExecutionContext = {
+    variables: new Map(input.variables),
+    logs: [],
+  };
+
+  const historyRecord: ExecutionRecord = {
+    id: `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    workflowId: options?.workflowId || "",
+    workflowName: options?.workflowName,
+    startTime: new Date().toISOString(),
+    status: "running",
+    steps: [],
+  };
+
+  if (!workflow.startNode) {
+    throw new Error("No workflow nodes found");
+  }
+
+  const log = (
+    nodeId: string,
+    nodeType: WorkflowNode["type"],
+    message: string,
+    status: ExecutionLog["status"] = "info",
+    input?: Record<string, unknown>,
+    output?: unknown
+  ) => {
+    const logEntry: ExecutionLog = {
+      nodeId, nodeType, message, timestamp: new Date(), status, input, output,
+    };
+    context.logs.push(logEntry);
+    onLog?.(logEntry);
+  };
+
+  const addHistoryStep = (
+    nodeId: string,
+    nodeType: WorkflowNode["type"],
+    input?: Record<string, unknown>,
+    output?: unknown,
+    status: "success" | "error" | "skipped" = "success",
+    error?: string
+  ) => {
+    historyRecord.steps.push({
+      nodeId, nodeType, timestamp: new Date().toISOString(),
+      input, output, status, error,
+    });
+  };
+
+  const stack: { nodeId: string; iterationCount: number }[] = [
+    { nodeId: workflow.startNode, iterationCount: 0 },
+  ];
+  const whileLoopStates = new Map<string, { iterationCount: number }>();
+  let totalIterations = 0;
+
+  while (stack.length > 0 && totalIterations < MAX_ITERATIONS) {
+    if (options?.abortSignal?.aborted) {
+      historyRecord.status = "cancelled";
+      historyRecord.endTime = new Date().toISOString();
+      throw new Error("Workflow execution was stopped");
+    }
+
+    totalIterations++;
+    const current = stack.pop()!;
+    const node = workflow.nodes.get(current.nodeId);
+    if (!node) continue;
+
+    log(node.id, node.type, `Executing node: ${node.type}`);
+
+    try {
+      switch (node.type) {
+        case "variable": {
+          handleVariableNode(node, context);
+          const varName = node.properties["name"];
+          const varValue = context.variables.get(varName);
+          log(node.id, node.type, `Set variable ${varName} = ${varValue}`, "success",
+            { name: varName, value: node.properties["value"] }, varValue);
+          addHistoryStep(node.id, node.type, { name: varName }, varValue);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "set": {
+          await handleSetNode(node, context);
+          const setName = node.properties["name"];
+          const setValue = context.variables.get(setName);
+          log(node.id, node.type, `Updated ${setName} = ${setValue}`, "success",
+            { name: setName, expression: node.properties["value"] }, setValue);
+          addHistoryStep(node.id, node.type, { name: setName }, setValue);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "if": {
+          const ifResult = handleIfNode(node, context);
+          log(node.id, node.type, `Condition: ${ifResult}`, "success",
+            { condition: node.properties["condition"] }, ifResult);
+          addHistoryStep(node.id, node.type, { condition: node.properties["condition"] }, ifResult);
+          const next = getNextNodes(workflow, node.id, ifResult);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "while": {
+          const whileResult = handleWhileNode(node, context);
+          const state = whileLoopStates.get(node.id) || { iterationCount: 0 };
+
+          if (whileResult) {
+            state.iterationCount++;
+            if (state.iterationCount > MAX_ITERATIONS) {
+              throw new Error(`While loop exceeded maximum iterations (${MAX_ITERATIONS})`);
+            }
+            whileLoopStates.set(node.id, state);
+            log(node.id, node.type, `Loop iteration ${state.iterationCount}`, "info",
+              { condition: node.properties["condition"], iteration: state.iterationCount }, whileResult);
+            addHistoryStep(node.id, node.type, { iteration: state.iterationCount }, whileResult);
+            const next = getNextNodes(workflow, node.id, true);
+            for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          } else {
+            log(node.id, node.type, `Loop condition false, exiting`, "success");
+            addHistoryStep(node.id, node.type, { condition: node.properties["condition"] }, false);
+            whileLoopStates.delete(node.id);
+            const next = getNextNodes(workflow, node.id, false);
+            for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          }
+          break;
+        }
+
+        case "command": {
+          const promptPreview = (node.properties["prompt"] || "").substring(0, 50);
+          log(node.id, node.type, `Executing LLM: ${promptPreview}...`, "info");
+          const cmdResult = await handleCommandNode(node, context, serviceContext, promptCallbacks);
+          const saveTo = node.properties["saveTo"];
+          const output = saveTo ? context.variables.get(saveTo) : undefined;
+          log(node.id, node.type, `LLM completed (${cmdResult.usedModel})`, "success",
+            { prompt: node.properties["prompt"], model: cmdResult.usedModel }, output);
+          addHistoryStep(node.id, node.type, { model: cmdResult.usedModel }, output);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "http": {
+          const httpUrl = replaceVariables(node.properties["url"] || "", context);
+          const httpMethod = node.properties["method"] || "GET";
+          log(node.id, node.type, `HTTP ${httpMethod} ${httpUrl}`, "info");
+          await handleHttpNode(node, context, serviceContext);
+          const httpSaveTo = node.properties["saveTo"];
+          const httpOutput = httpSaveTo ? context.variables.get(httpSaveTo) : undefined;
+          log(node.id, node.type, `HTTP completed`, "success", { url: httpUrl, method: httpMethod }, httpOutput);
+          addHistoryStep(node.id, node.type, { url: httpUrl, method: httpMethod }, httpOutput);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "json": {
+          const jsonSource = node.properties["source"] || "";
+          handleJsonNode(node, context);
+          const jsonSaveTo = node.properties["saveTo"] || "";
+          const jsonOutput = context.variables.get(jsonSaveTo);
+          log(node.id, node.type, `JSON parsed`, "success", { source: jsonSource }, jsonOutput);
+          addHistoryStep(node.id, node.type, { source: jsonSource }, jsonOutput);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "drive-file": {
+          const drivePath = node.properties["path"] || "";
+          log(node.id, node.type, `Writing file: ${drivePath}`, "info");
+          await handleDriveFileNode(node, context, serviceContext, promptCallbacks);
+          log(node.id, node.type, `File written: ${drivePath}`, "success");
+          addHistoryStep(node.id, node.type, { path: drivePath });
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "drive-read": {
+          const readPath = node.properties["path"] || "";
+          log(node.id, node.type, `Reading file: ${readPath}`, "info");
+          await handleDriveReadNode(node, context, serviceContext);
+          const readSaveTo = node.properties["saveTo"] || "";
+          const readContent = context.variables.get(readSaveTo);
+          log(node.id, node.type, `File read`, "success", { path: readPath }, readContent);
+          addHistoryStep(node.id, node.type, { path: readPath }, readContent);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "drive-search": {
+          const searchQuery = node.properties["query"] || "";
+          log(node.id, node.type, `Searching: ${searchQuery}`, "info");
+          await handleDriveSearchNode(node, context, serviceContext);
+          const searchSaveTo = node.properties["saveTo"] || "";
+          const searchResults = context.variables.get(searchSaveTo);
+          log(node.id, node.type, `Search complete`, "success", { query: searchQuery }, searchResults);
+          addHistoryStep(node.id, node.type, { query: searchQuery }, searchResults);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "drive-list": {
+          log(node.id, node.type, `Listing files`, "info");
+          await handleDriveListNode(node, context, serviceContext);
+          const listSaveTo = node.properties["saveTo"] || "";
+          const listResults = context.variables.get(listSaveTo);
+          log(node.id, node.type, `List complete`, "success", {}, listResults);
+          addHistoryStep(node.id, node.type, {}, listResults);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "drive-folder-list": {
+          log(node.id, node.type, `Listing folders`, "info");
+          await handleDriveFolderListNode(node, context, serviceContext);
+          const flSaveTo = node.properties["saveTo"] || "";
+          const flResults = context.variables.get(flSaveTo);
+          log(node.id, node.type, `Folder list complete`, "success", {}, flResults);
+          addHistoryStep(node.id, node.type, {}, flResults);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "drive-file-picker": {
+          log(node.id, node.type, `File picker`, "info");
+          await handleDriveFilePickerNode(node, context, serviceContext, promptCallbacks);
+          log(node.id, node.type, `File selected`, "success");
+          addHistoryStep(node.id, node.type);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "drive-save": {
+          log(node.id, node.type, `Saving file`, "info");
+          await handleDriveSaveNode(node, context, serviceContext);
+          log(node.id, node.type, `File saved`, "success");
+          addHistoryStep(node.id, node.type);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "preview": {
+          const previewPath = replaceVariables(node.properties["path"] || "", context);
+          log(node.id, node.type, `Preview: ${previewPath}`, "info");
+          await handlePreviewNode(node, context, serviceContext);
+          log(node.id, node.type, `Preview generated`, "success", { path: previewPath });
+          addHistoryStep(node.id, node.type, { path: previewPath });
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "dialog": {
+          const dialogTitle = node.properties["title"] || "Dialog";
+          log(node.id, node.type, `Showing dialog: ${dialogTitle}`, "info");
+          await handleDialogNode(node, context, serviceContext, promptCallbacks);
+          const dialogSaveTo = node.properties["saveTo"];
+          const dialogResult = dialogSaveTo ? context.variables.get(dialogSaveTo) : undefined;
+          log(node.id, node.type, `Dialog completed`, "success", { title: dialogTitle }, dialogResult);
+          addHistoryStep(node.id, node.type, { title: dialogTitle }, dialogResult);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "prompt-value": {
+          const promptTitle = node.properties["title"] || "Input";
+          log(node.id, node.type, `Prompting: ${promptTitle}`, "info");
+          await handlePromptValueNode(node, context, serviceContext, promptCallbacks);
+          const promptSaveTo = node.properties["saveTo"];
+          const promptResult = promptSaveTo ? context.variables.get(promptSaveTo) : undefined;
+          log(node.id, node.type, `Input received`, "success", { title: promptTitle }, promptResult);
+          addHistoryStep(node.id, node.type, { title: promptTitle }, promptResult);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "workflow": {
+          const subPath = replaceVariables(node.properties["path"] || "", context);
+          log(node.id, node.type, `Sub-workflow: ${subPath}`, "info");
+          await handleWorkflowNode(node, context, serviceContext, promptCallbacks);
+          log(node.id, node.type, `Sub-workflow completed`, "success", { path: subPath });
+          addHistoryStep(node.id, node.type, { path: subPath });
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "mcp": {
+          const mcpUrl = replaceVariables(node.properties["url"] || "", context);
+          const mcpTool = replaceVariables(node.properties["tool"] || "", context);
+          log(node.id, node.type, `MCP: ${mcpTool} @ ${mcpUrl}`, "info");
+          await handleMcpNode(node, context, serviceContext);
+          const mcpSaveTo = node.properties["saveTo"];
+          const mcpResult = mcpSaveTo ? context.variables.get(mcpSaveTo) : undefined;
+          log(node.id, node.type, `MCP completed`, "success", { url: mcpUrl, tool: mcpTool }, mcpResult);
+          addHistoryStep(node.id, node.type, { url: mcpUrl, tool: mcpTool }, mcpResult);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "sleep": {
+          const duration = replaceVariables(node.properties["duration"] || "0", context);
+          log(node.id, node.type, `Sleeping ${duration}ms`, "info");
+          await handleSleepNode(node, context);
+          log(node.id, node.type, `Sleep completed`, "success", { duration });
+          addHistoryStep(node.id, node.type, { duration });
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log(node.id, node.type, `Error: ${errorMessage}`, "error");
+      addHistoryStep(node.id, node.type, undefined, undefined, "error", errorMessage);
+      historyRecord.status = "error";
+      historyRecord.endTime = new Date().toISOString();
+      throw error;
+    }
+  }
+
+  if (totalIterations >= MAX_ITERATIONS) {
+    historyRecord.status = "error";
+    historyRecord.endTime = new Date().toISOString();
+    throw new Error(`Workflow exceeded maximum iterations (${MAX_ITERATIONS})`);
+  }
+
+  historyRecord.status = "completed";
+  historyRecord.endTime = new Date().toISOString();
+
+  return { context, historyRecord };
+}
