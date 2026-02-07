@@ -13,7 +13,7 @@ export function useFileUpload() {
   const [progress, setProgress] = useState<UploadProgress[]>([]);
 
   const upload = useCallback(
-    async (files: File[], folderId: string): Promise<boolean> => {
+    async (files: File[], folderId: string, namePrefix?: string): Promise<boolean> => {
       if (files.length === 0) return false;
 
       setUploading(true);
@@ -39,6 +39,9 @@ export function useFileUpload() {
 
       const formData = new FormData();
       formData.set("folderId", folderId);
+      if (namePrefix) {
+        formData.set("namePrefix", namePrefix);
+      }
       for (const f of validFiles) {
         formData.append("files", f);
       }

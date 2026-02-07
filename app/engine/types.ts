@@ -176,7 +176,6 @@ export interface PromptCallbacks {
 export interface ServiceContext {
   driveAccessToken: string;
   driveRootFolderId: string;
-  driveWorkflowsFolderId: string;
   driveHistoryFolderId: string;
   geminiApiKey?: string;
   abortSignal?: AbortSignal;

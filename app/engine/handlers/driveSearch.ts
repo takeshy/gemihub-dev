@@ -16,7 +16,7 @@ export async function handleDriveSearchNode(
   if (!saveTo) throw new Error("drive-search node missing 'saveTo' property");
 
   const accessToken = serviceContext.driveAccessToken;
-  const folderId = serviceContext.driveWorkflowsFolderId;
+  const folderId = serviceContext.driveRootFolderId;
 
   const files = await driveService.searchFiles(accessToken, folderId, query, searchContent);
 

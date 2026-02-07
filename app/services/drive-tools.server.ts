@@ -2,13 +2,12 @@
 
 import {
   readFile,
-  listFiles,
   searchFiles,
   createFile,
   updateFile,
-  listFolders,
   getFileMetadata,
 } from "./google-drive.server";
+import { getFileListFromMeta } from "./sync-meta.server";
 import type { ToolDefinition, EditHistorySettings } from "~/types/settings";
 import { saveEdit } from "./edit-history.server";
 
@@ -41,7 +40,7 @@ export const DRIVE_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: "search_drive_files",
-    description: "Search for files in Google Drive by name or content. Use list_drive_files to discover folder IDs, then search within specific folders.",
+    description: "Search for files in Google Drive by name or content",
     parameters: {
       type: "object",
       properties: {
@@ -53,9 +52,9 @@ export const DRIVE_TOOL_DEFINITIONS: ToolDefinition[] = [
           type: "boolean",
           description: "Whether to search file content (true) or just names (false). Default: false",
         },
-        folderId: {
+        folder: {
           type: "string",
-          description: "The folder ID to search in. If omitted, searches in the root app folder",
+          description: "Virtual folder path to filter results (e.g. 'notes' or 'projects/src'). If omitted, searches all files",
         },
       },
       required: ["query"],
@@ -63,34 +62,30 @@ export const DRIVE_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: "list_drive_files",
-    description: "List files in a Google Drive folder",
+    description: "List files in Google Drive. Files are organized in a virtual folder structure using path separators in file names (e.g. 'notes/todo.md'). Use the folder parameter to list files under a specific path.",
     parameters: {
       type: "object",
       properties: {
-        folderId: {
+        folder: {
           type: "string",
-          description: "The folder ID. If omitted, lists files in the root app folder",
+          description: "Virtual folder path to list (e.g. 'notes' or 'projects/src'). If omitted, lists all files and top-level virtual folders",
         },
       },
     },
   },
   {
     name: "create_drive_file",
-    description: "Create a new file in Google Drive",
+    description: "Create a new file in Google Drive. Use path separators in the name to place it in a virtual folder (e.g. 'notes/todo.md')",
     parameters: {
       type: "object",
       properties: {
         name: {
           type: "string",
-          description: "The file name",
+          description: "The file name, optionally including virtual folder path (e.g. 'notes/todo.md')",
         },
         content: {
           type: "string",
           description: "The file content",
-        },
-        folderId: {
-          type: "string",
-          description: "The parent folder ID. If omitted, creates in root app folder",
         },
       },
       required: ["name", "content"],
@@ -136,8 +131,14 @@ export async function executeDriveTool(
     case "search_drive_files": {
       const query = args.query as string;
       const searchContent = (args.searchContent as boolean) ?? false;
-      const folderId = (args.folderId as string) ?? rootFolderId;
-      const files = await searchFiles(accessToken, folderId, query, searchContent);
+      const folder = args.folder as string | undefined;
+      let files = await searchFiles(accessToken, rootFolderId, query, searchContent);
+      // Filter by virtual folder prefix
+      if (folder) {
+        files = files.filter(
+          (f) => f.name === folder || f.name.startsWith(folder + "/")
+        );
+      }
       return {
         files: files.map((f) => ({
           id: f.id,
@@ -149,28 +150,46 @@ export async function executeDriveTool(
     }
 
     case "list_drive_files": {
-      const folderId = (args.folderId as string) ?? rootFolderId;
-      const files = await listFiles(accessToken, folderId);
-      const folders = await listFolders(accessToken, folderId);
+      const folder = args.folder as string | undefined;
+      const { files: allFiles } = await getFileListFromMeta(accessToken, rootFolderId);
+
+      // Filter and extract virtual structure
+      const prefix = folder ? folder + "/" : "";
+      const filteredFiles: Array<{ id: string; name: string; mimeType: string; modifiedTime?: string }> = [];
+      const virtualFolders = new Set<string>();
+
+      for (const f of allFiles) {
+        if (folder && !f.name.startsWith(prefix)) continue;
+
+        const relativeName = folder ? f.name.slice(prefix.length) : f.name;
+        const slashIndex = relativeName.indexOf("/");
+
+        if (slashIndex === -1) {
+          // Direct child file
+          filteredFiles.push({
+            id: f.id,
+            name: relativeName,
+            mimeType: f.mimeType,
+            modifiedTime: f.modifiedTime,
+          });
+        } else {
+          // File in a subfolder — extract immediate subfolder name
+          virtualFolders.add(relativeName.slice(0, slashIndex));
+        }
+      }
+
       return {
-        files: files.map((f) => ({
-          id: f.id,
-          name: f.name,
-          mimeType: f.mimeType,
-          modifiedTime: f.modifiedTime,
-        })),
-        folders: folders.map((f) => ({
-          id: f.id,
-          name: f.name,
-        })),
+        files: filteredFiles,
+        folders: Array.from(virtualFolders)
+          .sort()
+          .map((name) => ({ name })),
       };
     }
 
     case "create_drive_file": {
       const name = args.name as string;
       const content = args.content as string;
-      const folderId = (args.folderId as string) ?? rootFolderId;
-      const file = await createFile(accessToken, name, content, folderId);
+      const file = await createFile(accessToken, name, content, rootFolderId);
       return {
         id: file.id,
         name: file.name,

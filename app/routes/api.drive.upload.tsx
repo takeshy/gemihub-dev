@@ -1,10 +1,8 @@
 import type { Route } from "./+types/api.drive.upload";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
-import {
-  createFileBinary,
-  getWorkflowsFolderId,
-} from "~/services/google-drive.server";
+import { createFileBinary } from "~/services/google-drive.server";
+import { upsertFileInMeta } from "~/services/sync-meta.server";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file (Drive multipart limit)
 
@@ -14,18 +12,14 @@ export async function action({ request }: Route.ActionArgs) {
 
   const formData = await request.formData();
   const folderId = formData.get("folderId") as string | null;
+  const namePrefix = formData.get("namePrefix") as string | null;
   const files = formData.getAll("files") as File[];
 
   if (files.length === 0) {
     return Response.json({ error: "No files provided" }, { status: 400 });
   }
 
-  const targetFolderId =
-    folderId ||
-    (await getWorkflowsFolderId(
-      validTokens.accessToken,
-      validTokens.rootFolderId
-    ));
+  const targetFolderId = folderId || validTokens.rootFolderId;
 
   const results: { name: string; file?: unknown; error?: string }[] = [];
 
@@ -41,13 +35,15 @@ export async function action({ request }: Route.ActionArgs) {
     try {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
+      const uploadName = namePrefix ? `${namePrefix}/${file.name}` : file.name;
       const driveFile = await createFileBinary(
         validTokens.accessToken,
-        file.name,
+        uploadName,
         buffer,
         targetFolderId,
         file.type || "application/octet-stream"
       );
+      await upsertFileInMeta(validTokens.accessToken, targetFolderId, driveFile);
       results.push({ name: file.name, file: driveFile });
     } catch (e) {
       results.push({

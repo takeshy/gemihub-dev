@@ -16,7 +16,7 @@ A web application that integrates Google Gemini AI with Google Drive. Build visu
 - **MCP (Model Context Protocol)** — Connect external MCP servers as tools for the AI chat
 - **Encryption** — Optional hybrid encryption (RSA + AES) for chat history and workflow logs
 - **Edit History** — Unified diff-based change tracking for workflows and Drive files
-- **Offline Cache & Sync** — IndexedDB-based file caching with Push/Pull synchronization across devices using md5 hash comparison. Temp file staging for faster saves (1-2 API calls instead of ~9)
+- **Offline Cache & Sync** — IndexedDB-based file caching with Push/Pull synchronization across devices using md5 hash comparison. Temp file staging for faster saves (1-2 API calls instead of ~9). Conflict backup, exclude patterns, Full Push/Pull, file status display, temp diff view
 - **Multi-Model Support** — Gemini 3, 2.5, Flash, Pro, Lite, Gemma; paid and free plan model lists
 - **Image Generation** — Generate images via Gemini 2.5 Flash Image / 3 Pro Image models
 - **i18n** — English and Japanese UI
@@ -38,7 +38,7 @@ A web application that integrates Google Gemini AI with Google Drive. Build visu
 app/
 ├── routes/           # Pages and API endpoints
 │   ├── _index.tsx              # IDE dashboard
-│   ├── settings.tsx            # Settings (6-tab UI)
+│   ├── settings.tsx            # Settings (7-tab UI)
 │   ├── api.chat.tsx            # Chat SSE streaming
 │   ├── api.chat.history.tsx    # Chat history CRUD
 │   ├── api.drive.files.tsx     # Drive file operations
@@ -81,8 +81,9 @@ app/
 │   ├── editor/           # Markdown editor wrapper
 │   ├── flow/             # Workflow canvas (Mermaid preview)
 │   ├── execution/        # Workflow execution panel, prompt modal
-│   ├── ide/              # IDE layout, sync UI, dialogs, file tree
-│   └── settings/         # CommandsTab, TempFilesDialog
+│   ├── ide/              # IDE layout, sync UI, dialogs, file tree, TempDiffModal
+│   ├── shared/           # Shared components (DiffView)
+│   └── settings/         # CommandsTab, TempFilesDialog, UntrackedFilesDialog
 ├── contexts/         # React contexts
 │   └── EditorContext.tsx  # Shared editor state (file content, selection, file list)
 ├── i18n/             # Internationalization
@@ -95,7 +96,8 @@ app/
 │   ├── workflow-to-mermaid.ts       # Workflow → Mermaid diagram
 │   ├── workflow-node-summary.ts     # Node property summaries
 │   ├── workflow-node-properties.ts  # Node property get/set
-│   └── workflow-connections.ts      # Node connection management
+│   ├── workflow-connections.ts      # Node connection management
+│   └── parallel.ts                  # Concurrent processing utility
 └── engine/           # Workflow execution engine
     ├── parser.ts         # YAML → AST
     ├── executor.ts       # Handler-per-node-type execution
@@ -216,7 +218,8 @@ All settings are stored in `settings.json` in your Google Drive root folder (`ge
 
 | Tab | What you can configure |
 |-----|----------------------|
-| **General** | API key, paid/free plan, default model, system prompt, chat history saving, language (en/ja), font size, temp file management |
+| **General** | API key, paid/free plan, default model, system prompt, chat history saving, language (en/ja), font size, theme |
+| **Sync** | Exclude patterns, conflict folder, Full Push/Pull, temp file management, untracked file detection, clear conflicts, last sync time display |
 | **MCP Servers** | Add/remove external MCP servers, test connections, enable/disable per server |
 | **RAG** | Enable/disable, top-K, manage multiple RAG settings, sync Drive files to File Search |
 | **Encryption** | Set up RSA key pair, toggle encryption for chat history and workflow logs |
@@ -271,6 +274,7 @@ gemini-hub/
 │   └── _sync-meta.json  # Push/Pull sync metadata
 ├── chats/               # Chat history JSON files
 ├── edit-history/        # Edit snapshots and diff history
+├── sync_conflicts/      # Conflict backup copies (configurable folder name)
 └── __TEMP__/            # Staged file saves (applied on Push)
 ```
 
@@ -282,9 +286,16 @@ Files are cached in the browser's IndexedDB for instant loading. The sync system
 - **Temp file staging** — File saves are first written to a `__TEMP__/` folder on Drive (1-2 API calls), then applied to the real files during Push
 - **Push** — Apply staged temp files to real Drive files, update remote sync metadata (`_sync-meta.json`), then push any remaining locally changed files
 - **Pull** — Download remotely changed files to the local cache. Staged temp files are preserved and will be applied on the next Push
-- **Conflict resolution** — When both local and remote copies changed, choose "Keep Local" or "Keep Remote" per file
+- **Conflict resolution** — When both local and remote copies changed, choose "Keep Local" or "Keep Remote" per file. The losing side is automatically backed up to the `sync_conflicts/` folder
+- **Exclude patterns** — Regex patterns to exclude files from sync (configured in the Sync settings tab)
+- **Full Push / Full Pull** — Force-sync all files in one direction (available in the Sync settings tab)
+- **File status dots** — File tree shows green dots for cached files and yellow dots for files with pending temp changes
+- **Cache clear** — Right-click a file or folder to clear its cache. Files with pending changes are skipped to prevent data loss
+- **Temp diff view** — When downloading a temp file, a unified diff is shown before applying changes
+- **Untracked file detection** — Detect remote files not tracked by sync metadata; delete or restore them from the Sync settings tab
+- **Push rejection** — Push is rejected when remote is newer than local; pull first to avoid overwriting changes
 
-The sync status bar in the header shows pending push/pull counts and provides manual sync controls. Temp files can be managed (downloaded or deleted) from the General settings tab.
+The sync status bar in the header shows pending push/pull counts and provides manual sync controls. Temp files can be managed from the Sync settings tab.
 
 ## License
 

@@ -2,18 +2,14 @@ import type { Route } from "./+types/api.drive.files";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import {
-  listFiles,
   readFile,
   readFileRaw,
   createFile,
-  createFolder,
   updateFile,
   deleteFile,
   renameFile,
-  moveFile,
   searchFiles,
   getFileMetadata,
-  getWorkflowsFolderId,
 } from "~/services/google-drive.server";
 import { getSettings } from "~/services/user-settings.server";
 import { saveEdit } from "~/services/edit-history.server";
@@ -21,6 +17,11 @@ import {
   encryptFileContent,
   decryptFileContent,
 } from "~/services/crypto.server";
+import {
+  getFileListFromMeta,
+  upsertFileInMeta,
+  removeFileFromMeta,
+} from "~/services/sync-meta.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
@@ -31,20 +32,15 @@ export async function loader({ request }: Route.LoaderArgs) {
   const fileId = url.searchParams.get("fileId");
   const query = url.searchParams.get("query");
 
-  const workflowsFolderId = await getWorkflowsFolderId(
-    validTokens.accessToken,
-    validTokens.rootFolderId
-  );
-
   switch (action) {
     case "list": {
-      const files = await listFiles(validTokens.accessToken, workflowsFolderId);
-      return Response.json({ files });
+      const { files, meta } = await getFileListFromMeta(validTokens.accessToken, validTokens.rootFolderId);
+      return Response.json({ files, meta: { lastUpdatedAt: meta.lastUpdatedAt, files: meta.files } });
     }
     case "metadata": {
       if (!fileId) return Response.json({ error: "Missing fileId" }, { status: 400 });
       const meta = await getFileMetadata(validTokens.accessToken, fileId);
-      return Response.json({ md5Checksum: meta.md5Checksum, modifiedTime: meta.modifiedTime });
+      return Response.json({ name: meta.name, mimeType: meta.mimeType, md5Checksum: meta.md5Checksum, modifiedTime: meta.modifiedTime });
     }
     case "read": {
       if (!fileId) return Response.json({ error: "Missing fileId" }, { status: 400 });
@@ -56,7 +52,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     }
     case "search": {
       if (!query) return Response.json({ error: "Missing query" }, { status: 400 });
-      const files = await searchFiles(validTokens.accessToken, workflowsFolderId, query);
+      const files = await searchFiles(validTokens.accessToken, validTokens.rootFolderId, query);
       return Response.json({ files });
     }
     case "raw": {
@@ -80,34 +76,19 @@ export async function action({ request }: Route.ActionArgs) {
   const { tokens: validTokens } = await getValidTokens(request, tokens);
 
   const body = await request.json();
-  const { action: actionType, fileId, name, content, password, folderId, mimeType, newParentId, oldParentId } = body;
-
-  const workflowsFolderId = await getWorkflowsFolderId(
-    validTokens.accessToken,
-    validTokens.rootFolderId
-  );
+  const { action: actionType, fileId, name, content, password, mimeType } = body;
 
   switch (actionType) {
     case "create": {
-      const parentId = folderId || workflowsFolderId;
       const file = await createFile(
         validTokens.accessToken,
         name,
         content || "",
-        parentId,
+        validTokens.rootFolderId,
         mimeType || "text/yaml"
       );
-      return Response.json({ file });
-    }
-    case "createFolder": {
-      if (!name) return Response.json({ error: "Missing name" }, { status: 400 });
-      const parentId = folderId || validTokens.rootFolderId;
-      const folder = await createFolder(
-        validTokens.accessToken,
-        name,
-        parentId
-      );
-      return Response.json({ file: folder });
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+      return Response.json({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "update": {
       if (!fileId) return Response.json({ error: "Missing fileId" }, { status: 400 });
@@ -132,28 +113,25 @@ export async function action({ request }: Route.ActionArgs) {
         // Don't fail the update if edit history fails
       }
 
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
       return Response.json({
         file,
         md5Checksum: file.md5Checksum,
         editHistoryEntry,
+        meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files },
       });
-    }
-    case "move": {
-      if (!fileId || !newParentId || !oldParentId) {
-        return Response.json({ error: "Missing fileId, newParentId, or oldParentId" }, { status: 400 });
-      }
-      const movedFile = await moveFile(validTokens.accessToken, fileId, newParentId, oldParentId);
-      return Response.json({ file: movedFile });
     }
     case "rename": {
       if (!fileId || !name) return Response.json({ error: "Missing fileId or name" }, { status: 400 });
       const renamed = await renameFile(validTokens.accessToken, fileId, name);
-      return Response.json({ file: renamed });
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, renamed);
+      return Response.json({ file: renamed, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "delete": {
       if (!fileId) return Response.json({ error: "Missing fileId" }, { status: 400 });
       await deleteFile(validTokens.accessToken, fileId);
-      return Response.json({ ok: true });
+      const updatedMeta = await removeFileFromMeta(validTokens.accessToken, validTokens.rootFolderId, fileId);
+      return Response.json({ ok: true, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "encrypt": {
       if (!fileId) {
@@ -177,7 +155,8 @@ export async function action({ request }: Route.ActionArgs) {
         fileId,
         meta.name + ".encrypted"
       );
-      return Response.json({ file: renamedFile });
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, renamedFile);
+      return Response.json({ file: renamedFile, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "decrypt": {
       if (!fileId || !password) {
@@ -194,7 +173,8 @@ export async function action({ request }: Route.ActionArgs) {
       const decMeta = await getFileMetadata(validTokens.accessToken, fileId);
       const newName = decMeta.name.replace(/\.encrypted$/, "");
       const decRenamedFile = await renameFile(validTokens.accessToken, fileId, newName);
-      return Response.json({ file: decRenamedFile });
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, decRenamedFile);
+      return Response.json({ file: decRenamedFile, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     default:
       return Response.json({ error: "Unknown action" }, { status: 400 });

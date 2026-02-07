@@ -3,8 +3,9 @@ import type { SessionTokens } from "./session.server";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 const ROOT_FOLDER_NAME = "gemini-hub";
-const WORKFLOWS_FOLDER = "workflows";
 const HISTORY_FOLDER = "history";
+
+const SYSTEM_FILES = new Set(["settings.json", "_sync-meta.json"]);
 
 export interface DriveFile {
   id: string;
@@ -101,13 +102,6 @@ export async function ensureSubFolder(
   return folder.id;
 }
 
-export async function getWorkflowsFolderId(
-  accessToken: string,
-  rootFolderId: string
-): Promise<string> {
-  return ensureSubFolder(accessToken, rootFolderId, WORKFLOWS_FOLDER);
-}
-
 export async function getHistoryFolderId(
   accessToken: string,
   rootFolderId: string
@@ -115,7 +109,7 @@ export async function getHistoryFolderId(
   return ensureSubFolder(accessToken, rootFolderId, HISTORY_FOLDER);
 }
 
-// List files in a folder
+// List files in a folder (with pagination for 1000+ files)
 export async function listFiles(
   accessToken: string,
   folderId: string,
@@ -126,12 +120,37 @@ export async function listFiles(
     query += ` and mimeType='${mimeType}'`;
   }
 
-  const res = await driveRequest(
-    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum)&orderBy=modifiedTime desc`,
-    accessToken
+  const allFiles: DriveFile[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const url = new URL(`${DRIVE_API}/files`);
+    url.searchParams.set("q", query);
+    url.searchParams.set("fields", "nextPageToken,files(id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum)");
+    url.searchParams.set("orderBy", "modifiedTime desc");
+    url.searchParams.set("pageSize", "1000");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const res = await driveRequest(url.toString(), accessToken);
+    const data: DriveListResponse = await res.json();
+    allFiles.push(...data.files);
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return allFiles;
+}
+
+// List user files in rootFolder (excludes folders and system files)
+export async function listUserFiles(
+  accessToken: string,
+  rootFolderId: string
+): Promise<DriveFile[]> {
+  const allFiles = await listFiles(accessToken, rootFolderId);
+  return allFiles.filter(
+    (f) =>
+      f.mimeType !== "application/vnd.google-apps.folder" &&
+      !SYSTEM_FILES.has(f.name)
   );
-  const data: DriveListResponse = await res.json();
-  return data.files;
 }
 
 // Read file content
@@ -410,17 +429,12 @@ export async function createFileBinary(
 export interface DriveServiceContext {
   accessToken: string;
   rootFolderId: string;
-  workflowsFolderId: string;
   historyFolderId: string;
 }
 
 export async function getDriveContext(
   tokens: SessionTokens
 ): Promise<DriveServiceContext> {
-  const workflowsFolderId = await getWorkflowsFolderId(
-    tokens.accessToken,
-    tokens.rootFolderId
-  );
   const historyFolderId = await getHistoryFolderId(
     tokens.accessToken,
     tokens.rootFolderId
@@ -429,7 +443,6 @@ export async function getDriveContext(
   return {
     accessToken: tokens.accessToken,
     rootFolderId: tokens.rootFolderId,
-    workflowsFolderId,
     historyFolderId,
   };
 }

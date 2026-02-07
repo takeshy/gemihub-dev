@@ -16,7 +16,7 @@ Google Gemini AI と Google Drive を統合した Web アプリケーション�
 - **MCP（Model Context Protocol）** — 外部MCPサーバーをAIチャットのツールとして接続
 - **暗号化** — チャット履歴・ワークフローログのハイブリッド暗号化（RSA + AES）に対応
 - **変更履歴** — unified diff形式によるワークフロー・Driveファイルの変更追跡
-- **オフラインキャッシュ & 同期** — IndexedDBベースのファイルキャッシュとmd5ハッシュ比較によるデバイス間Push/Pull同期。一時ファイルステージングにより保存を高速化（APIコール数: 約9→1-2）
+- **オフラインキャッシュ & 同期** — IndexedDBベースのファイルキャッシュとmd5ハッシュ比較によるデバイス間Push/Pull同期。一時ファイルステージングにより保存を高速化（APIコール数: 約9→1-2）。コンフリクト退避コピー、除外パターン、Full Push/Pull、ファイルステータス表示、一時ファイルdiff表示
 - **マルチモデル対応** — Gemini 3, 2.5, Flash, Pro, Lite, Gemma。有料/無料プラン別モデルリスト
 - **画像生成** — Gemini 2.5 Flash Image / 3 Pro Image モデルで画像を生成
 - **多言語対応** — 英語・日本語UI
@@ -38,7 +38,7 @@ Google Gemini AI と Google Drive を統合した Web アプリケーション�
 app/
 ├── routes/           # ページ & APIエンドポイント
 │   ├── _index.tsx              # IDEダッシュボード
-│   ├── settings.tsx            # 設定（6タブUI）
+│   ├── settings.tsx            # 設定（7タブUI）
 │   ├── api.chat.tsx            # チャットSSEストリーミング
 │   ├── api.chat.history.tsx    # チャット履歴CRUD
 │   ├── api.drive.files.tsx     # Driveファイル操作
@@ -81,8 +81,9 @@ app/
 │   ├── editor/           # Markdownエディタラッパー
 │   ├── flow/             # ワークフローキャンバス（Mermaidプレビュー）
 │   ├── execution/        # ワークフロー実行パネル、プロンプトモーダル
-│   ├── ide/              # IDEレイアウト、同期UI、ダイアログ、ファイルツリー
-│   └── settings/         # CommandsTab、TempFilesDialog
+│   ├── ide/              # IDEレイアウト、同期UI、ダイアログ、ファイルツリー、TempDiffModal
+│   ├── shared/           # 共有コンポーネント（DiffView）
+│   └── settings/         # CommandsTab、TempFilesDialog、UntrackedFilesDialog
 ├── contexts/         # Reactコンテキスト
 │   └── EditorContext.tsx  # エディタ共有状態（ファイル内容、選択範囲、ファイル一覧）
 ├── i18n/             # 多言語対応
@@ -95,7 +96,8 @@ app/
 │   ├── workflow-to-mermaid.ts       # ワークフロー → Mermaid図
 │   ├── workflow-node-summary.ts     # ノードプロパティサマリー
 │   ├── workflow-node-properties.ts  # ノードプロパティ取得/設定
-│   └── workflow-connections.ts      # ノード接続管理
+│   ├── workflow-connections.ts      # ノード接続管理
+│   └── parallel.ts                  # 並列処理ユーティリティ
 └── engine/           # ワークフロー実行エンジン
     ├── parser.ts         # YAML → AST
     ├── executor.ts       # ノードタイプごとのハンドラ実行
@@ -216,7 +218,8 @@ docker run -p 8080:8080 \
 
 | タブ | 設定内容 |
 |------|---------|
-| **General** | APIキー、有料/無料プラン、デフォルトモデル、システムプロンプト、チャット履歴保存、言語（en/ja）、フォントサイズ、一時ファイル管理 |
+| **General** | APIキー、有料/無料プラン、デフォルトモデル、システムプロンプト、チャット履歴保存、言語（en/ja）、フォントサイズ、テーマ |
+| **Sync** | 除外パターン、コンフリクトフォルダ、Full Push/Pull、一時ファイル管理、未追跡ファイル検出、コンフリクトクリア、最終同期日時表示 |
 | **MCP Servers** | 外部MCPサーバーの追加・削除、接続テスト、サーバーごとの有効/無効切替 |
 | **RAG** | 有効/無効、Top-K、複数RAG設定の管理、DriveファイルのFile Search同期 |
 | **Encryption** | RSA鍵ペアの生成、チャット履歴・ワークフローログの暗号化切替 |
@@ -271,6 +274,7 @@ gemini-hub/
 │   └── _sync-meta.json  # Push/Pull同期メタデータ
 ├── chats/               # チャット履歴JSONファイル
 ├── edit-history/        # 編集スナップショットとdiff履歴
+├── sync_conflicts/      # コンフリクト退避コピー（フォルダ名は設定変更可）
 └── __TEMP__/            # ステージング済み一時ファイル（Push時に適用）
 ```
 
@@ -282,9 +286,16 @@ gemini-hub/
 - **一時ファイルステージング** — ファイル保存時はまずDrive上の `__TEMP__/` フォルダに書き込み（APIコール1-2回）、Push時に実ファイルへ適用
 - **Push** — ステージング済みの一時ファイルを実Driveファイルに適用し、リモート同期メタデータ（`_sync-meta.json`）を更新。その後、残りのローカル変更をプッシュ
 - **Pull** — リモートで変更されたファイルをローカルキャッシュにダウンロード。ステージング済みの一時ファイルは保持され、次回Push時に適用
-- **コンフリクト解決** — ローカルとリモートの両方が変更された場合、ファイルごとに「ローカルを保持」または「リモートを保持」を選択
+- **コンフリクト解決** — ローカルとリモートの両方が変更された場合、ファイルごとに「ローカルを保持」または「リモートを保持」を選択。負けた側は自動的に `sync_conflicts/` フォルダに退避コピーされる
+- **除外パターン** — 同期から除外するファイルの正規表現パターン（Sync設定タブで設定）
+- **Full Push / Full Pull** — 全ファイルを一方向に強制同期（Sync設定タブから実行）
+- **ファイルステータスドット** — ファイルツリーにキャッシュ済み（緑）・一時変更あり（黄）のドットを表示
+- **キャッシュクリア** — ファイルやフォルダを右クリックしてキャッシュをクリア。変更ありファイルはデータ損失防止のためスキップ
+- **一時ファイルdiff表示** — 一時ファイルダウンロード時にunified diffを表示してから適用
+- **未追跡ファイル検出** — 同期メタデータに含まれないリモートファイルを検出し、Sync設定タブから削除または復元
+- **Push拒否** — リモートがローカルより新しい場合はPushを拒否し、先にPullを促す
 
-ヘッダーの同期ステータスバーでPush/Pull待ちの件数を確認でき、手動同期操作が可能です。一時ファイルはGeneral設定タブから管理（ダウンロード・削除）できます。
+ヘッダーの同期ステータスバーでPush/Pull待ちの件数を確認でき、手動同期操作が可能です。一時ファイルはSync設定タブから管理できます。
 
 ## ライセンス
 

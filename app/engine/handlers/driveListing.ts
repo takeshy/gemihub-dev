@@ -1,6 +1,6 @@
 import type { WorkflowNode, ExecutionContext, ServiceContext } from "../types";
 import { replaceVariables } from "./utils";
-import * as driveService from "~/services/google-drive.server";
+import { getFileListFromMeta } from "~/services/sync-meta.server";
 
 // Handle drive-list node (was: note-list)
 export async function handleDriveListNode(
@@ -17,16 +17,15 @@ export async function handleDriveListNode(
 
   const accessToken = serviceContext.driveAccessToken;
 
-  // If folder is specified, search for it; otherwise use workflows folder
-  let folderId = serviceContext.driveWorkflowsFolderId;
-  if (folder) {
-    const folders = await driveService.listFolders(accessToken, serviceContext.driveRootFolderId);
-    const found = folders.find(f => f.name === folder);
-    if (found) folderId = found.id;
-  }
+  // List all user files from meta (fast path)
+  const { files: allFiles } = await getFileListFromMeta(accessToken, serviceContext.driveRootFolderId);
 
-  const files = await driveService.listFiles(accessToken, folderId);
-  const limitedFiles = files.slice(0, limit);
+  // Filter by virtual folder prefix
+  const prefix = folder ? folder + "/" : "";
+  const filtered = folder
+    ? allFiles.filter(f => f.name.startsWith(prefix))
+    : allFiles;
+  const limitedFiles = filtered.slice(0, limit);
 
   const results = limitedFiles.map(f => ({
     id: f.id,
@@ -40,13 +39,14 @@ export async function handleDriveListNode(
     JSON.stringify({
       notes: results,
       count: results.length,
-      totalCount: files.length,
-      hasMore: files.length > limit,
+      totalCount: filtered.length,
+      hasMore: filtered.length > limit,
     })
   );
 }
 
 // Handle drive-folder-list node (was: folder-list)
+// In flat storage, "folders" are virtual — derived from path prefixes in file names
 export async function handleDriveFolderListNode(
   node: WorkflowNode,
   context: ExecutionContext,
@@ -58,21 +58,28 @@ export async function handleDriveFolderListNode(
   if (!saveTo) throw new Error("drive-folder-list node missing 'saveTo' property");
 
   const accessToken = serviceContext.driveAccessToken;
+  const { files: allFiles } = await getFileListFromMeta(accessToken, serviceContext.driveRootFolderId);
 
-  let parentId = serviceContext.driveRootFolderId;
-  if (parentFolder) {
-    const folders = await driveService.listFolders(accessToken, serviceContext.driveRootFolderId);
-    const found = folders.find(f => f.name === parentFolder);
-    if (found) parentId = found.id;
+  // Extract immediate virtual subfolder names under parentFolder
+  const prefix = parentFolder ? parentFolder + "/" : "";
+  const folderNames = new Set<string>();
+
+  for (const f of allFiles) {
+    const name = parentFolder ? (f.name.startsWith(prefix) ? f.name.slice(prefix.length) : null) : f.name;
+    if (name === null) continue;
+    const slashIndex = name.indexOf("/");
+    if (slashIndex !== -1) {
+      folderNames.add(name.slice(0, slashIndex));
+    }
   }
 
-  const folders = await driveService.listFolders(accessToken, parentId);
+  const sortedFolders = Array.from(folderNames).sort();
 
   context.variables.set(
     saveTo,
     JSON.stringify({
-      folders: folders.map(f => ({ id: f.id, name: f.name })),
-      count: folders.length,
+      folders: sortedFolders.map(name => ({ name })),
+      count: sortedFolders.length,
     })
   );
 }
