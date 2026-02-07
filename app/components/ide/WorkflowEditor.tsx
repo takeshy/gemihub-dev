@@ -20,7 +20,7 @@ export function WorkflowEditor({
   fileId,
   fileName,
   initialContent,
-  settings,
+  _settings,
   saveToCache,
 }: WorkflowEditorProps) {
   const { t } = useI18n();

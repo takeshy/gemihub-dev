@@ -114,7 +114,7 @@ function WorkflowNodeListView({
   onWorkflowChanged?: () => void;
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
 }) {
-  const { content: rawContent, loading: fileLoading, error: fileError, save, refresh } = useFileWithCache(fileId);
+  const { content: rawContent, error: fileError, save, refresh } = useFileWithCache(fileId);
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [workflowName, setWorkflowName] = useState("");

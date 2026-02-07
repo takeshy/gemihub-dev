@@ -169,6 +169,8 @@ function IDELayout({
             setActiveFileMimeType(data.mimeType || null);
             if (data.name.endsWith(".yaml") || data.name.endsWith(".yml")) {
               setRightPanel("workflow");
+            } else {
+              setRightPanel("chat");
             }
           }
         })
@@ -208,9 +210,11 @@ function IDELayout({
       setActiveFileId(fileId);
       setActiveFileName(fileName);
       setActiveFileMimeType(mimeType);
-      // Auto-switch to workflow tab for YAML files
+      // Auto-switch right panel based on file type
       if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
         setRightPanel("workflow");
+      } else {
+        setRightPanel("chat");
       }
       // Update URL without triggering React Router navigation/loader
       const url = new URL(window.location.href);

@@ -83,22 +83,6 @@ function removeNodeFromTree(
     );
 }
 
-function isDescendant(
-  nodes: CachedTreeNode[],
-  ancestorId: string,
-  targetId: string
-): boolean {
-  for (const node of nodes) {
-    if (node.id === ancestorId && node.isFolder && node.children) {
-      return findInChildren(node.children, targetId);
-    }
-    if (node.children && isDescendant(node.children, ancestorId, targetId)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function findInChildren(
   nodes: CachedTreeNode[],
   targetId: string
@@ -216,7 +200,7 @@ export function DriveFileTree({
   const { t } = useI18n();
   const dragCounterRef = useRef(0);
   const folderDragCounterRef = useRef<Map<string, number>>(new Map());
-  const { uploading, progress, upload, clearProgress } = useFileUpload();
+  const { progress, upload, clearProgress } = useFileUpload();
 
   const updateTreeFromMeta = useCallback(async (metaData: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] }) => {
     const cachedMeta: CachedRemoteMeta = {
@@ -1103,7 +1087,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [encryptionEnabled, handleDelete, handleRename, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, activeFileId, cachedFiles, t]
+    [handleDelete, handleRename, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, cachedFiles, t]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {

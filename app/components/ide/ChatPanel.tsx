@@ -14,7 +14,6 @@ import type { UserSettings, ModelType, DriveToolMode, SlashCommand } from "~/typ
 import {
   getAvailableModels,
   getDefaultModelForPlan,
-  isImageGenerationModel,
 } from "~/types/settings";
 import { MessageList } from "~/components/chat/MessageList";
 import { ChatInput } from "~/components/chat/ChatInput";

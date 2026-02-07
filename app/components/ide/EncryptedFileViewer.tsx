@@ -32,7 +32,7 @@ export function EncryptedFileViewer({
   forceRefresh,
 }: EncryptedFileViewerProps) {
   const { t } = useI18n();
-  const editorCtx = useEditorContext();
+  const { setActiveFileContent, setActiveFileName, setActiveSelection } = useEditorContext();
 
   // Is the raw content actually encrypted, or plain text with .encrypted extension?
   const contentIsEncrypted = isEncryptedFile(encryptedContent);
@@ -123,11 +123,11 @@ export function EncryptedFileViewer({
   // Push decrypted content to EditorContext
   useEffect(() => {
     if (decryptedContent !== null) {
-      editorCtx.setActiveFileContent(editedContent);
-      editorCtx.setActiveFileName(fileName);
-      editorCtx.setActiveSelection(null);
+      setActiveFileContent(editedContent);
+      setActiveFileName(fileName);
+      setActiveSelection(null);
     }
-  }, [editedContent, fileName, decryptedContent]);
+  }, [editedContent, fileName, decryptedContent, setActiveFileContent, setActiveFileName, setActiveSelection]);
 
   const handleUnlock = useCallback(async () => {
     if (!password) return;
@@ -165,9 +165,9 @@ export function EncryptedFileViewer({
     (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
       const ta = e.currentTarget;
       const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd);
-      editorCtx.setActiveSelection(sel || null);
+      setActiveSelection(sel || null);
     },
-    [editorCtx]
+    [setActiveSelection]
   );
 
   // Encrypt and upload — does NOT require password (only publicKey from settings)

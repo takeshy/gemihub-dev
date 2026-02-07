@@ -5,7 +5,6 @@ import type { SyncStatus, SyncDiff, ConflictInfo } from "~/hooks/useSync";
 import {
   getCachedRemoteMeta,
   getLocallyModifiedFileIds,
-  getCachedFile,
 } from "~/services/indexeddb-cache";
 
 interface SyncStatusBarProps {

@@ -46,7 +46,7 @@ export function useAutocomplete({
   const [mode, setMode] = useState<AutocompleteMode>(null);
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [triggerPos, setTriggerPos] = useState(0);
+  const [_triggerPos, setTriggerPos] = useState(0);
 
   // Build mention items
   const mentionItems = useMemo<AutocompleteItem[]>(() => {

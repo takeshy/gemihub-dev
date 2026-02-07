@@ -171,16 +171,35 @@ export function useSync() {
         });
       }
 
-      meta.lastUpdatedAt = new Date().toISOString();
-      await setLocalSyncMeta(meta);
-
       // Clear local edit history (now persisted in Drive)
       await clearAllEditHistory();
       setLocalModifiedCount(0);
       window.dispatchEvent(new Event("sync-complete"));
 
+      // Rebuild localSyncMeta from server remoteMeta to stay in sync
+      const syncRes = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "diff", localMeta: null }),
+      });
+      if (syncRes.ok) {
+        const syncData = await syncRes.json();
+        if (syncData.remoteMeta) {
+          const newLocal: LocalSyncMeta = {
+            id: "current",
+            lastUpdatedAt: syncData.remoteMeta.lastUpdatedAt,
+            files: {},
+          };
+          for (const [id, f] of Object.entries(syncData.remoteMeta.files) as [string, { md5Checksum: string; modifiedTime: string }][]) {
+            newLocal.files[id] = { md5Checksum: f.md5Checksum, modifiedTime: f.modifiedTime };
+          }
+          await setLocalSyncMeta(newLocal);
+        }
+        setDiff(syncData.diff);
+      }
+
       setLastSyncTime(new Date().toISOString());
-      await checkSync(); // Refresh diff
+      setSyncStatus("idle");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Push failed");
       setSyncStatus("error");

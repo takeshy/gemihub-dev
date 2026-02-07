@@ -32,7 +32,7 @@ export function Header({
   rightPanel,
   setRightPanel,
   activeFileName,
-  activeFileId,
+  _activeFileId,
   syncStatus,
   syncDiff,
   lastSyncTime,

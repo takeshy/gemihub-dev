@@ -105,17 +105,17 @@ function TextBasedViewer({
   refreshKey?: number;
 }) {
   const { t } = useI18n();
-  const { content, loading, error, saving, save, saveToCache, refresh, forceRefresh } =
+  const { content, loading, error, saveToCache, refresh, forceRefresh } =
     useFileWithCache(fileId, refreshKey);
-  const editorCtx = useEditorContext();
+  const { setActiveFileContent, setActiveFileName, setActiveSelection } = useEditorContext();
 
   // Push content and file name to EditorContext
   useEffect(() => {
-    editorCtx.setActiveFileContent(content);
-    editorCtx.setActiveFileName(fileName);
+    setActiveFileContent(content);
+    setActiveFileName(fileName);
     // Reset selection on file change
-    editorCtx.setActiveSelection(null);
-  }, [content, fileName, fileId]);
+    setActiveSelection(null);
+  }, [content, fileName, fileId, setActiveFileContent, setActiveFileName, setActiveSelection]);
 
   if (loading && content === null) {
     return (
@@ -201,7 +201,6 @@ function TextBasedViewer({
 // Markdown File Editor (3 modes: Preview / WYSIWYG / Raw)
 // ---------------------------------------------------------------------------
 
-const LazyReactMarkdown = lazy(() => import("react-markdown"));
 const LazyGfmPreview = lazy(() => import("./GfmMarkdownPreview"));
 type MdEditMode = "preview" | "wysiwyg" | "raw";
 

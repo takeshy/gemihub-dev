@@ -18,8 +18,6 @@ export function useFileWithCache(
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const currentFileId = useRef(fileId);
-  const savedTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
   // Track fileId changes — reset saved, but keep content (avoid null flash)
   const [prevFileId, setPrevFileId] = useState(fileId);
   const [prevRefreshKey, setPrevRefreshKey] = useState(refreshKey);

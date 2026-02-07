@@ -1,7 +1,6 @@
 import yaml from "js-yaml";
 import type {
   Workflow,
-  WorkflowEdge,
   WorkflowNode,
   WorkflowNodeType,
   WorkflowOptions,

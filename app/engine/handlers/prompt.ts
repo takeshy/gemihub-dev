@@ -1,4 +1,4 @@
-import type { WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks, DialogResult } from "../types";
+import type { WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks } from "../types";
 import { replaceVariables } from "./utils";
 
 // Handle prompt-value node (was: prompt-file + prompt-selection)
