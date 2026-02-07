@@ -5,43 +5,89 @@ import {
   ChevronDown,
   ChevronRight,
   Trash2,
+  Cloud,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { EditHistoryEntry } from "~/services/edit-history.server";
+import { getEditHistoryForFile } from "~/services/indexeddb-cache";
 import { useI18n } from "~/i18n/context";
 import { DiffView } from "~/components/shared/DiffView";
 
 interface EditHistoryModalProps {
+  fileId: string;
   filePath: string;
   onClose: () => void;
 }
 
-export function EditHistoryModal({ filePath, onClose }: EditHistoryModalProps) {
+type DisplayEntry = {
+  id: string;
+  timestamp: string;
+  diff: string;
+  stats: { additions: number; deletions: number };
+  origin: "local" | "remote";
+};
+
+export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModalProps) {
   const { t } = useI18n();
-  const [entries, setEntries] = useState<EditHistoryEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [localEntries, setLocalEntries] = useState<DisplayEntry[]>([]);
+  const [remoteEntries, setRemoteEntries] = useState<DisplayEntry[]>([]);
+  const [showRemote, setShowRemote] = useState(false);
+  const [loadingLocal, setLoadingLocal] = useState(true);
+  const [loadingRemote, setLoadingRemote] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const fetchEntries = useCallback(async () => {
-    setLoading(true);
+  // Load local entries from IndexedDB
+  useEffect(() => {
+    (async () => {
+      try {
+        const entry = await getEditHistoryForFile(fileId);
+        if (entry) {
+          setLocalEntries(
+            entry.diffs
+              .filter((d) => d.diff !== "")
+              .map((d, i) => ({
+                id: `local-${i}`,
+                timestamp: d.timestamp,
+                diff: d.diff,
+                stats: d.stats,
+                origin: "local" as const,
+              }))
+          );
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoadingLocal(false);
+      }
+    })();
+  }, [fileId]);
+
+  const loadRemoteHistory = useCallback(async () => {
+    setLoadingRemote(true);
     try {
       const res = await fetch(
         `/api/settings/edit-history?filePath=${encodeURIComponent(filePath)}`
       );
       if (res.ok) {
         const data = await res.json();
-        setEntries(data.entries || []);
+        const entries = (data.entries || []) as EditHistoryEntry[];
+        setRemoteEntries(
+          entries.map((e) => ({
+            id: `remote-${e.id}`,
+            timestamp: e.timestamp,
+            diff: e.diff,
+            stats: e.stats,
+            origin: "remote" as const,
+          }))
+        );
       }
     } catch {
       // ignore
     } finally {
-      setLoading(false);
+      setLoadingRemote(false);
+      setShowRemote(true);
     }
   }, [filePath]);
-
-  useEffect(() => {
-    fetchEntries();
-  }, [fetchEntries]);
 
   const handleClearAll = useCallback(async () => {
     if (!confirm(t("editHistory.confirmClearAll"))) return;
@@ -51,8 +97,7 @@ export function EditHistoryModal({ filePath, onClose }: EditHistoryModalProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filePath }),
       });
-      setEntries([]);
-      setExpandedId(null);
+      setRemoteEntries([]);
     } catch {
       // ignore
     }
@@ -64,6 +109,11 @@ export function EditHistoryModal({ filePath, onClose }: EditHistoryModalProps) {
     },
     [expandedId]
   );
+
+  const allEntries = [
+    ...localEntries,
+    ...(showRemote ? remoteEntries : []),
+  ].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -88,17 +138,17 @@ export function EditHistoryModal({ filePath, onClose }: EditHistoryModalProps) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-4 py-2">
-          {loading ? (
+          {loadingLocal ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 size={ICON.XL} className="animate-spin text-gray-400" />
             </div>
-          ) : entries.length === 0 ? (
+          ) : allEntries.length === 0 ? (
             <div className="py-8 text-center text-sm text-gray-500">
               {t("editHistory.noHistory")}
             </div>
           ) : (
             <div className="space-y-1">
-              {[...entries].reverse().map((entry) => {
+              {allEntries.map((entry) => {
                 const isExpanded = expandedId === entry.id;
 
                 return (
@@ -119,7 +169,7 @@ export function EditHistoryModal({ filePath, onClose }: EditHistoryModalProps) {
                       <span className="text-xs text-gray-700 dark:text-gray-300">
                         {formatDate(entry.timestamp)}
                       </span>
-                      <SourceBadge source={entry.source} />
+                      <OriginBadge origin={entry.origin} />
                       <span className="text-xs text-gray-400">
                         <span className="text-green-600 dark:text-green-400">
                           +{entry.stats.additions}
@@ -129,11 +179,6 @@ export function EditHistoryModal({ filePath, onClose }: EditHistoryModalProps) {
                           -{entry.stats.deletions}
                         </span>
                       </span>
-                      {entry.workflowName && (
-                        <span className="text-xs text-gray-400 truncate">
-                          {entry.workflowName}
-                        </span>
-                      )}
                     </button>
 
                     {/* Expanded diff */}
@@ -151,15 +196,31 @@ export function EditHistoryModal({ filePath, onClose }: EditHistoryModalProps) {
 
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700">
-          {entries.length > 0 && (
-            <button
-              onClick={handleClearAll}
-              className="inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400"
-            >
-              <Trash2 size={ICON.SM} />
-              {t("editHistory.clearAll")}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {!showRemote && (
+              <button
+                onClick={loadRemoteHistory}
+                disabled={loadingRemote}
+                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 disabled:opacity-50"
+              >
+                {loadingRemote ? (
+                  <Loader2 size={ICON.SM} className="animate-spin" />
+                ) : (
+                  <Cloud size={ICON.SM} />
+                )}
+                {t("editHistory.showRemote")}
+              </button>
+            )}
+            {showRemote && remoteEntries.length > 0 && (
+              <button
+                onClick={handleClearAll}
+                className="inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400"
+              >
+                <Trash2 size={ICON.SM} />
+                {t("editHistory.clearAll")}
+              </button>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="ml-auto rounded px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
@@ -172,24 +233,17 @@ export function EditHistoryModal({ filePath, onClose }: EditHistoryModalProps) {
   );
 }
 
-function SourceBadge({ source }: { source: string }) {
-  const colorMap: Record<string, string> = {
-    workflow:
-      "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
-    propose_edit:
-      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-    manual:
-      "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-    auto: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-  };
-
+function OriginBadge({ origin }: { origin: "local" | "remote" }) {
+  if (origin === "local") {
+    return (
+      <span className="inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">
+        local
+      </span>
+    );
+  }
   return (
-    <span
-      className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-        colorMap[source] || colorMap.manual
-      }`}
-    >
-      {source}
+    <span className="inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+      remote
     </span>
   );
 }

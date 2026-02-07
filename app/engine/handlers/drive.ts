@@ -1,7 +1,6 @@
 import type { WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks } from "../types";
 import { replaceVariables } from "./utils";
 import * as driveService from "~/services/google-drive.server";
-import { saveEdit } from "~/services/edit-history.server";
 
 // Handle drive-file node (was: note) - write content to a Drive file
 export async function handleDriveFileNode(
@@ -58,17 +57,6 @@ export async function handleDriveFileNode(
     }
   }
 
-  // Save edit history
-  if (serviceContext.editHistorySettings) {
-    try {
-      await saveEdit(
-        accessToken,
-        serviceContext.driveRootFolderId,
-        serviceContext.editHistorySettings,
-        { path: fileName, modifiedContent: finalContent, source: "workflow" }
-      );
-    } catch { /* don't fail workflow on history error */ }
-  }
 }
 
 // Handle drive-read node (was: note-read) - read file from Drive

@@ -14,8 +14,9 @@ import {
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Attachment } from "~/types/chat";
-import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand } from "~/types/settings";
+import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand, McpServerConfig } from "~/types/settings";
 import type { ChatOverrides } from "~/components/ide/ChatPanel";
+import { useI18n } from "~/i18n/context";
 import { useEditorContext } from "~/contexts/EditorContext";
 import { useAutocomplete, type AutocompleteItem } from "~/hooks/useAutocomplete";
 import { AutocompletePopup } from "./AutocompletePopup";
@@ -33,9 +34,9 @@ interface ChatInputProps {
   isStreaming?: boolean;
   driveToolMode?: DriveToolMode;
   onDriveToolModeChange?: (mode: DriveToolMode) => void;
-  enableMcp?: boolean;
-  onEnableMcpChange?: (enabled: boolean) => void;
-  hasMcpServers?: boolean;
+  mcpServers?: McpServerConfig[];
+  enabledMcpServerNames?: string[];
+  onEnabledMcpServerNamesChange?: (names: string[]) => void;
   slashCommands?: SlashCommand[];
 }
 
@@ -94,9 +95,9 @@ export function ChatInput({
   isStreaming,
   driveToolMode = "all",
   onDriveToolModeChange,
-  enableMcp = true,
-  onEnableMcpChange,
-  hasMcpServers,
+  mcpServers = [],
+  enabledMcpServerNames = [],
+  onEnabledMcpServerNamesChange,
   slashCommands = [],
 }: ChatInputProps) {
   const [content, setContent] = useState("");
@@ -110,6 +111,8 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const toolDropdownRef = useRef<HTMLDivElement>(null);
+
+  const { t } = useI18n();
 
   // EditorContext for autocomplete data
   const editorCtx = useEditorContext();
@@ -405,7 +408,7 @@ export function ChatInput({
                   onClick={() => setToolDropdownOpen(!toolDropdownOpen)}
                   disabled={disabled}
                   className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
-                    driveToolMode !== "all" || !enableMcp
+                    driveToolMode !== "all" || (mcpServers.length > 0 && enabledMcpServerNames.length < mcpServers.filter(s => s.enabled).length)
                       ? "text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/30"
                       : "text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   }`}
@@ -414,7 +417,7 @@ export function ChatInput({
                   <Wrench size={ICON.LG} />
                 </button>
                 {toolDropdownOpen && (
-                  <div className="absolute bottom-full left-0 z-10 mb-1 w-52 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                  <div className="absolute bottom-full left-0 z-10 mb-1 w-64 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
                     <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
                       Drive Tools
                     </div>
@@ -445,22 +448,43 @@ export function ChatInput({
                         </button>
                       );
                     })}
-                    {hasMcpServers && onEnableMcpChange && (
+                    {mcpServers.length > 0 && onEnabledMcpServerNamesChange && (
                       <>
                         <div className="mx-3 my-1 border-t border-gray-200 dark:border-gray-700" />
-                        <button
-                          onClick={() => onEnableMcpChange(!enableMcp)}
-                          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                        >
-                          <span className={`inline-flex h-3 w-3 items-center justify-center rounded border text-[8px] leading-none ${
-                            enableMcp
-                              ? "border-blue-500 bg-blue-500 text-white"
-                              : "border-gray-400 dark:border-gray-500"
-                          }`}>
-                            {enableMcp ? "✓" : ""}
-                          </span>
-                          MCP Servers
-                        </button>
+                        <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                          {t("chat.mcpToolsLabel")}
+                        </div>
+                        {mcpServers.filter(s => s.enabled).map((server) => {
+                          const isEnabled = enabledMcpServerNames.includes(server.name);
+                          const toolNames = (server.tools || []).map(t => t.name);
+                          const toolCount = toolNames.length;
+                          const preview = toolNames.slice(0, 3).join(", ") + (toolNames.length > 3 ? ", ..." : "");
+                          const label = toolCount > 0
+                            ? `${server.name} (${toolCount}: ${preview})`
+                            : server.name;
+                          return (
+                            <button
+                              key={server.name}
+                              onClick={() => {
+                                const next = isEnabled
+                                  ? enabledMcpServerNames.filter(n => n !== server.name)
+                                  : [...enabledMcpServerNames, server.name];
+                                onEnabledMcpServerNamesChange(next);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                              title={toolNames.length > 0 ? toolNames.join(", ") : undefined}
+                            >
+                              <span className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded border text-[8px] leading-none ${
+                                isEnabled
+                                  ? "border-blue-500 bg-blue-500 text-white"
+                                  : "border-gray-400 dark:border-gray-500"
+                              }`}>
+                                {isEnabled ? "✓" : ""}
+                              </span>
+                              <span className="truncate">{label}</span>
+                            </button>
+                          );
+                        })}
                       </>
                     )}
                   </div>

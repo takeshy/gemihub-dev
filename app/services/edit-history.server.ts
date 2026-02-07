@@ -1,4 +1,4 @@
-// Edit history manager - ported from obsidian-gemini-helper (Drive-based version)
+// Edit history manager - Drive-based persistence (called at Push time)
 
 import * as Diff from "diff";
 import {
@@ -55,10 +55,6 @@ function generateId(): string {
 
 function pathToHistoryFileName(filePath: string): string {
   return filePath.replace(/\//g, "-") + ".history.json";
-}
-
-function pathToSnapshotFileName(filePath: string): string {
-  return filePath.replace(/\//g, "-") + ".snapshot.json";
 }
 
 /**
@@ -124,48 +120,6 @@ async function saveHistoryFile(
 }
 
 /**
- * Load snapshot
- */
-async function loadSnapshot(
-  accessToken: string,
-  historyFolderId: string,
-  filePath: string
-): Promise<{ content: string | null; fileId: string | null }> {
-  const fileName = pathToSnapshotFileName(filePath);
-  const fileId = await findFileByName(accessToken, historyFolderId, fileName);
-
-  if (!fileId) {
-    return { content: null, fileId: null };
-  }
-
-  try {
-    const content = await readFile(accessToken, fileId);
-    return { content, fileId };
-  } catch {
-    return { content: null, fileId };
-  }
-}
-
-/**
- * Save snapshot
- */
-async function saveSnapshot(
-  accessToken: string,
-  historyFolderId: string,
-  filePath: string,
-  content: string,
-  existingFileId: string | null
-): Promise<void> {
-  const fileName = pathToSnapshotFileName(filePath);
-
-  if (existingFileId) {
-    await updateFile(accessToken, existingFileId, content, "text/plain");
-  } else {
-    await createFile(accessToken, fileName, content, historyFolderId, "text/plain");
-  }
-}
-
-/**
  * Create a unified diff between two strings
  */
 function createDiffStr(
@@ -199,78 +153,10 @@ function createDiffStr(
   return { diff: lines.join("\n"), stats: { additions, deletions } };
 }
 
-/**
- * Apply a patch to get previous content
- */
-function applyPatch(content: string, diff: string): string {
-  const lines = content.split("\n");
-  const diffLines = diff.split("\n");
-
-  let i = 0;
-  const hunks: Array<{ startIdx: number; searchLines: string[]; replaceLines: string[] }> = [];
-
-  while (i < diffLines.length) {
-    const line = diffLines[i];
-    const hunkMatch = line.match(/^@@ -(\d+),?\d* \+(\d+),?\d* @@/);
-
-    if (hunkMatch) {
-      const startIdx = parseInt(hunkMatch[1], 10) - 1;
-      const searchLines: string[] = [];
-      const replaceLines: string[] = [];
-
-      i++;
-      while (i < diffLines.length && !diffLines[i].startsWith("@@")) {
-        const hunkLine = diffLines[i];
-        if (hunkLine.startsWith("-")) {
-          searchLines.push(hunkLine.substring(1));
-        } else if (hunkLine.startsWith("+")) {
-          replaceLines.push(hunkLine.substring(1));
-        } else if (hunkLine.startsWith(" ")) {
-          searchLines.push(hunkLine.substring(1));
-          replaceLines.push(hunkLine.substring(1));
-        }
-        i++;
-      }
-
-      hunks.push({ startIdx, searchLines, replaceLines });
-    } else {
-      i++;
-    }
-  }
-
-  hunks.reverse();
-
-  for (const hunk of hunks) {
-    let startIdx = hunk.startIdx;
-
-    for (
-      let j = Math.max(0, startIdx - 5);
-      j <= Math.min(lines.length - hunk.searchLines.length, startIdx + 5);
-      j++
-    ) {
-      let match = true;
-      for (let k = 0; k < hunk.searchLines.length && j + k < lines.length; k++) {
-        if (lines[j + k] !== hunk.searchLines[k]) {
-          match = false;
-          break;
-        }
-      }
-      if (match) {
-        startIdx = j;
-        break;
-      }
-    }
-
-    lines.splice(startIdx, hunk.searchLines.length, ...hunk.replaceLines);
-  }
-
-  return lines.join("\n");
-}
-
 // --- Public API ---
 
 /**
- * Save an edit to history
+ * Save an edit to Drive history (oldContent → newContent forward diff)
  */
 export async function saveEdit(
   accessToken: string,
@@ -278,7 +164,8 @@ export async function saveEdit(
   settings: EditHistorySettings,
   params: {
     path: string;
-    modifiedContent: string;
+    oldContent: string;
+    newContent: string;
     source: "workflow" | "propose_edit" | "manual" | "auto";
     workflowName?: string;
     model?: string;
@@ -286,14 +173,7 @@ export async function saveEdit(
 ): Promise<EditHistoryEntry | null> {
   const historyFolderId = await ensureEditHistoryFolderId(accessToken, rootFolderId);
 
-  const { content: snapshot, fileId: snapshotFileId } = await loadSnapshot(
-    accessToken,
-    historyFolderId,
-    params.path
-  );
-  const base = snapshot ?? "";
-
-  const { diff, stats } = createDiffStr(params.modifiedContent, base, settings.diff.contextLines);
+  const { diff, stats } = createDiffStr(params.oldContent, params.newContent, settings.diff.contextLines);
 
   if (stats.additions === 0 && stats.deletions === 0) return null;
 
@@ -322,7 +202,6 @@ export async function saveEdit(
   }
 
   await saveHistoryFile(accessToken, historyFolderId, params.path, history, historyFileId);
-  await saveSnapshot(accessToken, historyFolderId, params.path, params.modifiedContent, snapshotFileId);
 
   return entry;
 }
@@ -338,59 +217,6 @@ export async function getHistory(
   const historyFolderId = await ensureEditHistoryFolderId(accessToken, rootFolderId);
   const { history } = await loadHistoryFile(accessToken, historyFolderId, filePath);
   return history.entries;
-}
-
-/**
- * Get content at a specific history entry
- */
-export async function getContentAt(
-  accessToken: string,
-  rootFolderId: string,
-  filePath: string,
-  entryId: string
-): Promise<string | null> {
-  const historyFolderId = await ensureEditHistoryFolderId(accessToken, rootFolderId);
-
-  const { content: snapshot } = await loadSnapshot(accessToken, historyFolderId, filePath);
-  if (snapshot === null) return null;
-
-  const { history } = await loadHistoryFile(accessToken, historyFolderId, filePath);
-  const targetIndex = history.entries.findIndex((e) => e.id === entryId);
-  if (targetIndex === -1) return null;
-
-  let content = snapshot;
-  for (let i = history.entries.length - 1; i >= targetIndex; i--) {
-    content = applyPatch(content, history.entries[i].diff);
-  }
-
-  return content;
-}
-
-/**
- * Restore file to a specific history entry (returns content to write)
- */
-export async function restoreTo(
-  accessToken: string,
-  rootFolderId: string,
-  filePath: string,
-  entryId: string
-): Promise<string | null> {
-  const content = await getContentAt(accessToken, rootFolderId, filePath, entryId);
-  if (content === null) return null;
-
-  // Update snapshot and clear history
-  const historyFolderId = await ensureEditHistoryFolderId(accessToken, rootFolderId);
-  const { fileId: snapshotFileId } = await loadSnapshot(accessToken, historyFolderId, filePath);
-  await saveSnapshot(accessToken, historyFolderId, filePath, content, snapshotFileId);
-
-  // Delete history
-  const historyFileName = pathToHistoryFileName(filePath);
-  const historyFileId = await findFileByName(accessToken, historyFolderId, historyFileName);
-  if (historyFileId) {
-    await deleteFile(accessToken, historyFileId);
-  }
-
-  return content;
 }
 
 /**
@@ -472,7 +298,7 @@ export async function getStats(
 }
 
 /**
- * Clear all history for a specific file (history + snapshot)
+ * Clear all history for a specific file
  */
 export async function clearHistory(
   accessToken: string,
@@ -485,11 +311,5 @@ export async function clearHistory(
   const historyFileId = await findFileByName(accessToken, historyFolderId, historyFileName);
   if (historyFileId) {
     await deleteFile(accessToken, historyFileId);
-  }
-
-  const snapshotFileName = pathToSnapshotFileName(filePath);
-  const snapshotFileId = await findFileByName(accessToken, historyFolderId, snapshotFileName);
-  if (snapshotFileId) {
-    await deleteFile(accessToken, snapshotFileId);
   }
 }

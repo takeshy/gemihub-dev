@@ -5,6 +5,7 @@ import type { UserSettings } from "~/types/settings";
 import { MermaidPreview } from "~/components/flow/MermaidPreview";
 import { useI18n } from "~/i18n/context";
 import { TempDiffModal } from "./TempDiffModal";
+import { commitSnapshot } from "~/services/edit-history-local";
 
 
 interface WorkflowEditorProps {
@@ -13,7 +14,6 @@ interface WorkflowEditorProps {
   initialContent: string;
   settings: UserSettings;
   saveToCache: (content: string) => Promise<void>;
-  saved: boolean;
 }
 
 export function WorkflowEditor({
@@ -22,7 +22,6 @@ export function WorkflowEditor({
   initialContent,
   settings,
   saveToCache,
-  saved,
 }: WorkflowEditorProps) {
   const { t } = useI18n();
   const [viewMode, setViewMode] = useState<"visual" | "yaml">("visual");
@@ -120,8 +119,11 @@ export function WorkflowEditor({
     }
   }, [yamlContent]);
 
+  const [uploaded, setUploaded] = useState(false);
+
   const handleTempUpload = useCallback(async () => {
     setUploading(true);
+    setUploaded(false);
     try {
       await fetch("/api/drive/temp", {
         method: "POST",
@@ -129,6 +131,8 @@ export function WorkflowEditor({
         body: JSON.stringify({ action: "save", fileName: fileName + ".yaml", fileId, content: yamlContent }),
       });
       await saveToCache(yamlContent);
+      setUploaded(true);
+      setTimeout(() => setUploaded(false), 2000);
     } finally {
       setUploading(false);
     }
@@ -162,11 +166,12 @@ export function WorkflowEditor({
 
   const handleTempDiffAccept = useCallback(async () => {
     if (!tempDiffData) return;
+    await commitSnapshot(fileId, tempDiffData.tempContent);
     contentFromProps.current = false;
     setYamlContent(tempDiffData.tempContent);
     await saveToCache(tempDiffData.tempContent);
     setTempDiffData(null);
-  }, [tempDiffData, saveToCache]);
+  }, [tempDiffData, saveToCache, fileId]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
@@ -202,9 +207,9 @@ export function WorkflowEditor({
             </button>
           </div>
 
-          {saved && (
+          {uploaded && (
             <span className="text-xs text-green-600 dark:text-green-400">
-              {t("mainViewer.saved")}
+              {t("contextMenu.tempUploaded")}
             </span>
           )}
 

@@ -1013,6 +1013,119 @@ function McpTab({ settings }: { settings: UserSettings }) {
     saveServers(updated);
   }, [servers, saveServers]);
 
+  const startAddOAuthFlow = useCallback(async (
+    oauthConfig: OAuthConfig,
+  ): Promise<OAuthTokens | null> => {
+    return new Promise(async (resolve) => {
+      const codeVerifier = generateRandomString(64);
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      const state = generateRandomString(32);
+      const redirectUri = `${window.location.origin}/auth/mcp-oauth-callback`;
+
+      const params = new URLSearchParams({
+        response_type: "code",
+        client_id: oauthConfig.clientId,
+        redirect_uri: redirectUri,
+        state,
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+      });
+      if (oauthConfig.scopes.length > 0) {
+        params.set("scope", oauthConfig.scopes.join(" "));
+      }
+
+      const authUrl = `${oauthConfig.authorizationUrl}?${params.toString()}`;
+
+      setAddTestResult({ ok: false, msg: t("settings.mcp.oauthAuthenticating") });
+
+      const popup = window.open(authUrl, "mcp-oauth", "width=600,height=700,popup=yes");
+
+      let resolved = false;
+      let checkClosedInterval: ReturnType<typeof setInterval>;
+
+      const cleanup = () => {
+        window.removeEventListener("message", onMessage);
+        window.removeEventListener("storage", onStorage);
+        if (checkClosedInterval) clearInterval(checkClosedInterval);
+      };
+
+      const onMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type !== "mcp-oauth-callback") return;
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+
+        if (event.data.error) {
+          setAddTestResult({
+            ok: false,
+            msg: t("settings.mcp.oauthFailed").replace("{{error}}", event.data.errorDescription || event.data.error),
+          });
+          resolve(null);
+          return;
+        }
+
+        if (event.data.state !== state) {
+          setAddTestResult({ ok: false, msg: t("settings.mcp.oauthFailed").replace("{{error}}", "State mismatch") });
+          resolve(null);
+          return;
+        }
+
+        try {
+          const tokenRes = await fetch("/api/settings/mcp-oauth-token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tokenUrl: oauthConfig.tokenUrl,
+              clientId: oauthConfig.clientId,
+              clientSecret: oauthConfig.clientSecret,
+              code: event.data.code,
+              codeVerifier,
+              redirectUri,
+            }),
+          });
+          const tokenData = await tokenRes.json();
+          if (!tokenRes.ok || !tokenData.tokens) {
+            setAddTestResult({
+              ok: false,
+              msg: t("settings.mcp.oauthFailed").replace("{{error}}", tokenData.error || "Token exchange failed"),
+            });
+            resolve(null);
+            return;
+          }
+
+          resolve(tokenData.tokens as OAuthTokens);
+        } catch (err) {
+          setAddTestResult({
+            ok: false,
+            msg: t("settings.mcp.oauthFailed").replace("{{error}}", err instanceof Error ? err.message : "Token exchange error"),
+          });
+          resolve(null);
+        }
+      };
+
+      const onStorage = (event: StorageEvent) => {
+        if (event.key !== "mcp-oauth-callback" || !event.newValue) return;
+        try {
+          const msg = JSON.parse(event.newValue);
+          if (msg.type === "mcp-oauth-callback") {
+            onMessage({ data: msg, origin: window.location.origin } as MessageEvent);
+          }
+        } catch { /* ignore parse errors */ }
+      };
+
+      window.addEventListener("message", onMessage);
+      window.addEventListener("storage", onStorage);
+      checkClosedInterval = setInterval(() => {
+        if (popup && popup.closed && !resolved) {
+          resolved = true;
+          cleanup();
+          resolve(null);
+        }
+      }, 500);
+    });
+  }, [t]);
+
   const testAndAddServer = useCallback(async () => {
     if (!newEntry.name.trim() || !newEntry.url.trim()) return;
     let headers: Record<string, string> = {};
@@ -1047,6 +1160,51 @@ function McpTab({ settings }: { settings: UserSettings }) {
         setNewEntry({ ...emptyMcpEntry });
         setAdding(false);
         setAddTestResult(null);
+      } else if (data.needsOAuth && data.oauthDiscovery) {
+        // Server requires OAuth — start OAuth flow for the new server
+        const oauthConfig: OAuthConfig = data.oauthDiscovery.config;
+
+        if (!oauthConfig.clientId) {
+          setAddTestResult({ ok: false, msg: t("settings.mcp.oauthFailed").replace("{{error}}", "No client ID (registration failed)") });
+          return;
+        }
+
+        const tokens = await startAddOAuthFlow(oauthConfig);
+        if (!tokens) return;
+
+        setAddTestResult({ ok: false, msg: t("settings.mcp.oauthSuccess") + " Retesting..." });
+        // Retry test with new tokens
+        const retryRes = await fetch("/api/settings/mcp-test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: newEntry.url.trim(),
+            headers,
+            oauth: oauthConfig,
+            oauthTokens: tokens,
+          }),
+        });
+        const retryData = await retryRes.json();
+
+        if (retryRes.ok && retryData.success) {
+          const newServer: McpServerConfig = {
+            name: newEntry.name.trim(),
+            url: newEntry.url.trim(),
+            headers,
+            enabled: true,
+            tools: retryData.tools as McpToolInfo[],
+            oauth: oauthConfig,
+            oauthTokens: tokens,
+          };
+          const updated = [...servers, newServer];
+          setServers(updated);
+          saveServers(updated);
+          setNewEntry({ ...emptyMcpEntry });
+          setAdding(false);
+          setAddTestResult(null);
+        } else {
+          setAddTestResult({ ok: false, msg: retryData.message || "Connection failed after OAuth" });
+        }
       } else {
         setAddTestResult({ ok: false, msg: data.message || "Connection failed" });
       }
@@ -1055,7 +1213,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
     } finally {
       setAddTesting(false);
     }
-  }, [newEntry, servers, saveServers]);
+  }, [newEntry, servers, saveServers, startAddOAuthFlow, t]);
 
   const startOAuthFlow = useCallback(async (
     idx: number,
@@ -1088,11 +1246,21 @@ function McpTab({ settings }: { settings: UserSettings }) {
 
       const popup = window.open(authUrl, "mcp-oauth", "width=600,height=700,popup=yes");
 
+      let resolved = false;
+      let checkClosedInterval: ReturnType<typeof setInterval>;
+
+      const cleanup = () => {
+        window.removeEventListener("message", onMessage);
+        window.removeEventListener("storage", onStorage);
+        if (checkClosedInterval) clearInterval(checkClosedInterval);
+      };
+
       const onMessage = async (event: MessageEvent) => {
         if (event.origin !== window.location.origin) return;
         if (event.data?.type !== "mcp-oauth-callback") return;
-
-        window.removeEventListener("message", onMessage);
+        if (resolved) return;
+        resolved = true;
+        cleanup();
 
         if (event.data.error) {
           setTestResults((prev) => ({
@@ -1115,7 +1283,6 @@ function McpTab({ settings }: { settings: UserSettings }) {
           return;
         }
 
-        // Exchange code for tokens via server-side endpoint
         try {
           const tokenRes = await fetch("/api/settings/mcp-oauth-token", {
             method: "POST",
@@ -1156,15 +1323,23 @@ function McpTab({ settings }: { settings: UserSettings }) {
         }
       };
 
-      window.addEventListener("message", onMessage);
+      const onStorage = (event: StorageEvent) => {
+        if (event.key !== "mcp-oauth-callback" || !event.newValue) return;
+        try {
+          const msg = JSON.parse(event.newValue);
+          if (msg.type === "mcp-oauth-callback") {
+            onMessage({ data: msg, origin: window.location.origin } as MessageEvent);
+          }
+        } catch { /* ignore parse errors */ }
+      };
 
-      // Clean up if popup is closed without completing
-      const checkClosed = setInterval(() => {
-        if (popup && popup.closed) {
-          clearInterval(checkClosed);
-          window.removeEventListener("message", onMessage);
-          // Resolve null if we didn't get tokens yet — the message handler
-          // may have already resolved, but Promise ignores duplicate resolves
+      window.addEventListener("message", onMessage);
+      window.addEventListener("storage", onStorage);
+
+      checkClosedInterval = setInterval(() => {
+        if (popup && popup.closed && !resolved) {
+          resolved = true;
+          cleanup();
           resolve(null);
         }
       }, 500);

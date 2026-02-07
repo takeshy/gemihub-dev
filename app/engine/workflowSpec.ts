@@ -275,12 +275,32 @@ Call MCP server tool.
 `;
   }
 
-  const serverList = enabled
+  const serverSections = enabled
     .map((s) => {
-      const hints = s.toolHints?.length
-        ? ` (tools: ${s.toolHints.join(", ")})`
-        : "";
-      return `  - \`${s.url}\` — ${s.name}${hints}`;
+      let section = `  - \`${s.url}\` — ${s.name}`;
+      if (s.tools?.length) {
+        const toolList = s.tools
+          .map((tool) => {
+            let line = `      - **${tool.name}**`;
+            if (tool.description) line += `: ${tool.description}`;
+            if (tool.inputSchema) {
+              const schema = tool.inputSchema as { properties?: Record<string, { type?: string; description?: string }>; required?: string[] };
+              if (schema.properties) {
+                const params = Object.entries(schema.properties)
+                  .map(([k, v]) => {
+                    const req = schema.required?.includes(k) ? " (required)" : "";
+                    return `${k}: ${v.type || "string"}${req}${v.description ? " — " + v.description : ""}`;
+                  })
+                  .join("; ");
+                if (params) line += ` | args: { ${params} }`;
+              }
+            }
+            return line;
+          })
+          .join("\n");
+        section += `\n    Tools:\n${toolList}`;
+      }
+      return section;
     })
     .join("\n");
 
@@ -293,7 +313,7 @@ Call MCP server tool.
 - **saveTo** (optional): Variable for result
 
 Available MCP servers:
-${serverList}
+${serverSections}
 
 `;
 }

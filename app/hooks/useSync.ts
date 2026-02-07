@@ -5,8 +5,11 @@ import {
   getCachedFile,
   setCachedFile,
   getAllCachedFiles,
+  clearAllEditHistory,
+  getLocallyModifiedFileIds,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
+import { commitSnapshot } from "~/services/edit-history-local";
 
 export interface ConflictInfo {
   fileId: string;
@@ -35,12 +38,32 @@ export function useSync() {
   const [diff, setDiff] = useState<SyncDiff | null>(null);
   const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [localModifiedCount, setLocalModifiedCount] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const refreshLocalModifiedCount = useCallback(async () => {
+    try {
+      const ids = await getLocallyModifiedFileIds();
+      setLocalModifiedCount(ids.size);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Listen for file-modified events to update count in real-time
+  useEffect(() => {
+    const handler = () => { refreshLocalModifiedCount(); };
+    window.addEventListener("file-modified", handler);
+    refreshLocalModifiedCount();
+    return () => window.removeEventListener("file-modified", handler);
+  }, [refreshLocalModifiedCount]);
 
   const checkSync = useCallback(async () => {
     setSyncStatus("checking");
     setError(null);
     try {
+      await refreshLocalModifiedCount();
+
       const localMeta = (await getLocalSyncMeta()) ?? null;
       const localMetaPayload = localMeta
         ? { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files }
@@ -67,13 +90,31 @@ export function useSync() {
       setError(err instanceof Error ? err.message : "Sync check failed");
       setSyncStatus("error");
     }
-  }, []);
+  }, [refreshLocalModifiedCount]);
 
   const push = useCallback(async () => {
     setSyncStatus("pushing");
     setError(null);
     try {
-      // Apply all temp files first
+      // Upload locally modified files as temp files
+      const modifiedIds = await getLocallyModifiedFileIds();
+      for (const fid of modifiedIds) {
+        const cached = await getCachedFile(fid);
+        if (cached) {
+          await fetch("/api/drive/temp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "save",
+              fileName: cached.fileName ?? fid,
+              fileId: fid,
+              content: cached.content,
+            }),
+          });
+        }
+      }
+
+      // Apply all temp files
       const tempRes = await fetch("/api/drive/temp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -169,6 +210,10 @@ export function useSync() {
 
       if (!pushRes.ok) throw new Error("Failed to push changes");
 
+      // Clear local edit history (now persisted in Drive via applyTempFile)
+      await clearAllEditHistory();
+      setLocalModifiedCount(0);
+
       setLastSyncTime(new Date().toISOString());
       await checkSync(); // Refresh diff
     } catch (err) {
@@ -232,6 +277,7 @@ export function useSync() {
       };
 
       for (const file of pullData.files) {
+        await commitSnapshot(file.fileId, file.content);
         await setCachedFile({
           fileId: file.fileId,
           content: file.content,
@@ -291,6 +337,7 @@ export function useSync() {
 
         // If remote wins, update local cache
         if (choice === "remote" && data.file) {
+          await commitSnapshot(data.file.fileId, data.file.content);
           await setCachedFile({
             fileId: data.file.fileId,
             content: data.file.content,
@@ -367,6 +414,7 @@ export function useSync() {
       }
 
       for (const file of data.files) {
+        await commitSnapshot(file.fileId, file.content);
         await setCachedFile({
           fileId: file.fileId,
           content: file.content,
@@ -390,7 +438,25 @@ export function useSync() {
     setSyncStatus("pushing");
     setError(null);
     try {
-      // Apply all temp files first
+      // Upload locally modified files as temp files
+      const modifiedIds = await getLocallyModifiedFileIds();
+      for (const fid of modifiedIds) {
+        const cached = await getCachedFile(fid);
+        if (cached) {
+          await fetch("/api/drive/temp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "save",
+              fileName: cached.fileName ?? fid,
+              fileId: fid,
+              content: cached.content,
+            }),
+          });
+        }
+      }
+
+      // Apply all temp files
       await fetch("/api/drive/temp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -413,6 +479,9 @@ export function useSync() {
       });
 
       if (!res.ok) throw new Error("Full push failed");
+
+      await clearAllEditHistory();
+      setLocalModifiedCount(0);
 
       setLastSyncTime(new Date().toISOString());
       setSyncStatus("idle");
@@ -441,6 +510,7 @@ export function useSync() {
     diff,
     conflicts,
     error,
+    localModifiedCount,
     push,
     pull,
     checkSync,

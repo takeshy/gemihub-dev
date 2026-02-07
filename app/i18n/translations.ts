@@ -33,6 +33,7 @@ export interface TranslationStrings {
   "chat.newChat": string;
   "chat.noHistory": string;
   "chat.confirmDelete": string;
+  "chat.mcpToolsLabel": string;
 
   // Settings page
   "settings.title": string;
@@ -67,7 +68,14 @@ export interface TranslationStrings {
   "settings.mcp.headers": string;
   "settings.mcp.enabled": string;
   "settings.mcp.add": string;
+  "settings.mcp.testAndAdd": string;
+  "settings.mcp.tools": string;
   "settings.mcp.save": string;
+  "settings.mcp.oauthAuthenticated": string;
+  "settings.mcp.oauthAuthenticating": string;
+  "settings.mcp.oauthSuccess": string;
+  "settings.mcp.oauthFailed": string;
+  "settings.mcp.oauthReauthorize": string;
 
   // RAG tab
   "settings.rag.enable": string;
@@ -106,11 +114,13 @@ export interface TranslationStrings {
   "editHistory.clearHistory": string;
   "editHistory.confirmClear": string;
   "editHistory.confirmClearAll": string;
+  "editHistory.showRemote": string;
 
   // Context menu
   "contextMenu.rename": string;
   "contextMenu.tempDownload": string;
   "contextMenu.tempUpload": string;
+  "contextMenu.tempUploaded": string;
   "contextMenu.noTempFile": string;
   "contextMenu.clearCache": string;
   "contextMenu.clearCacheModified": string;
@@ -226,6 +236,7 @@ const en: TranslationStrings = {
   "chat.newChat": "New Chat",
   "chat.noHistory": "No chat history",
   "chat.confirmDelete": "Delete this chat?",
+  "chat.mcpToolsLabel": "MCP Tools",
 
   // Settings
   "settings.title": "Settings",
@@ -260,7 +271,14 @@ const en: TranslationStrings = {
   "settings.mcp.headers": "Headers (JSON)",
   "settings.mcp.enabled": "Enabled",
   "settings.mcp.add": "Add",
+  "settings.mcp.testAndAdd": "Test & Add",
+  "settings.mcp.tools": "Tools: {{tools}}",
   "settings.mcp.save": "Save MCP Settings",
+  "settings.mcp.oauthAuthenticated": "Authenticated",
+  "settings.mcp.oauthAuthenticating": "Authenticating...",
+  "settings.mcp.oauthSuccess": "OAuth authentication successful",
+  "settings.mcp.oauthFailed": "OAuth authentication failed: {{error}}",
+  "settings.mcp.oauthReauthorize": "Re-authorize",
 
   // RAG tab
   "settings.rag.enable": "Enable RAG (Retrieval-Augmented Generation)",
@@ -299,11 +317,13 @@ const en: TranslationStrings = {
   "editHistory.clearHistory": "Clear History",
   "editHistory.confirmClear": "Clear all edit history for this file?",
   "editHistory.confirmClearAll": "Clear all edit history for this file?",
+  "editHistory.showRemote": "Show Remote",
 
   // Context menu
   "contextMenu.rename": "Rename",
   "contextMenu.tempDownload": "Temp Download",
   "contextMenu.tempUpload": "Temp Upload",
+  "contextMenu.tempUploaded": "Uploaded to temp",
   "contextMenu.noTempFile": "No temp file found for this file.",
   "contextMenu.clearCache": "Clear Cache",
   "contextMenu.clearCacheModified": "This file has unsaved changes. Push first.",
@@ -419,6 +439,7 @@ const ja: TranslationStrings = {
   "chat.newChat": "新しいチャット",
   "chat.noHistory": "チャット履歴はありません",
   "chat.confirmDelete": "このチャットを削除しますか？",
+  "chat.mcpToolsLabel": "MCPツール",
 
   // Settings
   "settings.title": "設定",
@@ -453,7 +474,14 @@ const ja: TranslationStrings = {
   "settings.mcp.headers": "ヘッダー (JSON)",
   "settings.mcp.enabled": "有効",
   "settings.mcp.add": "追加",
+  "settings.mcp.testAndAdd": "テスト＆追加",
+  "settings.mcp.tools": "ツール: {{tools}}",
   "settings.mcp.save": "MCP設定を保存",
+  "settings.mcp.oauthAuthenticated": "認証済み",
+  "settings.mcp.oauthAuthenticating": "認証中...",
+  "settings.mcp.oauthSuccess": "OAuth認証が成功しました",
+  "settings.mcp.oauthFailed": "OAuth認証に失敗しました: {{error}}",
+  "settings.mcp.oauthReauthorize": "再認証",
 
   // RAG tab
   "settings.rag.enable": "RAG（検索拡張生成）を有効にする",
@@ -492,11 +520,13 @@ const ja: TranslationStrings = {
   "editHistory.clearHistory": "履歴をクリア",
   "editHistory.confirmClear": "このファイルの編集履歴をすべてクリアしますか？",
   "editHistory.confirmClearAll": "このファイルの編集履歴をすべてクリアしますか？",
+  "editHistory.showRemote": "リモートを表示",
 
   // Context menu
   "contextMenu.rename": "名前を変更",
   "contextMenu.tempDownload": "一時ダウンロード",
   "contextMenu.tempUpload": "一時アップロード",
+  "contextMenu.tempUploaded": "一時ファイルにアップロードしました",
   "contextMenu.noTempFile": "このファイルの一時ファイルが見つかりません。",
   "contextMenu.clearCache": "キャッシュクリア",
   "contextMenu.clearCacheModified": "このファイルには未保存の変更があります。先にPushしてください。",

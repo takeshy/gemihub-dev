@@ -33,7 +33,7 @@ export function getOrCreateClient(config: McpServerConfig): McpClient {
     if (config.oauthTokens) {
       effectiveConfig.headers = {
         ...config.headers,
-        Authorization: `${config.oauthTokens.tokenType || "Bearer"} ${config.oauthTokens.accessToken}`,
+        Authorization: `Bearer ${config.oauthTokens.accessToken}`,
       };
     }
     client = new McpClient(effectiveConfig);

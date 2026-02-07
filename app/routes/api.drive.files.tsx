@@ -12,7 +12,6 @@ import {
   getFileMetadata,
 } from "~/services/google-drive.server";
 import { getSettings } from "~/services/user-settings.server";
-import { saveEdit } from "~/services/edit-history.server";
 import {
   encryptFileContent,
   decryptFileContent,
@@ -94,30 +93,10 @@ export async function action({ request }: Route.ActionArgs) {
       if (!fileId) return Response.json({ error: "Missing fileId" }, { status: 400 });
       const file = await updateFile(validTokens.accessToken, fileId, content, "text/yaml");
 
-      // Save edit history
-      let editHistoryEntry = null;
-      try {
-        const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-        const meta = await getFileMetadata(validTokens.accessToken, fileId);
-        editHistoryEntry = await saveEdit(
-          validTokens.accessToken,
-          validTokens.rootFolderId,
-          settings.editHistory,
-          {
-            path: meta.name,
-            modifiedContent: content,
-            source: "manual",
-          }
-        );
-      } catch {
-        // Don't fail the update if edit history fails
-      }
-
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
       return Response.json({
         file,
         md5Checksum: file.md5Checksum,
-        editHistoryEntry,
         meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files },
       });
     }

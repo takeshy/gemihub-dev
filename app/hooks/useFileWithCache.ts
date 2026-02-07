@@ -6,6 +6,7 @@ import {
   getLocalSyncMeta,
   setLocalSyncMeta,
 } from "~/services/indexeddb-cache";
+import { saveLocalEdit, initSnapshot } from "~/services/edit-history-local";
 
 export function useFileWithCache(
   fileId: string | null,
@@ -45,6 +46,7 @@ export function useFileWithCache(
         if (cached && currentFileId.current === id) {
           setContent(cached.content);
           setLoading(false);
+          initSnapshot(id, cached.content).catch(() => {});
           return; // Trust the cache. Remote changes are handled by Push/Pull sync.
         } else if (currentFileId.current === id) {
           setLoading(true);
@@ -90,7 +92,10 @@ export function useFileWithCache(
           cachedAt: Date.now(),
         });
 
-        // 6. Update local sync meta
+        // 6. Initialize edit history snapshot
+        initSnapshot(id, data.content).catch(() => {});
+
+        // 7. Update local sync meta
         if (md5) {
           const syncMeta = (await getLocalSyncMeta()) ?? {
             id: "current" as const,
@@ -175,6 +180,17 @@ export function useFileWithCache(
       if (!fileId) return;
       try {
         const cached = await getCachedFile(fileId);
+        const fileName = cached?.fileName ?? fileId;
+
+        // 1. Record local edit history BEFORE cache update
+        //    (saveLocalEdit reads old cache content for reverse-apply diff)
+        try {
+          await saveLocalEdit(fileId, fileName, newContent);
+        } catch {
+          // edit history failure is non-critical
+        }
+
+        // 2. Update cache with new content
         await setCachedFile({
           fileId,
           content: newContent,
@@ -183,9 +199,11 @@ export function useFileWithCache(
           cachedAt: Date.now(),
           fileName: cached?.fileName,
         });
-        setSaved(true);
-        if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current);
-        savedTimeoutRef.current = setTimeout(() => setSaved(false), 2000);
+
+        // Notify file tree that this file is modified locally
+        window.dispatchEvent(
+          new CustomEvent("file-modified", { detail: { fileId } })
+        );
       } catch {
         // ignore
       }

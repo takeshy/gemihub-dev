@@ -21,7 +21,7 @@
 | **Full Push** | ローカルのメタデータを全てリモートにマージ |
 | **Full Pull** | リモートの全ファイルをダウンロード（ハッシュ一致分はスキップ） |
 
-ヘッダーボタン: アップロードアイコン = Push、ダウンロードアイコン = Pull
+ヘッダーボタン: Push と Pull ボタンは常に表示されます。バッジにはローカル編集ファイル数を含む保留中の変更数が表示されます。
 
 ---
 
@@ -68,16 +68,19 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 ## Push Changes（差分）
 
-ローカルで変更されたファイルのみリモートにアップロードします。
+ローカルで変更されたファイルをリモートにアップロードします。
 
 ### フロー
 
-1. **一時ファイルを適用**（`__TEMP__/` ファイルを実パスに展開）
-2. **三者間比較で Diff を計算**
-3. **コンフリクト確認** — あれば停止してコンフリクト UI を表示
-4. **`lastUpdatedAt` を確認** — リモートが新しく、かつ未 Pull の変更がある場合は拒否
-5. **変更済みチェックサムをリモートの `_sync-meta.json` にアップロード**
-6. **Diff を再取得**してステータスを更新
+1. **ローカル編集ファイルの自動アップロード** — IndexedDB `editHistory` で追跡されているローカル編集ファイルを一時ファイルとしてアップロード
+2. **全一時ファイルを適用**（`__TEMP__/` ファイルを実パスに展開し、差分を Drive `.history.json` に記録）
+3. **ローカルキャッシュを更新**（適用されたファイルの新しいチェックサムで）
+4. **三者間比較で Diff を計算**
+5. **コンフリクト確認** — あれば停止してコンフリクト UI を表示
+6. **`lastUpdatedAt` を確認** — リモートが新しく、かつ未 Pull の変更がある場合は拒否
+7. **変更済みチェックサムをリモートの `_sync-meta.json` にアップロード**
+8. **ローカル編集履歴をクリア**（Drive `.history.json` に永続化済み）
+9. **Diff を再取得**してステータスを更新
 
 ### 前提条件
 
@@ -90,9 +93,10 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 ### 重要事項
 
-- Push はファイル内容を**アップロードしません** — 編集は直接 Drive に反映されるため、Drive には既に最新の内容があります。Push はメタデータ（チェックサム）のみを同期します。
+- Push はローカル編集ファイルを自動的に一時ファイルとしてアップロードしてから適用します。手動で各ファイルをアップロードする必要はありません。
 - Push はリモートファイルを**削除しません**。
 - ローカルで削除されたファイルはリモート上で「未追跡」になります（設定から復元可能）。
+- Push 成功後、IndexedDB のローカル編集履歴はクリアされます。差分は Drive `.history.json` に保存されています。
 
 ---
 
@@ -265,6 +269,56 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 ---
 
+## 編集履歴
+
+逆適用 diff によるローカル編集追跡。Push 時に Drive に永続化。
+
+### 概要
+
+編集履歴は2つのレイヤーに分かれています:
+
+| レイヤー | ストレージ | 保持期間 |
+|---------|-----------|---------|
+| **ローカル** | IndexedDB `editHistory` ストア | 次の Push まで（その後クリア） |
+| **リモート** | Drive のファイルごとの `.history.json` | 編集履歴設定に従い保持 |
+
+### ローカル編集履歴（IndexedDB）
+
+各ファイルに1つの `CachedEditHistoryEntry`（`diffs[]` 配列付き）があります。各配列要素は1つの diff セッション（コミットポイント）を表します。
+
+**自動保存（5秒ごと）:**
+1. IndexedDB キャッシュから旧コンテンツを読み取り（キャッシュ更新前）
+2. 最後の diff が存在する場合: 逆適用してベースを復元
+3. ベースから新コンテンツへの累積 diff を計算
+4. `diffs[]` の最後のエントリを上書き（同セッションの更新は1つの diff に累積）
+
+**コミット境界（明示的な保存イベント）:**
+- `diffs[]` に空エントリを境界マーカーとして追加
+- 次の自動保存は新しい diff セッションを開始（上書きではなく追加）
+- トリガー: ファイル開く/リロード、Pull、一時ダウンロード受入、ワークフローコマンド
+
+**メモリ効率:**
+- キャッシュ（最新コンテンツ）+ diff のみ保存（ベースコンテンツの完全コピーなし）
+- ベースコンテンツは必要時に逆適用で復元
+- 逆適用: `+`/`-` 行とハンクヘッダーのカウントを入れ替え、パッチを適用
+
+### リモート編集履歴（Drive）
+
+Push が一時ファイルを Drive に適用する際、サーバーは:
+1. 更新前に Drive から旧ファイル内容を読み取り
+2. diff（旧 → 新）を計算
+3. ファイルの `.history.json` に diff エントリを追記
+
+Push 後、diff は Drive に保存済みのため IndexedDB の編集履歴はクリアされます。
+
+### 履歴の閲覧
+
+編集履歴モーダルには以下が表示されます:
+- **ローカルエントリ**（IndexedDB）がデフォルト — 現在の編集セッションの diff
+- **リモートエントリ**（Drive）はオンデマンド — 「リモート履歴を表示」クリックで過去の diff を Drive から読み込み
+
+---
+
 ## アーキテクチャ
 
 ### データフロー
@@ -276,6 +330,8 @@ Diff アルゴリズムは3つのデータソースを比較します:
 │ syncMeta      │◄────►│ (diff/push/  │◄────►│ _sync-meta   │
 │ remoteMeta    │      │  pull/resolve)│      │ User files   │
 │ fileTree      │      │              │      │ sync_conflicts│
+│ editHistory   │      │ /api/drive/  │      │ .history.json│
+│               │      │  temp        │      │ __TEMP__/    │
 └──────────────┘      └──────────────┘      └──────────────┘
 ```
 
@@ -283,10 +339,13 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 | ファイル | 役割 |
 |---------|------|
-| `app/hooks/useSync.ts` | クライアント側の同期フック（push, pull, conflict, fullPush, fullPull） |
+| `app/hooks/useSync.ts` | クライアント側の同期フック（push, pull, conflict, fullPush, fullPull, localModifiedCount） |
+| `app/hooks/useFileWithCache.ts` | IndexedDB キャッシュ優先のファイル読取、編集履歴付き自動保存 |
 | `app/routes/api.sync.tsx` | サーバー側の同期 API（10アクション） |
 | `app/services/sync-meta.server.ts` | 同期メタデータの読取・書込・再構築・Diff |
-| `app/services/indexeddb-cache.ts` | IndexedDB キャッシュ（files, syncMeta, remoteMeta, fileTree） |
+| `app/services/indexeddb-cache.ts` | IndexedDB キャッシュ（files, syncMeta, remoteMeta, fileTree, editHistory） |
+| `app/services/edit-history-local.ts` | クライアント側の編集履歴（IndexedDB での逆適用 diff） |
+| `app/services/edit-history.server.ts` | サーバー側の編集履歴（Drive `.history.json` の読取・書込） |
 | `app/services/google-drive.server.ts` | Google Drive API ラッパー |
 | `app/utils/parallel.ts` | 並列処理ユーティリティ（同時実行数制限） |
 

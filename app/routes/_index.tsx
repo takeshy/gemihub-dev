@@ -177,6 +177,7 @@ function IDELayout({
     diff: syncDiff,
     conflicts,
     error: syncError,
+    localModifiedCount,
     push,
     pull,
     checkSync,
@@ -315,6 +316,7 @@ function IDELayout({
           lastSyncTime={lastSyncTime}
           syncError={syncError}
           syncConflicts={conflicts}
+          localModifiedCount={localModifiedCount}
           onPush={push}
           onPull={pull}
           onCheckSync={checkSync}

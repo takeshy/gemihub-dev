@@ -126,6 +126,14 @@ export async function applyTempFile(
   const { payload, tempFileId } = tempFile;
 
   try {
+    // Read old content before updating (for edit history diff)
+    let oldContent = "";
+    try {
+      oldContent = await readFile(accessToken, payload.fileId);
+    } catch {
+      // file may not exist yet
+    }
+
     // Update the actual file
     const updated = await updateFile(
       accessToken,
@@ -133,7 +141,7 @@ export async function applyTempFile(
       payload.content
     );
 
-    // Save edit history if settings provided
+    // Save edit history if settings provided (oldContent → newContent)
     let editHistoryEntry = null;
     if (editHistorySettings) {
       try {
@@ -144,7 +152,8 @@ export async function applyTempFile(
           editHistorySettings,
           {
             path: meta.name,
-            modifiedContent: payload.content,
+            oldContent,
+            newContent: payload.content,
             source: "manual",
           }
         );

@@ -53,7 +53,7 @@ export async function action({ request }: Route.ActionArgs) {
   // Build effective headers with OAuth Authorization if available
   const effectiveHeaders: Record<string, string> = { ...headers };
   if (activeTokens) {
-    effectiveHeaders["Authorization"] = `${activeTokens.tokenType || "Bearer"} ${activeTokens.accessToken}`;
+    effectiveHeaders["Authorization"] = `Bearer ${activeTokens.accessToken}`;
   }
 
   const client = new McpClient({
@@ -110,8 +110,14 @@ export async function action({ request }: Route.ActionArgs) {
                 discovery.config.clientSecret = registration.clientSecret;
               }
             } catch {
-              // Registration failed — client will need to provide clientId manually
+              // Dynamic registration failed — use fixed clientId as fallback
+              discovery.config.clientId = "gemini-hub-ide";
             }
+          }
+
+          // If no registration endpoint was available, use fixed clientId
+          if (!discovery.config.clientId) {
+            discovery.config.clientId = "gemini-hub-ide";
           }
 
           return Response.json({

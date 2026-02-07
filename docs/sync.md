@@ -21,7 +21,7 @@ Manual push/pull synchronization between the browser (IndexedDB) and Google Driv
 | **Full Push** | Merge all local metadata into remote |
 | **Full Pull** | Download entire remote vault (skip matching hashes) |
 
-Header buttons: Upload icon = Push, Download icon = Pull
+Header buttons: Push and Pull buttons are always visible. Badge shows count of pending changes (including locally modified files).
 
 ---
 
@@ -68,16 +68,19 @@ Where:
 
 ## Push Changes (Incremental)
 
-Uploads only locally-changed files to remote.
+Uploads locally-changed files to remote.
 
 ### Flow
 
-1. **Apply temp files** (flatten `__TEMP__/` files into real paths)
-2. **Compute diff** using three-way comparison
-3. **Check conflicts** — if any, stop and show conflict UI
-4. **Check `lastUpdatedAt`** — reject if remote is newer AND has pending pulls
-5. **Upload changed checksums** to remote `_sync-meta.json`
-6. **Refresh diff** to update status
+1. **Auto-upload locally modified files** — files with local edits (tracked in IndexedDB `editHistory`) are uploaded as temp files
+2. **Apply all temp files** (flatten `__TEMP__/` files into real paths, recording diffs to Drive `.history.json`)
+3. **Update local cache** with new checksums from applied files
+4. **Compute diff** using three-way comparison
+5. **Check conflicts** — if any, stop and show conflict UI
+6. **Check `lastUpdatedAt`** — reject if remote is newer AND has pending pulls
+7. **Upload changed checksums** to remote `_sync-meta.json`
+8. **Clear local edit history** (now persisted in Drive `.history.json`)
+9. **Refresh diff** to update status
 
 ### Preconditions
 
@@ -90,9 +93,10 @@ Uploads only locally-changed files to remote.
 
 ### Important Notes
 
-- Push does **NOT** upload file contents — Drive already has the latest content because edits go directly to Drive. Push only synchronizes the metadata (checksums).
+- Push automatically uploads locally modified files as temp files before applying. You don't need to manually upload each file.
 - Push does **NOT** delete remote files.
 - Deleted local files become "untracked" on remote (recoverable via settings).
+- After a successful push, local edit history in IndexedDB is cleared. The diffs are preserved in Drive `.history.json`.
 
 ---
 
@@ -265,6 +269,56 @@ Patterns are JavaScript regular expressions:
 
 ---
 
+## Edit History
+
+Local edit tracking with reverse-apply diffs, persisted to Drive on Push.
+
+### Overview
+
+Edit history is split into two layers:
+
+| Layer | Storage | Lifetime |
+|-------|---------|----------|
+| **Local** | IndexedDB `editHistory` store | Until next Push (then cleared) |
+| **Remote** | Drive `.history.json` per file | Retained per edit history settings |
+
+### Local Edit History (IndexedDB)
+
+Each file has one `CachedEditHistoryEntry` with a `diffs[]` array. Each array element represents one diff session (commit point).
+
+**Auto-save (every 5s):**
+1. Read old content from IndexedDB cache (before cache update)
+2. If last diff exists: reverse-apply it to old content to reconstruct the base
+3. Compute cumulative diff from base to new content
+4. Overwrite the last `diffs[]` entry (same session updates accumulate into one diff)
+
+**Commit boundary (explicit save events):**
+- Adds an empty entry to `diffs[]` as a boundary marker
+- Next auto-save starts a new diff session (appends instead of overwriting)
+- Triggered by: file open/reload, Pull, temp download accept, workflow commands
+
+**Memory efficiency:**
+- Only stores cache (latest content) + diffs (no full base content copy)
+- Base content is reconstructed via reverse-apply when needed
+- Reverse-apply: swap `+`/`-` lines and hunk header counts, then apply patch
+
+### Remote Edit History (Drive)
+
+When Push applies temp files to Drive, the server:
+1. Reads the old file content from Drive before updating
+2. Computes diff (old → new)
+3. Appends the diff entry to the file's `.history.json` on Drive
+
+After Push, IndexedDB edit history is cleared since diffs are now in Drive.
+
+### Viewing History
+
+The Edit History modal shows:
+- **Local entries** (IndexedDB) by default — current editing session diffs
+- **Remote entries** (Drive) on demand — click "Show remote history" to load past diffs from Drive
+
+---
+
 ## Architecture
 
 ### Data Flow
@@ -276,6 +330,8 @@ Browser (IndexedDB)          Server                Google Drive
 │ syncMeta      │◄────►│ (diff/push/  │◄────►│ _sync-meta   │
 │ remoteMeta    │      │  pull/resolve)│      │ User files   │
 │ fileTree      │      │              │      │ sync_conflicts│
+│ editHistory   │      │ /api/drive/  │      │ .history.json│
+│               │      │  temp        │      │ __TEMP__/    │
 └──────────────┘      └──────────────┘      └──────────────┘
 ```
 
@@ -283,10 +339,13 @@ Browser (IndexedDB)          Server                Google Drive
 
 | File | Role |
 |------|------|
-| `app/hooks/useSync.ts` | Client-side sync hook (push, pull, conflict, fullPush, fullPull) |
+| `app/hooks/useSync.ts` | Client-side sync hook (push, pull, conflict, fullPush, fullPull, localModifiedCount) |
+| `app/hooks/useFileWithCache.ts` | IndexedDB cache-first file reads, auto-save with edit history |
 | `app/routes/api.sync.tsx` | Server-side sync API (10 actions) |
 | `app/services/sync-meta.server.ts` | Sync metadata read/write/rebuild/diff |
-| `app/services/indexeddb-cache.ts` | IndexedDB cache (files, syncMeta, remoteMeta, fileTree) |
+| `app/services/indexeddb-cache.ts` | IndexedDB cache (files, syncMeta, remoteMeta, fileTree, editHistory) |
+| `app/services/edit-history-local.ts` | Client-side edit history (reverse-apply diffs in IndexedDB) |
+| `app/services/edit-history.server.ts` | Server-side edit history (Drive `.history.json` read/write) |
 | `app/services/google-drive.server.ts` | Google Drive API wrapper |
 | `app/utils/parallel.ts` | Parallel processing utility (concurrency limit) |
 

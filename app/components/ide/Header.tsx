@@ -20,6 +20,7 @@ interface HeaderProps {
   lastSyncTime: string | null;
   syncError: string | null;
   syncConflicts: ConflictInfo[];
+  localModifiedCount: number;
   onPush: () => void;
   onPull: () => void;
   onCheckSync: () => void;
@@ -36,6 +37,7 @@ export function Header({
   lastSyncTime,
   syncError,
   syncConflicts,
+  localModifiedCount,
   onPush,
   onPull,
   onCheckSync,
@@ -61,6 +63,7 @@ export function Header({
           diff={syncDiff}
           lastSyncTime={lastSyncTime}
           error={syncError}
+          localModifiedCount={localModifiedCount}
           onPush={onPush}
           onPull={onPull}
           onCheckSync={onCheckSync}

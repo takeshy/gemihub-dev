@@ -1,7 +1,6 @@
 import type { WorkflowNode, ExecutionContext, FileExplorerData, ServiceContext } from "../types";
 import { replaceVariables } from "./utils";
 import * as driveService from "~/services/google-drive.server";
-import { saveEdit } from "~/services/edit-history.server";
 
 // Handle drive-save node (was: file-save) - save FileExplorerData to Drive
 export async function handleDriveSaveNode(
@@ -54,17 +53,5 @@ export async function handleDriveSaveNode(
 
   if (savePathTo) {
     context.variables.set(savePathTo, driveFile.name);
-  }
-
-  // Save edit history
-  if (serviceContext.editHistorySettings && fileData.contentType !== "binary") {
-    try {
-      await saveEdit(
-        accessToken,
-        serviceContext.driveRootFolderId,
-        serviceContext.editHistorySettings,
-        { path: fileName, modifiedContent: content, source: "workflow" }
-      );
-    } catch { /* don't fail workflow on history error */ }
   }
 }

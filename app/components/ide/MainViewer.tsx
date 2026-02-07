@@ -9,6 +9,7 @@ import { useFileWithCache } from "~/hooks/useFileWithCache";
 import { useI18n } from "~/i18n/context";
 import { useEditorContext } from "~/contexts/EditorContext";
 import { TempDiffModal } from "./TempDiffModal";
+import { commitSnapshot } from "~/services/edit-history-local";
 
 interface MainViewerProps {
   fileId: string | null;
@@ -104,7 +105,7 @@ function TextBasedViewer({
   refreshKey?: number;
 }) {
   const { t } = useI18n();
-  const { content, loading, error, saving, saved, save, saveToCache, refresh, forceRefresh } =
+  const { content, loading, error, saving, save, saveToCache, refresh, forceRefresh } =
     useFileWithCache(fileId, refreshKey);
   const editorCtx = useEditorContext();
 
@@ -169,7 +170,6 @@ function TextBasedViewer({
         initialContent={content}
         settings={settings}
         saveToCache={saveToCache}
-        saved={saved}
       />
     );
   }
@@ -182,7 +182,6 @@ function TextBasedViewer({
         fileName={name}
         initialContent={content}
         saveToCache={saveToCache}
-        saved={saved}
       />
     );
   }
@@ -194,7 +193,6 @@ function TextBasedViewer({
       fileName={name}
       initialContent={content}
       saveToCache={saveToCache}
-      saved={saved}
     />
   );
 }
@@ -212,13 +210,11 @@ function MarkdownFileEditor({
   fileName,
   initialContent,
   saveToCache,
-  saved,
 }: {
   fileId: string;
   fileName: string;
   initialContent: string;
   saveToCache: (content: string) => Promise<void>;
-  saved: boolean;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -254,14 +250,19 @@ function MarkdownFileEditor({
     };
   }, [content, saveToCache]);
 
+  const [uploaded, setUploaded] = useState(false);
+
   const handleTempUpload = useCallback(async () => {
     setUploading(true);
+    setUploaded(false);
     try {
       await fetch("/api/drive/temp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "save", fileName, fileId, content }),
       });
+      setUploaded(true);
+      setTimeout(() => setUploaded(false), 2000);
     } finally {
       setUploading(false);
     }
@@ -295,11 +296,12 @@ function MarkdownFileEditor({
 
   const handleTempDiffAccept = useCallback(async () => {
     if (!tempDiffData) return;
+    await commitSnapshot(fileId, tempDiffData.tempContent);
     contentFromProps.current = false;
     setContent(tempDiffData.tempContent);
     await saveToCache(tempDiffData.tempContent);
     setTempDiffData(null);
-  }, [tempDiffData, saveToCache]);
+  }, [tempDiffData, saveToCache, fileId]);
 
   const handleSelect = useCallback(
     (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
@@ -378,32 +380,28 @@ function MarkdownFileEditor({
 
         {/* Temp Upload / Download */}
         <div className="flex items-center gap-2">
-          {saved && (
+          {uploaded && (
             <span className="text-xs text-green-600 dark:text-green-400">
-              {t("mainViewer.saved")}
+              {t("contextMenu.tempUploaded")}
             </span>
           )}
-          {mode !== "preview" && (
-            <>
-              <button
-                onClick={handleTempUpload}
-                disabled={uploading}
-                className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                title={t("contextMenu.tempUpload")}
-              >
-                <Upload size={ICON.SM} />
-                {t("contextMenu.tempUpload")}
-              </button>
-              <button
-                onClick={handleTempDownload}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-                title={t("contextMenu.tempDownload")}
-              >
-                <Download size={ICON.SM} />
-                {t("contextMenu.tempDownload")}
-              </button>
-            </>
-          )}
+          <button
+            onClick={handleTempUpload}
+            disabled={uploading}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            title={t("contextMenu.tempUpload")}
+          >
+            <Upload size={ICON.SM} />
+            {t("contextMenu.tempUpload")}
+          </button>
+          <button
+            onClick={handleTempDownload}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            title={t("contextMenu.tempDownload")}
+          >
+            <Download size={ICON.SM} />
+            {t("contextMenu.tempDownload")}
+          </button>
         </div>
       </div>
 
@@ -469,13 +467,11 @@ function TextFileEditor({
   fileName,
   initialContent,
   saveToCache,
-  saved,
 }: {
   fileId: string;
   fileName: string;
   initialContent: string;
   saveToCache: (content: string) => Promise<void>;
-  saved: boolean;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -516,14 +512,19 @@ function TextFileEditor({
     };
   }, [content, saveToCache]);
 
+  const [uploaded, setUploaded] = useState(false);
+
   const handleTempUpload = useCallback(async () => {
     setUploading(true);
+    setUploaded(false);
     try {
       await fetch("/api/drive/temp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "save", fileName, fileId, content }),
       });
+      setUploaded(true);
+      setTimeout(() => setUploaded(false), 2000);
     } finally {
       setUploading(false);
     }
@@ -557,11 +558,12 @@ function TextFileEditor({
 
   const handleTempDiffAccept = useCallback(async () => {
     if (!tempDiffData) return;
+    await commitSnapshot(fileId, tempDiffData.tempContent);
     contentFromProps.current = false;
     setContent(tempDiffData.tempContent);
     await saveToCache(tempDiffData.tempContent);
     setTempDiffData(null);
-  }, [tempDiffData, saveToCache]);
+  }, [tempDiffData, saveToCache, fileId]);
 
   const handleSelect = useCallback(
     (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
@@ -575,9 +577,9 @@ function TextFileEditor({
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
       <div className="flex items-center justify-end gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-        {saved && (
+        {uploaded && (
           <span className="text-xs text-green-600 dark:text-green-400">
-            {t("mainViewer.saved")}
+            {t("contextMenu.tempUploaded")}
           </span>
         )}
         <button

@@ -7,6 +7,7 @@ interface SyncStatusBarProps {
   diff: SyncDiff | null;
   lastSyncTime: string | null;
   error: string | null;
+  localModifiedCount: number;
   onPush: () => void;
   onPull: () => void;
   onCheckSync: () => void;
@@ -19,13 +20,15 @@ export function SyncStatusBar({
   diff,
   lastSyncTime,
   error,
+  localModifiedCount,
   onPush,
   onPull,
   onCheckSync,
   onShowConflicts,
   conflicts,
 }: SyncStatusBarProps) {
-  const pushCount = diff ? diff.toPush.length + diff.localOnly.length : 0;
+  const remotePushCount = diff ? diff.toPush.length + diff.localOnly.length : 0;
+  const pushCount = remotePushCount + localModifiedCount;
   const pullCount = diff ? diff.toPull.length + diff.remoteOnly.length : 0;
   const conflictCount = conflicts.length;
 
@@ -58,30 +61,32 @@ export function SyncStatusBar({
       </button>
 
       {/* Push button */}
-      {pushCount > 0 && (
-        <button
-          onClick={onPush}
-          disabled={isBusy}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-sm text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50"
-          title={`Push ${pushCount} change${pushCount > 1 ? "s" : ""}`}
-        >
-          <ArrowUp size={ICON.SM} />
-          <span>{pushCount}</span>
-        </button>
-      )}
+      <button
+        onClick={onPush}
+        disabled={isBusy}
+        className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium disabled:opacity-50 ${
+          pushCount > 0
+            ? "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+            : "border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
+        }`}
+      >
+        <ArrowUp size={ICON.SM} />
+        Push{pushCount > 0 && ` (${pushCount})`}
+      </button>
 
       {/* Pull button */}
-      {pullCount > 0 && (
-        <button
-          onClick={onPull}
-          disabled={isBusy}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-sm text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 disabled:opacity-50"
-          title={`Pull ${pullCount} change${pullCount > 1 ? "s" : ""}`}
-        >
-          <ArrowDown size={ICON.SM} />
-          <span>{pullCount}</span>
-        </button>
-      )}
+      <button
+        onClick={onPull}
+        disabled={isBusy}
+        className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium disabled:opacity-50 ${
+          pullCount > 0
+            ? "bg-green-600 text-white hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
+            : "border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
+        }`}
+      >
+        <ArrowDown size={ICON.SM} />
+        Pull{pullCount > 0 && ` (${pullCount})`}
+      </button>
 
       {/* Conflict indicator */}
       {conflictCount > 0 && (

@@ -40,6 +40,7 @@ import { useI18n } from "~/i18n/context";
 import type { FileListItem } from "~/contexts/EditorContext";
 import {
   getAllCachedFileIds,
+  getLocallyModifiedFileIds,
   getCachedFile,
   deleteCachedFile,
   getLocalSyncMeta,
@@ -192,7 +193,7 @@ export function DriveFileTree({
   const [dragOverTree, setDragOverTree] = useState(false);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [draggingItem, setDraggingItem] = useState<{ id: string; parentId: string } | null>(null);
-  const [editHistoryFile, setEditHistoryFile] = useState<string | null>(null);
+  const [editHistoryFile, setEditHistoryFile] = useState<{ fileId: string; filePath: string } | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [cachedFiles, setCachedFiles] = useState<Set<string>>(new Set());
   const [modifiedFiles, setModifiedFiles] = useState<Set<string>>(new Set());
@@ -268,18 +269,23 @@ export function DriveFileTree({
         setCachedFiles(ids);
       } catch { /* ignore */ }
       try {
-        const res = await fetch("/api/drive/temp?action=list");
-        if (res.ok) {
-          const data = await res.json();
-          const modifiedSet = new Set<string>();
-          for (const f of data.files) {
-            if (f.payload?.fileId) modifiedSet.add(f.payload.fileId);
-          }
-          setModifiedFiles(modifiedSet);
-        }
+        const ids = await getLocallyModifiedFileIds();
+        setModifiedFiles(ids);
       } catch { /* ignore */ }
     })();
   }, [treeItems]);
+
+  // Listen for file-modified events from useFileWithCache save
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const fileId = (e as CustomEvent).detail?.fileId;
+      if (fileId) {
+        setModifiedFiles((prev) => new Set(prev).add(fileId));
+      }
+    };
+    window.addEventListener("file-modified", handler);
+    return () => window.removeEventListener("file-modified", handler);
+  }, []);
 
   // Push flattened file list to parent when tree changes
   useEffect(() => {
@@ -1031,7 +1037,7 @@ export function DriveFileTree({
         items.push({
           label: t("editHistory.menuLabel"),
           icon: <History size={ICON.MD} />,
-          onClick: () => setEditHistoryFile(item.name),
+          onClick: () => setEditHistoryFile({ fileId: item.id, filePath: item.name }),
         });
         items.push({
           label: t("editHistory.clearHistory"),
@@ -1273,7 +1279,8 @@ export function DriveFileTree({
 
       {editHistoryFile && (
         <EditHistoryModal
-          filePath={editHistoryFile}
+          fileId={editHistoryFile.fileId}
+          filePath={editHistoryFile.filePath}
           onClose={() => setEditHistoryFile(null)}
         />
       )}

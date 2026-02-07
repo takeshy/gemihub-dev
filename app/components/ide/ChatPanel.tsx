@@ -8,6 +8,7 @@ import type {
   ChatHistory,
   ChatHistoryItem,
   GeneratedImage,
+  McpAppInfo,
 } from "~/types/chat";
 import type { UserSettings, ModelType, DriveToolMode, SlashCommand } from "~/types/settings";
 import {
@@ -65,8 +66,8 @@ export function ChatPanel({
     settings.selectedRagSetting
   );
   const [driveToolMode, setDriveToolMode] = useState<DriveToolMode>("all");
-  const [enableMcp, setEnableMcp] = useState(
-    settings.mcpServers.some((s) => s.enabled)
+  const [enabledMcpServerNames, setEnabledMcpServerNames] = useState<string[]>(
+    settings.mcpServers.filter((s) => s.enabled).map((s) => s.name)
   );
 
   // ---- Chat history management ----
@@ -178,14 +179,14 @@ export function ChatPanel({
       if (name === "__websearch__") {
         // Web Search: incompatible with other tools
         setDriveToolMode("none");
-        setEnableMcp(false);
+        setEnabledMcpServerNames([]);
       } else if (name) {
         // RAG selected: search tools not needed
         setDriveToolMode("noSearch");
       } else {
         // None: restore defaults
         setDriveToolMode("all");
-        setEnableMcp(settings.mcpServers.some((s) => s.enabled));
+        setEnabledMcpServerNames(settings.mcpServers.filter((s) => s.enabled).map((s) => s.name));
       }
     },
     [settings.mcpServers]
@@ -200,7 +201,7 @@ export function ChatPanel({
       const effectiveModel = overrides?.model || selectedModel;
       const effectiveRagSetting = overrides?.searchSetting !== undefined ? overrides.searchSetting : selectedRagSetting;
       const effectiveDriveToolMode = overrides?.driveToolMode || driveToolMode;
-      const mcpOverride = overrides?.enabledMcpServers;
+      const mcpOverride = overrides?.enabledMcpServers !== undefined ? overrides.enabledMcpServers : null;
 
       const userMessage: Message = {
         role: "user",
@@ -233,15 +234,15 @@ export function ChatPanel({
               : []
           : [];
 
-      const mcpEnabled = mcpOverride
-        ? mcpOverride.length > 0
-        : enableMcp && !isWebSearch;
+      const effectiveMcpNames = mcpOverride
+        ? mcpOverride
+        : isWebSearch ? [] : enabledMcpServerNames;
 
-      const mcpServers = mcpOverride
-        ? settings.mcpServers.filter((s) => mcpOverride.includes(s.name))
-        : mcpEnabled
-          ? settings.mcpServers.filter((s) => s.enabled)
-          : undefined;
+      const mcpEnabled = effectiveMcpNames.length > 0;
+
+      const mcpServersFiltered = mcpEnabled
+        ? settings.mcpServers.filter((s) => effectiveMcpNames.includes(s.name))
+        : undefined;
 
       const body = {
         messages: updatedMessages,
@@ -251,7 +252,7 @@ export function ChatPanel({
         driveToolMode: effectiveDriveToolMode,
         enableDriveTools: effectiveDriveToolMode !== "none",
         enableMcp: mcpEnabled,
-        mcpServers: mcpEnabled ? mcpServers : undefined,
+        mcpServers: mcpServersFiltered,
         webSearchEnabled: isWebSearch,
         apiPlan: settings.apiPlan,
         settings: {
@@ -287,6 +288,7 @@ export function ChatPanel({
         let webSearchUsed = false;
         let ragSources: string[] = [];
         let generatedImages: GeneratedImage[] = [];
+        let mcpApps: McpAppInfo[] = [];
 
         while (true) {
           const { done, value } = await reader.read();
@@ -342,6 +344,11 @@ export function ChatPanel({
                     generatedImages = [...generatedImages, chunk.generatedImage];
                   }
                   break;
+                case "mcp_app":
+                  if (chunk.mcpApp) {
+                    mcpApps = [...mcpApps, chunk.mcpApp];
+                  }
+                  break;
                 case "error":
                   accumulatedContent +=
                     `\n\n**Error:** ${chunk.error || "Unknown error"}`;
@@ -371,6 +378,8 @@ export function ChatPanel({
                       generatedImages.length > 0
                         ? generatedImages
                         : undefined,
+                    mcpApps:
+                      mcpApps.length > 0 ? mcpApps : undefined,
                   };
 
                   const finalMessages = [
@@ -423,7 +432,7 @@ export function ChatPanel({
       selectedModel,
       selectedRagSetting,
       driveToolMode,
-      enableMcp,
+      enabledMcpServerNames,
       settings,
       saveChat,
       streamingContent,
@@ -517,9 +526,9 @@ export function ChatPanel({
         isStreaming={isStreaming}
         driveToolMode={driveToolMode}
         onDriveToolModeChange={setDriveToolMode}
-        enableMcp={enableMcp}
-        onEnableMcpChange={setEnableMcp}
-        hasMcpServers={settings.mcpServers.some((s) => s.enabled)}
+        mcpServers={settings.mcpServers}
+        enabledMcpServerNames={enabledMcpServerNames}
+        onEnabledMcpServerNamesChange={setEnabledMcpServerNames}
         slashCommands={slashCommands}
       />
     </div>

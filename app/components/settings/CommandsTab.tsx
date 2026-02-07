@@ -181,22 +181,24 @@ export function CommandsTab({ settings }: CommandsTabProps) {
                 {cmd.description}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => startEdit(cmd)}
-              className="p-1.5 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400"
-              title={t("settings.commands.edit")}
-            >
-              <Pencil size={ICON.LG} />
-            </button>
-            <button
-              type="button"
-              onClick={() => removeCommand(cmd.id)}
-              className="p-1.5 text-gray-500 hover:text-red-600 dark:hover:text-red-400"
-              title={t("settings.commands.delete")}
-            >
-              <Trash2 size={ICON.LG} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => startEdit(cmd)}
+                className="p-1.5 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400"
+                title={t("settings.commands.edit")}
+              >
+                <Pencil size={ICON.LG} />
+              </button>
+              <button
+                type="button"
+                onClick={() => removeCommand(cmd.id)}
+                className="p-1.5 text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                title={t("settings.commands.delete")}
+              >
+                <Trash2 size={ICON.LG} />
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -329,22 +331,24 @@ export function CommandsTab({ settings }: CommandsTabProps) {
         <button
           type="button"
           onClick={startAdd}
-          className="inline-flex items-center gap-2 mb-6 px-3 py-1.5 border border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-md hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
+          className="inline-flex items-center gap-2 px-3 py-1.5 border border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-md hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
         >
           <Plus size={ICON.LG} />
           {t("settings.commands.addCommand")}
         </button>
       )}
 
-      <button
-        type="button"
-        disabled={loading}
-        onClick={handleSubmit}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
-      >
-        {loading ? <Loader2 size={ICON.LG} className="animate-spin" /> : <Save size={ICON.LG} />}
-        {t("settings.commands.save")}
-      </button>
+      <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <button
+          type="button"
+          disabled={loading}
+          onClick={handleSubmit}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+        >
+          {loading ? <Loader2 size={ICON.LG} className="animate-spin" /> : <Save size={ICON.LG} />}
+          {t("settings.commands.save")}
+        </button>
+      </div>
     </div>
   );
 }
