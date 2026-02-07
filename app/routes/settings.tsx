@@ -904,19 +904,31 @@ function SyncTab({ settings }: { settings: UserSettings }) {
     setActionLoading("fullPush");
     setActionMsg(null);
     try {
-      const { useSync } = await import("~/hooks/useSync");
-      // Directly call the API since we can't use hooks here
-      await fetch("/api/drive/temp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "applyAll" }),
-      });
-      const { getLocalSyncMeta } = await import("~/services/indexeddb-cache");
-      const localMeta = await getLocalSyncMeta();
-      if (!localMeta) {
-        setActionMsg("No local data to push.");
-        return;
+      const { getLocalSyncMeta, setLocalSyncMeta, getLocallyModifiedFileIds, getCachedFile, setCachedFile, clearAllEditHistory } = await import("~/services/indexeddb-cache");
+      const modifiedIds = await getLocallyModifiedFileIds();
+      const localMeta = (await getLocalSyncMeta()) ?? {
+        id: "current" as const,
+        lastUpdatedAt: new Date().toISOString(),
+        files: {} as Record<string, { md5Checksum: string; modifiedTime: string }>,
+      };
+
+      for (const fid of modifiedIds) {
+        const cached = await getCachedFile(fid);
+        if (!cached) continue;
+        const res = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "update", fileId: fid, content: cached.content }),
+        });
+        if (!res.ok) throw new Error(`Failed to update file ${cached.fileName ?? fid}`);
+        const data = await res.json();
+        localMeta.files[fid] = { md5Checksum: data.md5Checksum, modifiedTime: data.file.modifiedTime };
+        await setCachedFile({ ...cached, md5Checksum: data.md5Checksum, modifiedTime: data.file.modifiedTime, cachedAt: Date.now() });
       }
+
+      localMeta.lastUpdatedAt = new Date().toISOString();
+      await setLocalSyncMeta(localMeta);
+
       const res = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -926,6 +938,8 @@ function SyncTab({ settings }: { settings: UserSettings }) {
         }),
       });
       if (!res.ok) throw new Error("Full push failed");
+
+      await clearAllEditHistory();
       setActionMsg("Full push completed.");
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : "Full push failed.");

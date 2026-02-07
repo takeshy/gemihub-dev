@@ -132,106 +132,47 @@ export function useSync() {
         }
       }
 
-      // Safe to push — upload locally modified files as temp files
+      // Safe to push — update files directly on Drive
       const modifiedIds = await getLocallyModifiedFileIds();
+      const meta = localMeta ?? {
+        id: "current" as const,
+        lastUpdatedAt: new Date().toISOString(),
+        files: {} as Record<string, { md5Checksum: string; modifiedTime: string }>,
+      };
+
       for (const fid of modifiedIds) {
         const cached = await getCachedFile(fid);
-        if (cached) {
-          await fetch("/api/drive/temp", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "save",
-              fileName: cached.fileName ?? fid,
-              fileId: fid,
-              content: cached.content,
-            }),
-          });
-        }
+        if (!cached) continue;
+        const res = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            fileId: fid,
+            content: cached.content,
+          }),
+        });
+        if (!res.ok) throw new Error(`Failed to update file ${cached.fileName ?? fid}`);
+        const data = await res.json();
+        meta.files[fid] = {
+          md5Checksum: data.md5Checksum,
+          modifiedTime: data.file.modifiedTime,
+        };
+        await setCachedFile({
+          ...cached,
+          md5Checksum: data.md5Checksum,
+          modifiedTime: data.file.modifiedTime,
+          cachedAt: Date.now(),
+        });
       }
 
-      // Apply all temp files
-      const tempRes = await fetch("/api/drive/temp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "applyAll" }),
-      });
-      if (tempRes.ok) {
-        const tempData = await tempRes.json();
-        const results = tempData.results as Array<{
-          fileId: string;
-          md5Checksum: string;
-          modifiedTime: string;
-        }>;
-        if (results.length > 0) {
-          const meta = (await getLocalSyncMeta()) ?? {
-            id: "current" as const,
-            lastUpdatedAt: new Date().toISOString(),
-            files: {},
-          };
-          for (const r of results) {
-            meta.files[r.fileId] = {
-              md5Checksum: r.md5Checksum,
-              modifiedTime: r.modifiedTime,
-            };
-            // Update IndexedDB cache with new checksum
-            const cached = await getCachedFile(r.fileId);
-            if (cached) {
-              await setCachedFile({
-                ...cached,
-                md5Checksum: r.md5Checksum,
-                modifiedTime: r.modifiedTime,
-                cachedAt: Date.now(),
-              });
-            }
-          }
-          meta.lastUpdatedAt = new Date().toISOString();
-          await setLocalSyncMeta(meta);
-        }
-      }
+      meta.lastUpdatedAt = new Date().toISOString();
+      await setLocalSyncMeta(meta);
 
-      // Clear local edit history (now persisted in Drive via applyTempFile)
+      // Clear local edit history (now persisted in Drive)
       await clearAllEditHistory();
       setLocalModifiedCount(0);
       window.dispatchEvent(new Event("sync-complete"));
-
-      // Push metadata sync
-      const updatedMeta = (await getLocalSyncMeta()) ?? null;
-      if (!updatedMeta) {
-        setSyncStatus("idle");
-        setLastSyncTime(new Date().toISOString());
-        return;
-      }
-
-      const postDiffRes = await fetch("/api/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "diff",
-          localMeta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files },
-        }),
-      });
-
-      if (!postDiffRes.ok) throw new Error("Failed to compute diff");
-      const postDiffData = await postDiffRes.json();
-
-      if (postDiffData.diff.toPush.length === 0) {
-        setLastSyncTime(new Date().toISOString());
-        setSyncStatus("idle");
-        return;
-      }
-
-      const pushRes = await fetch("/api/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "push",
-          fileIds: postDiffData.diff.toPush,
-          localMeta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files },
-        }),
-      });
-
-      if (!pushRes.ok) throw new Error("Failed to push changes");
 
       setLastSyncTime(new Date().toISOString());
       await checkSync(); // Refresh diff
@@ -457,38 +398,45 @@ export function useSync() {
     setSyncStatus("pushing");
     setError(null);
     try {
-      // Upload locally modified files as temp files
+      // Update modified files directly on Drive
       const modifiedIds = await getLocallyModifiedFileIds();
+      const localMeta = (await getLocalSyncMeta()) ?? {
+        id: "current" as const,
+        lastUpdatedAt: new Date().toISOString(),
+        files: {} as Record<string, { md5Checksum: string; modifiedTime: string }>,
+      };
+
       for (const fid of modifiedIds) {
         const cached = await getCachedFile(fid);
-        if (cached) {
-          await fetch("/api/drive/temp", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "save",
-              fileName: cached.fileName ?? fid,
-              fileId: fid,
-              content: cached.content,
-            }),
-          });
-        }
+        if (!cached) continue;
+        const res = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            fileId: fid,
+            content: cached.content,
+          }),
+        });
+        if (!res.ok) throw new Error(`Failed to update file ${cached.fileName ?? fid}`);
+        const data = await res.json();
+        localMeta.files[fid] = {
+          md5Checksum: data.md5Checksum,
+          modifiedTime: data.file.modifiedTime,
+        };
+        await setCachedFile({
+          ...cached,
+          md5Checksum: data.md5Checksum,
+          modifiedTime: data.file.modifiedTime,
+          cachedAt: Date.now(),
+        });
       }
 
-      // Apply all temp files
-      await fetch("/api/drive/temp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "applyAll" }),
-      });
+      localMeta.lastUpdatedAt = new Date().toISOString();
+      await setLocalSyncMeta(localMeta);
 
-      const localMeta = (await getLocalSyncMeta()) ?? null;
-      if (!localMeta) {
-        setSyncStatus("idle");
-        return;
-      }
-
-      const res = await fetch("/api/sync", {
+      // Push metadata
+      const pushRes = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -497,7 +445,7 @@ export function useSync() {
         }),
       });
 
-      if (!res.ok) throw new Error("Full push failed");
+      if (!pushRes.ok) throw new Error("Full push failed");
 
       await clearAllEditHistory();
       setLocalModifiedCount(0);

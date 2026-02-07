@@ -91,7 +91,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
     case "update": {
       if (!fileId) return Response.json({ error: "Missing fileId" }, { status: 400 });
-      const file = await updateFile(validTokens.accessToken, fileId, content, "text/yaml");
+      const file = await updateFile(validTokens.accessToken, fileId, content, mimeType || "text/plain");
 
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
       return Response.json({
