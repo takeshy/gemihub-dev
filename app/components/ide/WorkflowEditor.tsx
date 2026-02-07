@@ -1,8 +1,10 @@
-import { useState, useCallback, useEffect } from "react";
-import { Save, Code, Eye } from "lucide-react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { Code, Eye, Upload, Download } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { UserSettings } from "~/types/settings";
 import { MermaidPreview } from "~/components/flow/MermaidPreview";
+import { useI18n } from "~/i18n/context";
+import { TempDiffModal } from "./TempDiffModal";
 
 
 interface WorkflowEditorProps {
@@ -10,8 +12,7 @@ interface WorkflowEditorProps {
   fileName: string;
   initialContent: string;
   settings: UserSettings;
-  onSave: (content: string) => Promise<void>;
-  saving: boolean;
+  saveToCache: (content: string) => Promise<void>;
   saved: boolean;
 }
 
@@ -20,19 +21,50 @@ export function WorkflowEditor({
   fileName,
   initialContent,
   settings,
-  onSave,
-  saving,
+  saveToCache,
   saved,
 }: WorkflowEditorProps) {
+  const { t } = useI18n();
   const [viewMode, setViewMode] = useState<"visual" | "yaml">("visual");
   const [yamlContent, setYamlContent] = useState(initialContent);
   const [parseError, setParseError] = useState<string | null>(null);
   const [mermaidChart, setMermaidChart] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [tempDiffData, setTempDiffData] = useState<{
+    fileName: string;
+    fileId: string;
+    currentContent: string;
+    tempContent: string;
+    tempSavedAt: string;
+    currentModifiedTime: string;
+    isBinary: boolean;
+  } | null>(null);
+
+  // Debounced auto-save to IndexedDB
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const contentFromProps = useRef(true);
+
+  const updateContent = useCallback((newContent: string) => {
+    contentFromProps.current = false;
+    setYamlContent(newContent);
+  }, []);
 
   useEffect(() => {
+    contentFromProps.current = true;
     setYamlContent(initialContent);
-  }, [initialContent]);
+  }, [initialContent, fileId]);
+
+  useEffect(() => {
+    if (contentFromProps.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      saveToCache(yamlContent);
+    }, 5000);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [yamlContent, saveToCache]);
 
   // Parse workflow YAML to mermaid on mount and when content changes
   useEffect(() => {
@@ -68,10 +100,6 @@ export function WorkflowEditor({
     };
   }, [initialContent, fileId]);
 
-  const handleSave = useCallback(async () => {
-    await onSave(yamlContent);
-  }, [yamlContent, onSave]);
-
   // Re-parse mermaid when switching from YAML to visual
   const switchToVisual = useCallback(async () => {
     setViewMode("visual");
@@ -91,6 +119,54 @@ export function WorkflowEditor({
       setLoading(false);
     }
   }, [yamlContent]);
+
+  const handleTempUpload = useCallback(async () => {
+    setUploading(true);
+    try {
+      await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save", fileName: fileName + ".yaml", fileId, content: yamlContent }),
+      });
+      await saveToCache(yamlContent);
+    } finally {
+      setUploading(false);
+    }
+  }, [yamlContent, fileName, fileId, saveToCache]);
+
+  const handleTempDownload = useCallback(async () => {
+    try {
+      const res = await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "download", fileName: fileName + ".yaml" }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.found) {
+        alert(t("contextMenu.noTempFile"));
+        return;
+      }
+      const { payload } = data.tempFile;
+      setTempDiffData({
+        fileName: fileName + ".yaml",
+        fileId,
+        currentContent: yamlContent,
+        tempContent: payload.content,
+        tempSavedAt: payload.savedAt,
+        currentModifiedTime: "",
+        isBinary: false,
+      });
+    } catch { /* ignore */ }
+  }, [fileName, fileId, yamlContent, t]);
+
+  const handleTempDiffAccept = useCallback(async () => {
+    if (!tempDiffData) return;
+    contentFromProps.current = false;
+    setYamlContent(tempDiffData.tempContent);
+    await saveToCache(tempDiffData.tempContent);
+    setTempDiffData(null);
+  }, [tempDiffData, saveToCache]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
@@ -128,17 +204,27 @@ export function WorkflowEditor({
 
           {saved && (
             <span className="text-xs text-green-600 dark:text-green-400">
-              Saved
+              {t("mainViewer.saved")}
             </span>
           )}
 
           <button
-            onClick={handleSave}
-            disabled={saving}
+            onClick={handleTempUpload}
+            disabled={uploading}
             className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            title={t("contextMenu.tempUpload")}
           >
-            <Save size={ICON.SM} />
-            {saving ? "Saving..." : "Save"}
+            <Upload size={ICON.SM} />
+            {t("contextMenu.tempUpload")}
+          </button>
+          <button
+            onClick={handleTempDownload}
+            disabled={uploading}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
+            title={t("contextMenu.tempDownload")}
+          >
+            <Download size={ICON.SM} />
+            {t("contextMenu.tempDownload")}
           </button>
         </div>
       </div>
@@ -170,7 +256,7 @@ export function WorkflowEditor({
           <div className="flex-1 p-4">
             <textarea
               value={yamlContent}
-              onChange={(e) => setYamlContent(e.target.value)}
+              onChange={(e) => updateContent(e.target.value)}
               className="w-full h-full font-mono text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
               spellCheck={false}
             />
@@ -178,6 +264,19 @@ export function WorkflowEditor({
         )}
 
       </div>
+
+      {tempDiffData && (
+        <TempDiffModal
+          fileName={tempDiffData.fileName}
+          currentContent={tempDiffData.currentContent}
+          tempContent={tempDiffData.tempContent}
+          tempSavedAt={tempDiffData.tempSavedAt}
+          currentModifiedTime={tempDiffData.currentModifiedTime}
+          isBinary={tempDiffData.isBinary}
+          onAccept={handleTempDiffAccept}
+          onReject={() => setTempDiffData(null)}
+        />
+      )}
     </div>
   );
 }

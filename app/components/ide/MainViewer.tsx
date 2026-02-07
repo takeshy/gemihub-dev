@@ -168,8 +168,7 @@ function TextBasedViewer({
         fileName={name.replace(/\.ya?ml$/, "")}
         initialContent={content}
         settings={settings}
-        onSave={save}
-        saving={saving}
+        saveToCache={saveToCache}
         saved={saved}
       />
     );
