@@ -25,6 +25,7 @@ interface HeaderProps {
   onPull: () => void;
   onCheckSync: () => void;
   onShowConflicts: () => void;
+  onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
 }
 
 export function Header({
@@ -42,6 +43,7 @@ export function Header({
   onPull,
   onCheckSync,
   onShowConflicts,
+  onSelectFile,
 }: HeaderProps) {
   const { t } = useI18n();
 
@@ -68,6 +70,7 @@ export function Header({
           onPull={onPull}
           onCheckSync={onCheckSync}
           onShowConflicts={onShowConflicts}
+          onSelectFile={onSelectFile}
           conflicts={syncConflicts}
         />
       </div>

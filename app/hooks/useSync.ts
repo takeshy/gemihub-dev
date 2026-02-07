@@ -7,6 +7,7 @@ import {
   getAllCachedFiles,
   clearAllEditHistory,
   getLocallyModifiedFileIds,
+  getCachedRemoteMeta,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { commitSnapshot } from "~/services/edit-history-local";
@@ -133,7 +134,11 @@ export function useSync() {
       }
 
       // Safe to push — update files directly on Drive
-      const modifiedIds = await getLocallyModifiedFileIds();
+      // Filter to only files tracked in remoteMeta (exclude history/logs)
+      const allModifiedIds = await getLocallyModifiedFileIds();
+      const cachedRemote = await getCachedRemoteMeta();
+      const trackedFiles = cachedRemote?.files ?? {};
+      const modifiedIds = new Set([...allModifiedIds].filter((id) => trackedFiles[id]));
       const meta = localMeta ?? {
         id: "current" as const,
         lastUpdatedAt: new Date().toISOString(),

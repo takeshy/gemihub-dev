@@ -18,6 +18,7 @@ interface SyncStatusBarProps {
   onPull: () => void;
   onCheckSync: () => void;
   onShowConflicts: () => void;
+  onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
   conflicts: ConflictInfo[];
 }
 
@@ -36,10 +37,10 @@ export function SyncStatusBar({
   onPull,
   onCheckSync,
   onShowConflicts,
+  onSelectFile,
   conflicts,
 }: SyncStatusBarProps) {
   const remotePushCount = diff ? diff.toPush.length + diff.localOnly.length : 0;
-  const pushCount = remotePushCount + localModifiedCount;
   const pullCount = diff ? diff.toPull.length + diff.remoteOnly.length : 0;
   const conflictCount = conflicts.length;
 
@@ -48,6 +49,9 @@ export function SyncStatusBar({
   const [openList, setOpenList] = useState<"push" | "pull" | null>(null);
   const [listFiles, setListFiles] = useState<FileListItem[]>([]);
   const [listLoading, setListLoading] = useState(false);
+  // Filtered local modified count (only files tracked in remoteMeta)
+  const [filteredLocalModifiedCount, setFilteredLocalModifiedCount] = useState(0);
+  const pushCount = remotePushCount + filteredLocalModifiedCount;
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Close on click outside
@@ -61,6 +65,28 @@ export function SyncStatusBar({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [openList]);
+
+  // Filter localModifiedCount to exclude files not in remoteMeta (e.g. history/logs)
+  useEffect(() => {
+    if (localModifiedCount === 0) {
+      setFilteredLocalModifiedCount(0);
+      return;
+    }
+    (async () => {
+      try {
+        const remoteMeta = await getCachedRemoteMeta();
+        const tracked = remoteMeta?.files ?? {};
+        const localModified = await getLocallyModifiedFileIds();
+        let count = 0;
+        for (const id of localModified) {
+          if (tracked[id]) count++;
+        }
+        setFilteredLocalModifiedCount(count);
+      } catch {
+        setFilteredLocalModifiedCount(0);
+      }
+    })();
+  }, [localModifiedCount]);
 
   const loadFileList = useCallback(async (type: "push" | "pull") => {
     if (openList === type) {
@@ -83,7 +109,10 @@ export function SyncStatusBar({
           diff.localOnly.forEach((id) => fileIds.add(id));
         }
         const localModified = await getLocallyModifiedFileIds();
-        localModified.forEach((id) => fileIds.add(id));
+        // Only include files tracked in remoteMeta (exclude history/logs)
+        for (const id of localModified) {
+          if (nameMap[id]) fileIds.add(id);
+        }
       } else {
         if (diff) {
           diff.toPull.forEach((id) => fileIds.add(id));
@@ -94,12 +123,7 @@ export function SyncStatusBar({
       const files: FileListItem[] = [];
       for (const id of fileIds) {
         const meta = nameMap[id];
-        if (meta?.name) {
-          files.push({ id, name: meta.name });
-        } else {
-          const cached = await getCachedFile(id);
-          files.push({ id, name: cached?.fileName ?? id });
-        }
+        files.push({ id, name: meta?.name ?? id });
       }
 
       files.sort((a, b) => a.name.localeCompare(b.name));
@@ -155,7 +179,7 @@ export function SyncStatusBar({
             {pushCount}
           </button>
           {openList === "push" && (
-            <FileListPopover files={listFiles} loading={listLoading} />
+            <FileListPopover files={listFiles} loading={listLoading} onSelect={(f) => { setOpenList(null); onSelectFile?.(f.id, f.name, guessMimeType(f.name)); }} />
           )}
         </div>
       )}
@@ -178,7 +202,7 @@ export function SyncStatusBar({
             {pullCount}
           </button>
           {openList === "pull" && (
-            <FileListPopover files={listFiles} loading={listLoading} />
+            <FileListPopover files={listFiles} loading={listLoading} onSelect={(f) => { setOpenList(null); onSelectFile?.(f.id, f.name, guessMimeType(f.name)); }} />
           )}
         </div>
       )}
@@ -212,12 +236,21 @@ export function SyncStatusBar({
   );
 }
 
+function guessMimeType(name: string): string {
+  if (name.endsWith(".yaml") || name.endsWith(".yml")) return "text/yaml";
+  if (name.endsWith(".json")) return "application/json";
+  if (name.endsWith(".md")) return "text/markdown";
+  return "text/plain";
+}
+
 function FileListPopover({
   files,
   loading,
+  onSelect,
 }: {
   files: FileListItem[];
   loading: boolean;
+  onSelect?: (file: FileListItem) => void;
 }) {
   return (
     <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
@@ -230,13 +263,14 @@ function FileListPopover({
       ) : (
         <div className="max-h-48 overflow-y-auto py-1">
           {files.map((f) => (
-            <div
+            <button
               key={f.id}
-              className="truncate px-3 py-1 text-xs text-gray-700 dark:text-gray-300"
+              className="block w-full truncate px-3 py-1 text-left text-xs text-blue-600 hover:bg-gray-100 hover:underline dark:text-blue-400 dark:hover:bg-gray-800"
               title={f.name}
+              onClick={() => onSelect?.(f)}
             >
               {f.name}
-            </div>
+            </button>
           ))}
         </div>
       )}

@@ -334,6 +334,7 @@ function IDELayout({
           onPull={pull}
           onCheckSync={checkSync}
           onShowConflicts={() => setShowConflictDialog(true)}
+          onSelectFile={handleSelectFile}
         />
 
         {!hasGeminiApiKey && (
