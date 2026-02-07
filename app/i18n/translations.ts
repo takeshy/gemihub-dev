@@ -166,6 +166,15 @@ export interface TranslationStrings {
   "tempFiles.confirmDelete": string;
   "tempFiles.savedAt": string;
 
+  // Encrypted file viewer
+  "crypt.enterPassword": string;
+  "crypt.enterPasswordDesc": string;
+  "crypt.passwordPlaceholder": string;
+  "crypt.unlock": string;
+  "crypt.decrypting": string;
+  "crypt.wrongPassword": string;
+  "crypt.encrypting": string;
+
   // Commands tab
   "settings.tab.commands": string;
   "settings.commands.noCommands": string;
@@ -350,6 +359,15 @@ const en: TranslationStrings = {
   "tempFiles.confirmDelete": "Delete the selected temporary files?",
   "tempFiles.savedAt": "Saved at",
 
+  // Encrypted file viewer
+  "crypt.enterPassword": "Enter Password",
+  "crypt.enterPasswordDesc": "This file is encrypted. Enter your password to view.",
+  "crypt.passwordPlaceholder": "Password",
+  "crypt.unlock": "Unlock",
+  "crypt.decrypting": "Decrypting...",
+  "crypt.wrongPassword": "Invalid password",
+  "crypt.encrypting": "Encrypting & uploading...",
+
   // Commands tab
   "settings.tab.commands": "Commands",
   "settings.commands.noCommands": "No slash commands configured.",
@@ -533,6 +551,15 @@ const ja: TranslationStrings = {
   "tempFiles.deleteSelected": "選択を削除",
   "tempFiles.confirmDelete": "選択した一時ファイルを削除しますか？",
   "tempFiles.savedAt": "保存日時",
+
+  // Encrypted file viewer
+  "crypt.enterPassword": "パスワードを入力",
+  "crypt.enterPasswordDesc": "このファイルは暗号化されています。パスワードを入力してください。",
+  "crypt.passwordPlaceholder": "パスワード",
+  "crypt.unlock": "解除",
+  "crypt.decrypting": "復号中...",
+  "crypt.wrongPassword": "パスワードが正しくありません",
+  "crypt.encrypting": "暗号化＆アップロード中...",
 
   // Commands tab
   "settings.tab.commands": "コマンド",

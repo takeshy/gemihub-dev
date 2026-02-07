@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
-import { FileText, Loader2, Eye, PenLine, Code } from "lucide-react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
+import { FileText, Loader2, Eye, PenLine, Code, Upload, Download } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { UserSettings } from "~/types/settings";
 import { WorkflowEditor } from "./WorkflowEditor";
+import { EncryptedFileViewer } from "./EncryptedFileViewer";
+import { isEncryptedFile } from "~/services/crypto-core";
 import { useFileWithCache } from "~/hooks/useFileWithCache";
 import { useI18n } from "~/i18n/context";
 import { useEditorContext } from "~/contexts/EditorContext";
+import { TempDiffModal } from "./TempDiffModal";
 
 interface MainViewerProps {
   fileId: string | null;
@@ -101,7 +104,7 @@ function TextBasedViewer({
   refreshKey?: number;
 }) {
   const { t } = useI18n();
-  const { content, loading, error, saving, saved, save, refresh } =
+  const { content, loading, error, saving, saved, save, saveToCache, refresh, forceRefresh } =
     useFileWithCache(fileId, refreshKey);
   const editorCtx = useEditorContext();
 
@@ -143,6 +146,20 @@ function TextBasedViewer({
 
   const name = fileName || "";
 
+  // Encrypted file: check extension OR content format
+  if (name.endsWith(".encrypted") || isEncryptedFile(content)) {
+    return (
+      <EncryptedFileViewer
+        fileId={fileId}
+        fileName={name}
+        encryptedContent={content}
+        encryptionSettings={settings.encryption}
+        saveToCache={saveToCache}
+        forceRefresh={forceRefresh}
+      />
+    );
+  }
+
   // Workflow YAML file
   if (name.endsWith(".yaml") || name.endsWith(".yml")) {
     return (
@@ -163,9 +180,9 @@ function TextBasedViewer({
     return (
       <MarkdownFileEditor
         fileId={fileId}
+        fileName={name}
         initialContent={content}
-        onSave={save}
-        saving={saving}
+        saveToCache={saveToCache}
         saved={saved}
       />
     );
@@ -175,9 +192,9 @@ function TextBasedViewer({
   return (
     <TextFileEditor
       fileId={fileId}
+      fileName={name}
       initialContent={content}
-      onSave={save}
-      saving={saving}
+      saveToCache={saveToCache}
       saved={saved}
     />
   );
@@ -193,20 +210,97 @@ type MdEditMode = "preview" | "wysiwyg" | "raw";
 
 function MarkdownFileEditor({
   fileId,
+  fileName,
   initialContent,
-  onSave,
-  saving,
+  saveToCache,
   saved,
 }: {
   fileId: string;
+  fileName: string;
   initialContent: string;
-  onSave: (content: string) => Promise<void>;
-  saving: boolean;
+  saveToCache: (content: string) => Promise<void>;
   saved: boolean;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
   const editorCtx = useEditorContext();
+  const [uploading, setUploading] = useState(false);
+  const [tempDiffData, setTempDiffData] = useState<{
+    fileName: string;
+    fileId: string;
+    currentContent: string;
+    tempContent: string;
+    tempSavedAt: string;
+    currentModifiedTime: string;
+    isBinary: boolean;
+  } | null>(null);
+
+  // Debounced auto-save to IndexedDB on content change
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const contentFromProps = useRef(true);
+
+  const updateContent = useCallback((newContent: string) => {
+    contentFromProps.current = false;
+    setContent(newContent);
+  }, []);
+
+  useEffect(() => {
+    if (contentFromProps.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      saveToCache(content);
+    }, 5000);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [content, saveToCache]);
+
+  const handleTempUpload = useCallback(async () => {
+    setUploading(true);
+    try {
+      await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save", fileName, fileId, content }),
+      });
+    } finally {
+      setUploading(false);
+    }
+  }, [content, fileName, fileId]);
+
+  const handleTempDownload = useCallback(async () => {
+    try {
+      const res = await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "download", fileName }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.found) {
+        alert(t("contextMenu.noTempFile"));
+        return;
+      }
+      const { payload } = data.tempFile;
+      setTempDiffData({
+        fileName,
+        fileId,
+        currentContent: content,
+        tempContent: payload.content,
+        tempSavedAt: payload.savedAt,
+        currentModifiedTime: "",
+        isBinary: fileName.endsWith(".encrypted"),
+      });
+    } catch { /* ignore */ }
+  }, [fileName, fileId, content, t]);
+
+  const handleTempDiffAccept = useCallback(async () => {
+    if (!tempDiffData) return;
+    contentFromProps.current = false;
+    setContent(tempDiffData.tempContent);
+    await saveToCache(tempDiffData.tempContent);
+    setTempDiffData(null);
+  }, [tempDiffData, saveToCache]);
 
   const handleSelect = useCallback(
     (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
@@ -241,6 +335,7 @@ function MarkdownFileEditor({
   >(null);
 
   useEffect(() => {
+    contentFromProps.current = true;
     setContent(initialContent);
     setMode(initialContent ? "preview" : "wysiwyg");
   }, [initialContent, fileId]);
@@ -282,7 +377,7 @@ function MarkdownFileEditor({
           ))}
         </div>
 
-        {/* Save */}
+        {/* Temp Upload / Download */}
         <div className="flex items-center gap-2">
           {saved && (
             <span className="text-xs text-green-600 dark:text-green-400">
@@ -290,13 +385,25 @@ function MarkdownFileEditor({
             </span>
           )}
           {mode !== "preview" && (
-            <button
-              onClick={() => onSave(content)}
-              disabled={saving}
-              className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? t("mainViewer.saving") : t("common.save")}
-            </button>
+            <>
+              <button
+                onClick={handleTempUpload}
+                disabled={uploading}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                title={t("contextMenu.tempUpload")}
+              >
+                <Upload size={ICON.SM} />
+                {t("contextMenu.tempUpload")}
+              </button>
+              <button
+                onClick={handleTempDownload}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                title={t("contextMenu.tempDownload")}
+              >
+                <Download size={ICON.SM} />
+                {t("contextMenu.tempDownload")}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -317,7 +424,7 @@ function MarkdownFileEditor({
           {MarkdownEditorComponent ? (
             <MarkdownEditorComponent
               value={content}
-              onChange={setContent}
+              onChange={updateContent}
               placeholder="Write your content here..."
             />
           ) : (
@@ -330,12 +437,25 @@ function MarkdownFileEditor({
         <div className="flex-1 p-4">
           <textarea
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => updateContent(e.target.value)}
             onSelect={handleSelect}
             className="w-full h-full font-mono text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
             spellCheck={false}
           />
         </div>
+      )}
+
+      {tempDiffData && (
+        <TempDiffModal
+          fileName={tempDiffData.fileName}
+          currentContent={tempDiffData.currentContent}
+          tempContent={tempDiffData.tempContent}
+          tempSavedAt={tempDiffData.tempSavedAt}
+          currentModifiedTime={tempDiffData.currentModifiedTime}
+          isBinary={tempDiffData.isBinary}
+          onAccept={handleTempDiffAccept}
+          onReject={() => setTempDiffData(null)}
+        />
       )}
     </div>
   );
@@ -347,24 +467,102 @@ function MarkdownFileEditor({
 
 function TextFileEditor({
   fileId,
+  fileName,
   initialContent,
-  onSave,
-  saving,
+  saveToCache,
   saved,
 }: {
   fileId: string;
+  fileName: string;
   initialContent: string;
-  onSave: (content: string) => Promise<void>;
-  saving: boolean;
+  saveToCache: (content: string) => Promise<void>;
   saved: boolean;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
   const editorCtx = useEditorContext();
+  const [uploading, setUploading] = useState(false);
+  const [tempDiffData, setTempDiffData] = useState<{
+    fileName: string;
+    fileId: string;
+    currentContent: string;
+    tempContent: string;
+    tempSavedAt: string;
+    currentModifiedTime: string;
+    isBinary: boolean;
+  } | null>(null);
+
+  // Debounced auto-save to IndexedDB on content change
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const contentFromProps = useRef(true);
+
+  const updateContent = useCallback((newContent: string) => {
+    contentFromProps.current = false;
+    setContent(newContent);
+  }, []);
 
   useEffect(() => {
+    contentFromProps.current = true;
     setContent(initialContent);
   }, [initialContent, fileId]);
+
+  useEffect(() => {
+    if (contentFromProps.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      saveToCache(content);
+    }, 5000);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [content, saveToCache]);
+
+  const handleTempUpload = useCallback(async () => {
+    setUploading(true);
+    try {
+      await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save", fileName, fileId, content }),
+      });
+    } finally {
+      setUploading(false);
+    }
+  }, [content, fileName, fileId]);
+
+  const handleTempDownload = useCallback(async () => {
+    try {
+      const res = await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "download", fileName }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.found) {
+        alert(t("contextMenu.noTempFile"));
+        return;
+      }
+      const { payload } = data.tempFile;
+      setTempDiffData({
+        fileName,
+        fileId,
+        currentContent: content,
+        tempContent: payload.content,
+        tempSavedAt: payload.savedAt,
+        currentModifiedTime: "",
+        isBinary: fileName.endsWith(".encrypted"),
+      });
+    } catch { /* ignore */ }
+  }, [fileName, fileId, content, t]);
+
+  const handleTempDiffAccept = useCallback(async () => {
+    if (!tempDiffData) return;
+    contentFromProps.current = false;
+    setContent(tempDiffData.tempContent);
+    await saveToCache(tempDiffData.tempContent);
+    setTempDiffData(null);
+  }, [tempDiffData, saveToCache]);
 
   const handleSelect = useCallback(
     (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
@@ -377,29 +575,52 @@ function TextFileEditor({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
-      <div className="flex items-center justify-end px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+      <div className="flex items-center justify-end gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         {saved && (
-          <span className="mr-2 text-xs text-green-600 dark:text-green-400">
+          <span className="text-xs text-green-600 dark:text-green-400">
             {t("mainViewer.saved")}
           </span>
         )}
         <button
-          onClick={() => onSave(content)}
-          disabled={saving}
+          onClick={handleTempUpload}
+          disabled={uploading}
           className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          title={t("contextMenu.tempUpload")}
         >
-          {saving ? t("mainViewer.saving") : t("common.save")}
+          <Upload size={ICON.SM} />
+          {t("contextMenu.tempUpload")}
+        </button>
+        <button
+          onClick={handleTempDownload}
+          className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+          title={t("contextMenu.tempDownload")}
+        >
+          <Download size={ICON.SM} />
+          {t("contextMenu.tempDownload")}
         </button>
       </div>
       <div className="flex-1 p-4">
         <textarea
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={(e) => updateContent(e.target.value)}
           onSelect={handleSelect}
           className="w-full h-full font-mono text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
           spellCheck={false}
         />
       </div>
+
+      {tempDiffData && (
+        <TempDiffModal
+          fileName={tempDiffData.fileName}
+          currentContent={tempDiffData.currentContent}
+          tempContent={tempDiffData.tempContent}
+          tempSavedAt={tempDiffData.tempSavedAt}
+          currentModifiedTime={tempDiffData.currentModifiedTime}
+          isBinary={tempDiffData.isBinary}
+          onAccept={handleTempDiffAccept}
+          onReject={() => setTempDiffData(null)}
+        />
+      )}
     </div>
   );
 }

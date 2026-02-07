@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getCachedFile,
   setCachedFile,
+  deleteCachedFile,
   getLocalSyncMeta,
   setLocalSyncMeta,
 } from "~/services/indexeddb-cache";
@@ -16,6 +17,7 @@ export function useFileWithCache(
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const currentFileId = useRef(fileId);
+  const savedTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Track fileId changes — reset saved, but keep content (avoid null flash)
   const [prevFileId, setPrevFileId] = useState(fileId);
@@ -168,11 +170,44 @@ export function useFileWithCache(
     [fileId]
   );
 
+  const saveToCache = useCallback(
+    async (newContent: string) => {
+      if (!fileId) return;
+      try {
+        const cached = await getCachedFile(fileId);
+        await setCachedFile({
+          fileId,
+          content: newContent,
+          md5Checksum: cached?.md5Checksum ?? "",
+          modifiedTime: cached?.modifiedTime ?? "",
+          cachedAt: Date.now(),
+          fileName: cached?.fileName,
+        });
+        setSaved(true);
+        if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current);
+        savedTimeoutRef.current = setTimeout(() => setSaved(false), 2000);
+      } catch {
+        // ignore
+      }
+    },
+    [fileId]
+  );
+
   const refresh = useCallback(async () => {
     if (fileId) {
       await fetchFile(fileId);
     }
   }, [fileId, fetchFile]);
 
-  return { content, loading, error, saving, saved, save, refresh };
+  // Force refresh: clear cache first so fetchFile hits the remote
+  const forceRefresh = useCallback(async () => {
+    if (fileId) {
+      setLoading(true);
+      setContent(null);
+      await deleteCachedFile(fileId);
+      await fetchFile(fileId);
+    }
+  }, [fileId, fetchFile]);
+
+  return { content, loading, error, saving, saved, save, saveToCache, refresh, forceRefresh };
 }
