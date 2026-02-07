@@ -123,10 +123,13 @@ export interface TranslationStrings {
   "editHistory.close": string;
   "editHistory.menuLabel": string;
   "editHistory.confirmClearAll": string;
+  "editHistory.confirmRestore": string;
+  "editHistory.restore": string;
   "editHistory.showRemote": string;
 
   // Context menu
   "contextMenu.rename": string;
+  "contextMenu.download": string;
   "contextMenu.tempDownload": string;
   "contextMenu.tempUpload": string;
   "contextMenu.tempUploaded": string;
@@ -340,10 +343,13 @@ const en: TranslationStrings = {
   "editHistory.close": "Close",
   "editHistory.menuLabel": "History",
   "editHistory.confirmClearAll": "Clear all history for this file?",
+  "editHistory.confirmRestore": "Restore file to this point? Current content will be overwritten.",
+  "editHistory.restore": "Restore",
   "editHistory.showRemote": "Show Remote",
 
   // Context menu
   "contextMenu.rename": "Rename",
+  "contextMenu.download": "Download",
   "contextMenu.tempDownload": "Temp Download",
   "contextMenu.tempUpload": "Temp Upload",
   "contextMenu.tempUploaded": "Uploaded to temp",
@@ -557,10 +563,13 @@ const ja: TranslationStrings = {
   "editHistory.close": "閉じる",
   "editHistory.menuLabel": "履歴",
   "editHistory.confirmClearAll": "このファイルの履歴をすべてクリアしますか？",
+  "editHistory.confirmRestore": "この時点に復元しますか？現在の内容は上書きされます。",
+  "editHistory.restore": "復元",
   "editHistory.showRemote": "リモートを表示",
 
   // Context menu
   "contextMenu.rename": "名前を変更",
+  "contextMenu.download": "ダウンロード",
   "contextMenu.tempDownload": "一時ダウンロード",
   "contextMenu.tempUpload": "一時アップロード",
   "contextMenu.tempUploaded": "一時ファイルにアップロードしました",

@@ -216,6 +216,18 @@ export function useFileWithCache(
     [fileId]
   );
 
+  // Listen for file-restored events (from EditHistoryModal restore)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.fileId === fileId && detail?.content != null) {
+        setContent(detail.content);
+      }
+    };
+    window.addEventListener("file-restored", handler);
+    return () => window.removeEventListener("file-restored", handler);
+  }, [fileId]);
+
   const refresh = useCallback(async () => {
     if (fileId) {
       await fetchFile(fileId);

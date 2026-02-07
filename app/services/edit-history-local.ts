@@ -124,6 +124,52 @@ export async function commitSnapshot(
  * Reverse-apply a unified diff to recover the base content.
  * Swaps +/- lines and hunk header counts, then applies.
  */
+/**
+ * Restore file content to the state at a specific history entry.
+ * Reverse-applies diffs from the most recent back to the target,
+ * then records the restore as a new diff entry (current → restored)
+ * so that full history is preserved.
+ */
+export async function restoreToHistoryEntry(
+  fileId: string,
+  targetFilteredIndex: number
+): Promise<string | null> {
+  const cached = await getCachedFile(fileId);
+  if (!cached) return null;
+
+  const entry = await getEditHistoryForFile(fileId);
+  if (!entry) return null;
+
+  const nonEmptyDiffs = entry.diffs.filter((d) => d.diff !== "");
+  if (targetFilteredIndex < 0 || targetFilteredIndex >= nonEmptyDiffs.length) return null;
+
+  // Reconstruct content at target entry
+  let restoredContent = cached.content;
+  for (let i = nonEmptyDiffs.length - 1; i > targetFilteredIndex; i--) {
+    restoredContent = reverseApplyDiff(restoredContent, nonEmptyDiffs[i].diff);
+  }
+
+  // Record the restore as a new history entry: diff(current → restored)
+  const now = new Date().toISOString();
+  const lastDiff = entry.diffs[entry.diffs.length - 1];
+
+  // Add commit boundary if current session has changes
+  if (lastDiff && lastDiff.diff !== "") {
+    entry.diffs.push({ timestamp: now, diff: "", stats: { additions: 0, deletions: 0 } });
+  }
+
+  // Add restore diff (from current content to restored content)
+  const { diff, stats } = createDiffStr(cached.content, restoredContent, 3);
+  if (diff) {
+    entry.diffs.push({ timestamp: now, diff, stats });
+    // Add commit boundary after restore
+    entry.diffs.push({ timestamp: now, diff: "", stats: { additions: 0, deletions: 0 } });
+  }
+
+  await setEditHistoryEntry(entry);
+  return restoredContent;
+}
+
 function reverseApplyDiff(content: string, diffStr: string): string {
   const lines = diffStr.split("\n");
   const reversed: string[] = [];

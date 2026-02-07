@@ -21,6 +21,7 @@ import {
   FilePlus,
   History,
   Eraser,
+  Download,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import {
@@ -29,6 +30,12 @@ import {
   getCachedRemoteMeta,
   setCachedRemoteMeta,
   setCachedFile,
+  getCachedFile,
+  getAllCachedFileIds,
+  getLocallyModifiedFileIds,
+  deleteCachedFile,
+  getLocalSyncMeta,
+  setLocalSyncMeta,
   type CachedTreeNode,
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
@@ -38,13 +45,6 @@ import { EditHistoryModal } from "./EditHistoryModal";
 import { TempDiffModal } from "./TempDiffModal";
 import { useI18n } from "~/i18n/context";
 import type { FileListItem } from "~/contexts/EditorContext";
-import {
-  getAllCachedFileIds,
-  getLocallyModifiedFileIds,
-  deleteCachedFile,
-  getLocalSyncMeta,
-  setLocalSyncMeta,
-} from "~/services/indexeddb-cache";
 
 interface DriveFileTreeProps {
   rootFolderId: string;
@@ -954,6 +954,33 @@ export function DriveFileTree({
           label: t("editHistory.menuLabel"),
           icon: <History size={ICON.MD} />,
           onClick: () => setEditHistoryFile({ fileId: item.id, filePath: item.name }),
+        });
+
+        items.push({
+          label: t("contextMenu.download"),
+          icon: <Download size={ICON.MD} />,
+          onClick: async () => {
+            const fileName = item.name.split("/").pop() || item.name;
+            const cached = await getCachedFile(item.id);
+            if (cached) {
+              const blob = new Blob([cached.content], { type: "text/plain" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = fileName;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            } else {
+              const a = document.createElement("a");
+              a.href = `/api/drive/files?action=raw&fileId=${item.id}`;
+              a.download = fileName;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            }
+          },
         });
       }
 

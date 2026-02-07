@@ -244,7 +244,7 @@ function MarkdownFileEditor({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
-    }, 5000);
+    }, 3000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -506,7 +506,7 @@ function TextFileEditor({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
-    }, 5000);
+    }, 3000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };

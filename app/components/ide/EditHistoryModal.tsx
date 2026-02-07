@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { EditHistoryEntry } from "~/services/edit-history.server";
-import { getEditHistoryForFile } from "~/services/indexeddb-cache";
+import { getEditHistoryForFile, getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
+import { restoreToHistoryEntry } from "~/services/edit-history-local";
 import { useI18n } from "~/i18n/context";
 import { DiffView } from "~/components/shared/DiffView";
 
@@ -25,6 +26,7 @@ type DisplayEntry = {
   diff: string;
   stats: { additions: number; deletions: number };
   origin: "local" | "remote";
+  filteredIndex?: number;
 };
 
 export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModalProps) {
@@ -51,6 +53,7 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
                 diff: d.diff,
                 stats: d.stats,
                 origin: "local" as const,
+                filteredIndex: i,
               }))
           );
         }
@@ -102,6 +105,38 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
       // ignore
     }
   }, [filePath, t]);
+
+  const handleRestore = useCallback(
+    async (entry: DisplayEntry) => {
+      if (entry.origin !== "local" || entry.filteredIndex == null) return;
+      if (!confirm(t("editHistory.confirmRestore"))) return;
+
+      const restoredContent = await restoreToHistoryEntry(fileId, entry.filteredIndex);
+      if (restoredContent == null) return;
+
+      // Update IndexedDB cache
+      const cached = await getCachedFile(fileId);
+      await setCachedFile({
+        fileId,
+        content: restoredContent,
+        md5Checksum: cached?.md5Checksum ?? "",
+        modifiedTime: cached?.modifiedTime ?? "",
+        cachedAt: Date.now(),
+        fileName: cached?.fileName,
+      });
+
+      // Notify editor to update content
+      window.dispatchEvent(
+        new CustomEvent("file-restored", { detail: { fileId, content: restoredContent } })
+      );
+      window.dispatchEvent(
+        new CustomEvent("file-modified", { detail: { fileId } })
+      );
+
+      onClose();
+    },
+    [fileId, onClose, t]
+  );
 
   const toggleExpand = useCallback(
     (id: string) => {
@@ -179,6 +214,22 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
                           -{entry.stats.deletions}
                         </span>
                       </span>
+                      {entry.origin === "local" && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRestore(entry);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.stopPropagation(); handleRestore(entry); }
+                          }}
+                          className="ml-auto rounded border border-gray-300 px-1.5 py-0.5 text-[10px] text-gray-500 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 dark:border-gray-600 dark:text-gray-400 dark:hover:border-blue-500 dark:hover:bg-blue-900/30 dark:hover:text-blue-400"
+                        >
+                          {t("editHistory.restore")}
+                        </span>
+                      )}
                     </button>
 
                     {/* Expanded diff */}
