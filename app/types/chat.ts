@@ -65,13 +65,15 @@ export interface StreamChunk {
     | "done"
     | "rag_used"
     | "web_search_used"
-    | "image_generated";
+    | "image_generated"
+    | "mcp_app";
   content?: string;
   toolCall?: ToolCall;
   toolResult?: ToolResult;
   error?: string;
   ragSources?: string[];
   generatedImage?: GeneratedImage;
+  mcpApp?: McpAppInfo;
 }
 
 // Chat history stored in Drive

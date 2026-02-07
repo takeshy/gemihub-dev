@@ -1,12 +1,31 @@
 // Settings type definitions - ported from obsidian-gemini-helper
 
+// OAuth configuration for MCP servers
+export interface OAuthConfig {
+  clientId: string;
+  authorizationUrl: string;
+  tokenUrl: string;
+  scopes: string[];
+  clientSecret?: string;
+}
+
+// OAuth tokens for MCP servers
+export interface OAuthTokens {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  tokenType?: string;
+}
+
 // MCP (Model Context Protocol) server configuration
 export interface McpServerConfig {
   name: string;
   url: string;
   headers?: Record<string, string>;
   enabled: boolean;
-  toolHints?: string[];
+  tools?: McpToolInfo[];
+  oauth?: OAuthConfig;
+  oauthTokens?: OAuthTokens;
 }
 
 // MCP tool information (from server)

@@ -5,11 +5,9 @@ import {
   searchFiles,
   createFile,
   updateFile,
-  getFileMetadata,
 } from "./google-drive.server";
 import { getFileListFromMeta } from "./sync-meta.server";
-import type { ToolDefinition, EditHistorySettings } from "~/types/settings";
-import { saveEdit } from "./edit-history.server";
+import type { ToolDefinition } from "~/types/settings";
 
 /**
  * Set of drive tool names that are search/list related.
@@ -118,8 +116,7 @@ export async function executeDriveTool(
   toolName: string,
   args: Record<string, unknown>,
   accessToken: string,
-  rootFolderId: string,
-  editHistorySettings?: EditHistorySettings
+  rootFolderId: string
 ): Promise<unknown> {
   switch (toolName) {
     case "read_drive_file": {
@@ -201,18 +198,6 @@ export async function executeDriveTool(
       const fileId = args.fileId as string;
       const content = args.content as string;
       const file = await updateFile(accessToken, fileId, content);
-
-      // Save edit history
-      if (editHistorySettings) {
-        try {
-          const meta = await getFileMetadata(accessToken, fileId);
-          await saveEdit(accessToken, rootFolderId, editHistorySettings, {
-            path: meta.name,
-            modifiedContent: content,
-            source: "propose_edit",
-          });
-        } catch { /* don't fail tool on history error */ }
-      }
 
       return {
         id: file.id,

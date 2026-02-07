@@ -5,9 +5,8 @@ import { chatWithToolsStream, generateImageStream } from "~/services/gemini-chat
 import { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES, executeDriveTool } from "~/services/drive-tools.server";
 import { getMcpToolDefinitions, executeMcpTool } from "~/services/mcp-tools.server";
 import { isImageGenerationModel } from "~/types/settings";
-import type { ToolDefinition, McpServerConfig, ModelType, EditHistorySettings } from "~/types/settings";
+import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
-import { getSettings } from "~/services/user-settings.server";
 
 // ---------------------------------------------------------------------------
 // POST handler -- Chat SSE streaming API
@@ -94,34 +93,6 @@ export async function action({ request }: Route.ActionArgs) {
   const driveToolNames = new Set(DRIVE_TOOL_DEFINITIONS.map((t) => t.name));
   const mcpToolNames = new Set(mcpToolDefs.map((t) => t.name));
 
-  // Load edit history settings for drive tools
-  let editHistorySettings: EditHistorySettings | undefined;
-  try {
-    const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-    editHistorySettings = settings.editHistory;
-  } catch { /* ignore */ }
-
-  const executeToolCall = async (
-    name: string,
-    args: Record<string, unknown>
-  ): Promise<unknown> => {
-    if (driveToolNames.has(name)) {
-      return executeDriveTool(
-        name,
-        args,
-        validTokens.accessToken,
-        validTokens.rootFolderId,
-        editHistorySettings
-      );
-    }
-
-    if (mcpToolNames.has(name) && mcpServers) {
-      return executeMcpTool(mcpServers, name, args);
-    }
-
-    return { error: `Unknown tool: ${name}` };
-  };
-
   // Create SSE stream
   const stream = new ReadableStream({
     async start(controller) {
@@ -129,6 +100,32 @@ export async function action({ request }: Route.ActionArgs) {
 
       const sendChunk = (chunk: StreamChunk) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+      };
+
+      // executeToolCall defined here so it can send mcp_app chunks via sendChunk
+      const executeToolCall = async (
+        name: string,
+        args: Record<string, unknown>
+      ): Promise<unknown> => {
+        if (driveToolNames.has(name)) {
+          return executeDriveTool(
+            name,
+            args,
+            validTokens.accessToken,
+            validTokens.rootFolderId
+          );
+        }
+
+        if (mcpToolNames.has(name) && mcpServers) {
+          const result = await executeMcpTool(mcpServers, name, args);
+          // Send mcp_app chunk if the tool returned UI metadata
+          if (result.mcpApp) {
+            sendChunk({ type: "mcp_app", mcpApp: result.mcpApp });
+          }
+          return result.textResult;
+        }
+
+        return { error: `Unknown tool: ${name}` };
       };
 
       try {

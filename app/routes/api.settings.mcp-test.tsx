@@ -1,6 +1,13 @@
 import type { Route } from "./+types/api.settings.mcp-test";
 import { requireAuth } from "~/services/session.server";
 import { McpClient } from "~/services/mcp-client.server";
+import {
+  discoverOAuth,
+  registerOAuthClient,
+  refreshAccessToken,
+  isTokenExpired,
+} from "~/services/mcp-oauth.server";
+import type { OAuthConfig, OAuthTokens } from "~/types/settings";
 
 // ---------------------------------------------------------------------------
 // POST -- Test MCP server connection
@@ -14,9 +21,11 @@ export async function action({ request }: Route.ActionArgs) {
   await requireAuth(request);
 
   const body = await request.json();
-  const { url, headers } = body as {
+  const { url, headers, oauth, oauthTokens } = body as {
     url: string;
     headers?: Record<string, string>;
+    oauth?: OAuthConfig;
+    oauthTokens?: OAuthTokens;
   };
 
   if (!url) {
@@ -26,25 +35,51 @@ export async function action({ request }: Route.ActionArgs) {
     );
   }
 
+  // If we have tokens, check expiry and auto-refresh if possible
+  let activeTokens = oauthTokens;
+  let tokensRefreshed = false;
+
+  if (activeTokens && oauth && isTokenExpired(activeTokens)) {
+    if (activeTokens.refreshToken) {
+      try {
+        activeTokens = await refreshAccessToken(oauth, activeTokens.refreshToken);
+        tokensRefreshed = true;
+      } catch {
+        // Refresh failed, try with current tokens anyway
+      }
+    }
+  }
+
+  // Build effective headers with OAuth Authorization if available
+  const effectiveHeaders: Record<string, string> = { ...headers };
+  if (activeTokens) {
+    effectiveHeaders["Authorization"] = `${activeTokens.tokenType || "Bearer"} ${activeTokens.accessToken}`;
+  }
+
   const client = new McpClient({
     name: "test",
     url,
-    headers,
+    headers: effectiveHeaders,
     enabled: true,
   });
 
   try {
     await client.initialize();
     const tools = await client.listTools();
-    const toolNames = tools.map((t) => t.name);
 
     await client.close();
 
-    return Response.json({
+    const result: Record<string, unknown> = {
       success: true,
-      message: `Connected. Found ${toolNames.length} tool(s).`,
-      tools: toolNames,
-    });
+      message: `Connected. Found ${tools.length} tool(s).`,
+      tools,
+    };
+
+    if (tokensRefreshed && activeTokens) {
+      result.tokens = activeTokens;
+    }
+
+    return Response.json(result);
   } catch (error) {
     try {
       await client.close();
@@ -52,15 +87,50 @@ export async function action({ request }: Route.ActionArgs) {
       // Ignore close errors
     }
 
+    // Check if this looks like a 401 — attempt OAuth discovery
+    const errorMsg = error instanceof Error ? error.message : "Connection failed";
+    const is401 = errorMsg.includes("(401)");
+
+    if (is401) {
+      try {
+        const discovery = await discoverOAuth(url);
+        if (discovery) {
+          // Attempt dynamic client registration if available and no clientId yet
+          if (discovery.registrationUrl && !discovery.config.clientId) {
+            try {
+              const origin = new URL(request.url).origin;
+              const redirectUri = `${origin}/auth/mcp-oauth-callback`;
+              const registration = await registerOAuthClient(
+                discovery.registrationUrl,
+                redirectUri,
+                "Gemini Hub IDE"
+              );
+              discovery.config.clientId = registration.clientId;
+              if (registration.clientSecret) {
+                discovery.config.clientSecret = registration.clientSecret;
+              }
+            } catch {
+              // Registration failed — client will need to provide clientId manually
+            }
+          }
+
+          return Response.json({
+            success: false,
+            needsOAuth: true,
+            oauthDiscovery: discovery,
+            message: "Server requires OAuth authentication.",
+          });
+        }
+      } catch {
+        // Discovery failed, return original error
+      }
+    }
+
     return Response.json(
       {
         success: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to connect to MCP server",
-        error:
-          error instanceof Error ? error.message : "Connection failed",
+        message: errorMsg,
+        error: errorMsg,
       },
       { status: 500 }
     );

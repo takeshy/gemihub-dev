@@ -15,6 +15,9 @@ import type {
   Language,
   FontSize,
   Theme,
+  OAuthConfig,
+  OAuthTokens,
+  McpToolInfo,
 } from "~/types/settings";
 import {
   DEFAULT_USER_SETTINGS,
@@ -49,6 +52,8 @@ import {
   Loader2,
   Pencil,
   FileBox,
+  ShieldCheck,
+  KeyRound,
 } from "lucide-react";
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { TempFilesDialog } from "~/components/settings/TempFilesDialog";
@@ -950,10 +955,27 @@ interface McpFormEntry {
   name: string;
   url: string;
   headers: string; // JSON string
-  enabled: boolean;
 }
 
-const emptyMcpEntry: McpFormEntry = { name: "", url: "", headers: "{}", enabled: true };
+const emptyMcpEntry: McpFormEntry = { name: "", url: "", headers: "{}" };
+
+// PKCE utilities for OAuth flow
+
+function generateRandomString(length: number): string {
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("").slice(0, length);
+}
+
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return btoa(String.fromCharCode(...new Uint8Array(hash)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
 
 function McpTab({ settings }: { settings: UserSettings }) {
   const fetcher = useFetcher();
@@ -964,8 +986,34 @@ function McpTab({ settings }: { settings: UserSettings }) {
   const [adding, setAdding] = useState(false);
   const [newEntry, setNewEntry] = useState<McpFormEntry>({ ...emptyMcpEntry });
   const [testResults, setTestResults] = useState<Record<number, { ok: boolean; msg: string }>>({});
+  const [addTestResult, setAddTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [addTesting, setAddTesting] = useState(false);
 
-  const addServer = useCallback(() => {
+  const saveServers = useCallback((updated: McpServerConfig[]) => {
+    const fd = new FormData();
+    fd.set("_action", "saveMcp");
+    fd.set("mcpServers", JSON.stringify(updated));
+    fetcher.submit(fd, { method: "post" });
+  }, [fetcher]);
+
+  const removeServer = useCallback((idx: number) => {
+    const updated = servers.filter((_, i) => i !== idx);
+    setServers(updated);
+    setTestResults((prev) => {
+      const copy = { ...prev };
+      delete copy[idx];
+      return copy;
+    });
+    saveServers(updated);
+  }, [servers, saveServers]);
+
+  const toggleServer = useCallback((idx: number) => {
+    const updated = servers.map((s, i) => (i === idx ? { ...s, enabled: !s.enabled } : s));
+    setServers(updated);
+    saveServers(updated);
+  }, [servers, saveServers]);
+
+  const testAndAddServer = useCallback(async () => {
     if (!newEntry.name.trim() || !newEntry.url.trim()) return;
     let headers: Record<string, string> = {};
     try {
@@ -973,23 +1021,155 @@ function McpTab({ settings }: { settings: UserSettings }) {
     } catch {
       // ignore parse error, use empty
     }
-    setServers((prev) => [...prev, { name: newEntry.name.trim(), url: newEntry.url.trim(), headers, enabled: newEntry.enabled }]);
-    setNewEntry({ ...emptyMcpEntry });
-    setAdding(false);
-  }, [newEntry]);
 
-  const removeServer = useCallback((idx: number) => {
-    setServers((prev) => prev.filter((_, i) => i !== idx));
-    setTestResults((prev) => {
-      const copy = { ...prev };
-      delete copy[idx];
-      return copy;
+    setAddTesting(true);
+    setAddTestResult({ ok: false, msg: "Testing..." });
+
+    try {
+      const res = await fetch("/api/settings/mcp-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: newEntry.url.trim(), headers }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        const newServer: McpServerConfig = {
+          name: newEntry.name.trim(),
+          url: newEntry.url.trim(),
+          headers,
+          enabled: true,
+          tools: data.tools as McpToolInfo[],
+        };
+        const updated = [...servers, newServer];
+        setServers(updated);
+        saveServers(updated);
+        setNewEntry({ ...emptyMcpEntry });
+        setAdding(false);
+        setAddTestResult(null);
+      } else {
+        setAddTestResult({ ok: false, msg: data.message || "Connection failed" });
+      }
+    } catch (err) {
+      setAddTestResult({ ok: false, msg: err instanceof Error ? err.message : "Network error" });
+    } finally {
+      setAddTesting(false);
+    }
+  }, [newEntry, servers, saveServers]);
+
+  const startOAuthFlow = useCallback(async (
+    idx: number,
+    oauthConfig: OAuthConfig,
+  ): Promise<OAuthTokens | null> => {
+    return new Promise(async (resolve) => {
+      const codeVerifier = generateRandomString(64);
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      const state = generateRandomString(32);
+      const redirectUri = `${window.location.origin}/auth/mcp-oauth-callback`;
+
+      const params = new URLSearchParams({
+        response_type: "code",
+        client_id: oauthConfig.clientId,
+        redirect_uri: redirectUri,
+        state,
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+      });
+      if (oauthConfig.scopes.length > 0) {
+        params.set("scope", oauthConfig.scopes.join(" "));
+      }
+
+      const authUrl = `${oauthConfig.authorizationUrl}?${params.toString()}`;
+
+      setTestResults((prev) => ({
+        ...prev,
+        [idx]: { ok: false, msg: t("settings.mcp.oauthAuthenticating") },
+      }));
+
+      const popup = window.open(authUrl, "mcp-oauth", "width=600,height=700,popup=yes");
+
+      const onMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type !== "mcp-oauth-callback") return;
+
+        window.removeEventListener("message", onMessage);
+
+        if (event.data.error) {
+          setTestResults((prev) => ({
+            ...prev,
+            [idx]: {
+              ok: false,
+              msg: t("settings.mcp.oauthFailed").replace("{{error}}", event.data.errorDescription || event.data.error),
+            },
+          }));
+          resolve(null);
+          return;
+        }
+
+        if (event.data.state !== state) {
+          setTestResults((prev) => ({
+            ...prev,
+            [idx]: { ok: false, msg: t("settings.mcp.oauthFailed").replace("{{error}}", "State mismatch") },
+          }));
+          resolve(null);
+          return;
+        }
+
+        // Exchange code for tokens via server-side endpoint
+        try {
+          const tokenRes = await fetch("/api/settings/mcp-oauth-token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tokenUrl: oauthConfig.tokenUrl,
+              clientId: oauthConfig.clientId,
+              clientSecret: oauthConfig.clientSecret,
+              code: event.data.code,
+              codeVerifier,
+              redirectUri,
+            }),
+          });
+          const tokenData = await tokenRes.json();
+
+          if (!tokenRes.ok || !tokenData.tokens) {
+            setTestResults((prev) => ({
+              ...prev,
+              [idx]: {
+                ok: false,
+                msg: t("settings.mcp.oauthFailed").replace("{{error}}", tokenData.error || "Token exchange failed"),
+              },
+            }));
+            resolve(null);
+            return;
+          }
+
+          resolve(tokenData.tokens as OAuthTokens);
+        } catch (err) {
+          setTestResults((prev) => ({
+            ...prev,
+            [idx]: {
+              ok: false,
+              msg: t("settings.mcp.oauthFailed").replace("{{error}}", err instanceof Error ? err.message : "Token exchange error"),
+            },
+          }));
+          resolve(null);
+        }
+      };
+
+      window.addEventListener("message", onMessage);
+
+      // Clean up if popup is closed without completing
+      const checkClosed = setInterval(() => {
+        if (popup && popup.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener("message", onMessage);
+          // Resolve null if we didn't get tokens yet — the message handler
+          // may have already resolved, but Promise ignores duplicate resolves
+          resolve(null);
+        }
+      }, 500);
     });
-  }, []);
-
-  const toggleServer = useCallback((idx: number) => {
-    setServers((prev) => prev.map((s, i) => (i === idx ? { ...s, enabled: !s.enabled } : s)));
-  }, []);
+  }, [t]);
 
   const testConnection = useCallback(async (idx: number) => {
     const server = servers[idx];
@@ -999,27 +1179,113 @@ function McpTab({ settings }: { settings: UserSettings }) {
       const res = await fetch("/api/settings/mcp-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: server.url, headers: server.headers }),
+        body: JSON.stringify({
+          url: server.url,
+          headers: server.headers,
+          oauth: server.oauth,
+          oauthTokens: server.oauthTokens,
+        }),
       });
       const data = await res.json();
+
+      // Handle refreshed tokens from server
+      if (data.tokens) {
+        const updated = servers.map((s, i) => i === idx ? { ...s, oauthTokens: data.tokens } : s);
+        setServers(updated);
+        saveServers(updated);
+      }
+
+      // Handle OAuth requirement
+      if (data.needsOAuth && data.oauthDiscovery) {
+        const oauthConfig: OAuthConfig = data.oauthDiscovery.config;
+
+        if (!oauthConfig.clientId) {
+          setTestResults((prev) => ({
+            ...prev,
+            [idx]: { ok: false, msg: t("settings.mcp.oauthFailed").replace("{{error}}", "No client ID (registration failed)") },
+          }));
+          return;
+        }
+
+        // Start OAuth popup flow
+        const tokens = await startOAuthFlow(idx, oauthConfig);
+        if (!tokens) return;
+
+        // Store oauth config and tokens on the server entry
+        const oauthUpdated = servers.map((s, i) =>
+          i === idx ? { ...s, oauth: oauthConfig, oauthTokens: tokens } : s
+        );
+        setServers(oauthUpdated);
+        saveServers(oauthUpdated);
+
+        setTestResults((prev) => ({
+          ...prev,
+          [idx]: { ok: false, msg: t("settings.mcp.oauthSuccess") + " Retesting..." },
+        }));
+
+        // Retry test with the new tokens
+        const retryRes = await fetch("/api/settings/mcp-test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: server.url,
+            headers: server.headers,
+            oauth: oauthConfig,
+            oauthTokens: tokens,
+          }),
+        });
+        const retryData = await retryRes.json();
+
+        setTestResults((prev) => ({
+          ...prev,
+          [idx]: { ok: retryRes.ok, msg: retryData.message || (retryRes.ok ? "Connected" : "Failed") },
+        }));
+
+        if (retryRes.ok && retryData.tools) {
+          const retryUpdated = oauthUpdated.map((s, i) => i === idx ? { ...s, tools: retryData.tools as McpToolInfo[] } : s);
+          setServers(retryUpdated);
+          saveServers(retryUpdated);
+        }
+        return;
+      }
+
       setTestResults((prev) => ({
         ...prev,
         [idx]: { ok: res.ok, msg: data.message || (res.ok ? "Connected" : "Failed") },
       }));
+      if (res.ok && data.tools) {
+        const updated = servers.map((s, i) => i === idx ? { ...s, tools: data.tools as McpToolInfo[] } : s);
+        setServers(updated);
+        saveServers(updated);
+      } else if (!res.ok) {
+        setServers((prev) => prev.map((s, i) => i === idx ? { ...s, tools: undefined } : s));
+      }
     } catch (err) {
       setTestResults((prev) => ({
         ...prev,
         [idx]: { ok: false, msg: err instanceof Error ? err.message : "Network error" },
       }));
+      setServers((prev) => prev.map((s, i) => i === idx ? { ...s, tools: undefined } : s));
     }
-  }, [servers]);
+  }, [servers, startOAuthFlow, saveServers, t]);
 
-  const handleSubmit = useCallback(() => {
-    const fd = new FormData();
-    fd.set("_action", "saveMcp");
-    fd.set("mcpServers", JSON.stringify(servers));
-    fetcher.submit(fd, { method: "post" });
-  }, [fetcher, servers]);
+  const reauthorize = useCallback(async (idx: number) => {
+    const server = servers[idx];
+    if (!server?.oauth) return;
+
+    const tokens = await startOAuthFlow(idx, server.oauth);
+    if (!tokens) return;
+
+    const updated = servers.map((s, i) =>
+      i === idx ? { ...s, oauthTokens: tokens } : s
+    );
+    setServers(updated);
+    saveServers(updated);
+    setTestResults((prev) => ({
+      ...prev,
+      [idx]: { ok: true, msg: t("settings.mcp.oauthSuccess") },
+    }));
+  }, [servers, startOAuthFlow, saveServers, t]);
 
   return (
     <SectionCard>
@@ -1046,10 +1312,23 @@ function McpTab({ settings }: { settings: UserSettings }) {
               title="Enabled"
             />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                {server.name}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                  {server.name}
+                </p>
+                {server.oauthTokens && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">
+                    <ShieldCheck size={10} />
+                    {t("settings.mcp.oauthAuthenticated")}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{server.url}</p>
+              {server.tools && server.tools.length > 0 && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 truncate" title={server.tools.map(t => t.name).join(", ")}>
+                  {t("settings.mcp.tools").replace("{{tools}}", server.tools.map(t => t.name).join(", "))}
+                </p>
+              )}
               {testResults[idx] && (
                 <p
                   className={`text-xs mt-1 ${
@@ -1060,22 +1339,34 @@ function McpTab({ settings }: { settings: UserSettings }) {
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => testConnection(idx)}
-              className="p-1.5 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400"
-              title="Test connection"
-            >
-              <TestTube size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => removeServer(idx)}
-              className="p-1.5 text-gray-500 hover:text-red-600 dark:hover:text-red-400"
-              title="Remove"
-            >
-              <Trash2 size={16} />
-            </button>
+            <div className="flex items-center gap-1">
+              {server.oauthTokens && (
+                <button
+                  type="button"
+                  onClick={() => reauthorize(idx)}
+                  className="p-1.5 text-gray-500 hover:text-orange-600 dark:hover:text-orange-400"
+                  title={t("settings.mcp.oauthReauthorize")}
+                >
+                  <KeyRound size={16} />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => testConnection(idx)}
+                className="p-1.5 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400"
+                title="Test connection"
+              >
+                <TestTube size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => removeServer(idx)}
+                className="p-1.5 text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                title="Remove"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -1115,29 +1406,31 @@ function McpTab({ settings }: { settings: UserSettings }) {
               className={inputClass + " font-mono resize-y"}
             />
           </div>
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="mcp-enabled"
-              checked={newEntry.enabled}
-              onChange={(e) => setNewEntry((p) => ({ ...p, enabled: e.target.checked }))}
-              className={checkboxClass}
-            />
-            <Label htmlFor="mcp-enabled">{t("settings.mcp.enabled")}</Label>
-          </div>
+          {addTestResult && (
+            <p
+              className={`text-xs ${
+                addTestResult.ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+              }`}
+            >
+              {addTestResult.msg}
+            </p>
+          )}
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={addServer}
-              className="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+              onClick={testAndAddServer}
+              disabled={addTesting || !newEntry.name.trim() || !newEntry.url.trim()}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
             >
-              {t("settings.mcp.add")}
+              {addTesting ? <Loader2 size={14} className="animate-spin" /> : <TestTube size={14} />}
+              {t("settings.mcp.testAndAdd")}
             </button>
             <button
               type="button"
               onClick={() => {
                 setAdding(false);
                 setNewEntry({ ...emptyMcpEntry });
+                setAddTestResult(null);
               }}
               className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
             >
@@ -1149,22 +1442,13 @@ function McpTab({ settings }: { settings: UserSettings }) {
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-2 mb-6 px-3 py-1.5 border border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-md hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
+          className="inline-flex items-center gap-2 px-3 py-1.5 border border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-md hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
         >
           <Plus size={16} />
           {t("settings.mcp.addServer")}
         </button>
       )}
 
-      <button
-        type="button"
-        disabled={loading}
-        onClick={handleSubmit}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
-      >
-        {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-        {t("settings.mcp.save")}
-      </button>
     </SectionCard>
   );
 }

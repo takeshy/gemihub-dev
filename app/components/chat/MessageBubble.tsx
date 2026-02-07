@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { ChevronDown, ChevronRight, Download, Paperclip, FileText, Wrench, BookOpen } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Message, Attachment, GeneratedImage, ToolCall } from "~/types/chat";
+import { McpAppRenderer } from "./McpAppRenderer";
 
 interface MessageBubbleProps {
   message: Message;
@@ -141,87 +142,121 @@ function AttachmentDisplay({ attachment }: { attachment: Attachment }) {
 
 export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const [collapsedMcpApps, setCollapsedMcpApps] = useState<Set<number>>(new Set());
+
+  const toggleMcpAppExpand = (index: number) => {
+    setCollapsedMcpApps((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  const hasMcpApps = !isUser && message.mcpApps && message.mcpApps.length > 0;
 
   return (
-    <div
-      className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
-    >
+    <>
       <div
-        className={`max-w-[85%] rounded-2xl px-4 py-3 md:max-w-[75%] ${
-          isUser
-            ? "bg-blue-600 text-white"
-            : "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100"
-        }`}
+        className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
       >
-        {/* Attachments (shown for user messages) */}
-        {message.attachments && message.attachments.length > 0 && (
-          <div className="mb-2">
-            {message.attachments.map((att, i) => (
-              <AttachmentDisplay key={i} attachment={att} />
-            ))}
-          </div>
-        )}
-
-        {/* Thinking section (assistant only) */}
-        {!isUser && message.thinking && (
-          <ThinkingSection thinking={message.thinking} />
-        )}
-
-        {/* Tool calls (assistant only) */}
-        {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
-          <ToolCallBadges toolCalls={message.toolCalls} />
-        )}
-
-        {/* RAG sources (assistant only) */}
-        {!isUser && message.ragSources && message.ragSources.length > 0 && (
-          <RagSourcesList sources={message.ragSources} />
-        )}
-
-        {/* Message content */}
         <div
-          className={`prose prose-sm max-w-none break-words ${
+          className={`max-w-[85%] rounded-2xl px-4 py-3 md:max-w-[75%] ${
             isUser
-              ? "prose-invert"
-              : "dark:prose-invert"
+              ? "bg-blue-600 text-white"
+              : "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100"
           }`}
         >
-          <ReactMarkdown>{message.content}</ReactMarkdown>
-        </div>
-
-        {/* Generated images (assistant only) */}
-        {!isUser &&
-          message.generatedImages &&
-          message.generatedImages.length > 0 && (
-            <div className="mt-2">
-              {message.generatedImages.map((img, i) => (
-                <GeneratedImageDisplay key={i} image={img} />
+          {/* Attachments (shown for user messages) */}
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="mb-2">
+              {message.attachments.map((att, i) => (
+                <AttachmentDisplay key={i} attachment={att} />
               ))}
             </div>
           )}
 
-        {/* Streaming indicator */}
-        {isStreaming && !isUser && (
-          <div className="mt-1 flex items-center gap-1">
-            <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-            <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:150ms]" />
-            <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:300ms]" />
-          </div>
-        )}
-
-        {/* Timestamp */}
-        <div
-          className={`mt-1.5 text-[10px] ${
-            isUser
-              ? "text-blue-200"
-              : "text-gray-400 dark:text-gray-500"
-          }`}
-        >
-          {formatTimestamp(message.timestamp)}
-          {!isUser && message.model && (
-            <span className="ml-1.5">{message.model}</span>
+          {/* Thinking section (assistant only) */}
+          {!isUser && message.thinking && (
+            <ThinkingSection thinking={message.thinking} />
           )}
+
+          {/* Tool calls (assistant only) */}
+          {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
+            <ToolCallBadges toolCalls={message.toolCalls} />
+          )}
+
+          {/* RAG sources (assistant only) */}
+          {!isUser && message.ragSources && message.ragSources.length > 0 && (
+            <RagSourcesList sources={message.ragSources} />
+          )}
+
+          {/* Message content */}
+          <div
+            className={`prose prose-sm max-w-none break-words ${
+              isUser
+                ? "prose-invert"
+                : "dark:prose-invert"
+            }`}
+          >
+            <ReactMarkdown>{message.content}</ReactMarkdown>
+          </div>
+
+          {/* Generated images (assistant only) */}
+          {!isUser &&
+            message.generatedImages &&
+            message.generatedImages.length > 0 && (
+              <div className="mt-2">
+                {message.generatedImages.map((img, i) => (
+                  <GeneratedImageDisplay key={i} image={img} />
+                ))}
+              </div>
+            )}
+
+          {/* Streaming indicator */}
+          {isStreaming && !isUser && (
+            <div className="mt-1 flex items-center gap-1">
+              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:150ms]" />
+              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:300ms]" />
+            </div>
+          )}
+
+          {/* Timestamp */}
+          <div
+            className={`mt-1.5 text-[10px] ${
+              isUser
+                ? "text-blue-200"
+                : "text-gray-400 dark:text-gray-500"
+            }`}
+          >
+            {formatTimestamp(message.timestamp)}
+            {!isUser && message.model && (
+              <span className="ml-1.5">{message.model}</span>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* MCP Apps - rendered outside the bubble for full width */}
+      {hasMcpApps && (
+        <div className="w-full">
+          {message.mcpApps!.map((mcpApp, index) => (
+            <McpAppRenderer
+              key={index}
+              serverUrl={mcpApp.serverUrl}
+              serverHeaders={mcpApp.serverHeaders}
+              toolResult={mcpApp.toolResult}
+              uiResource={mcpApp.uiResource}
+              expanded={!collapsedMcpApps.has(index)}
+              onToggleExpand={() => toggleMcpAppExpand(index)}
+            />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
