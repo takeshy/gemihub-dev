@@ -367,6 +367,8 @@ export interface UserSettings {
   slashCommands: SlashCommand[];
   syncExcludePatterns: string[];
   syncConflictFolder: string;
+  encryptedApiKey: string;
+  apiKeySalt: string;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -389,4 +391,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   slashCommands: [],
   syncExcludePatterns: [],
   syncConflictFolder: "sync_conflicts",
+  encryptedApiKey: "",
+  apiKeySalt: "",
 };

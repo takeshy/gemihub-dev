@@ -5,6 +5,7 @@ export default [
   route("auth/google", "routes/auth.google.tsx"),
   route("auth/google/callback", "routes/auth.google.callback.tsx"),
   route("auth/logout", "routes/auth.logout.tsx"),
+  route("api/auth/unlock", "routes/api.auth.unlock.tsx"),
   route("settings", "routes/settings.tsx"),
   // API routes
   route("api/drive/files", "routes/api.drive.files.tsx"),

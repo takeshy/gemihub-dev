@@ -16,6 +16,7 @@ import { RightSidebar } from "~/components/ide/RightSidebar";
 import { DriveFileTree } from "~/components/ide/DriveFileTree";
 import { MainViewer } from "~/components/ide/MainViewer";
 import { ChatPanel } from "~/components/ide/ChatPanel";
+import { PasswordPromptDialog } from "~/components/ide/PasswordPromptDialog";
 import { WorkflowPropsPanel } from "~/components/ide/WorkflowPropsPanel";
 import { ConflictDialog } from "~/components/ide/ConflictDialog";
 import { AIWorkflowDialog, type AIWorkflowMeta } from "~/components/ide/AIWorkflowDialog";
@@ -32,6 +33,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       authenticated: false as const,
       settings: null,
       hasGeminiApiKey: false,
+      hasEncryptedApiKey: false,
       rootFolderId: "",
     };
   }
@@ -44,6 +46,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       authenticated: true as const,
       settings,
       hasGeminiApiKey: !!validTokens.geminiApiKey,
+      hasEncryptedApiKey: !!settings.encryptedApiKey,
       rootFolderId: validTokens.rootFolderId,
     };
   } catch {
@@ -51,6 +54,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       authenticated: false as const,
       settings: null,
       hasGeminiApiKey: false,
+      hasEncryptedApiKey: false,
       rootFolderId: "",
     };
   }
@@ -106,6 +110,7 @@ export default function Index() {
     <IDELayout
       settings={data.settings!}
       hasGeminiApiKey={data.hasGeminiApiKey}
+      hasEncryptedApiKey={data.hasEncryptedApiKey}
       rootFolderId={data.rootFolderId}
     />
   );
@@ -124,13 +129,16 @@ interface AIDialogState {
 
 function IDELayout({
   settings,
-  hasGeminiApiKey,
+  hasGeminiApiKey: initialHasGeminiApiKey,
+  hasEncryptedApiKey,
   rootFolderId,
 }: {
   settings: UserSettings;
   hasGeminiApiKey: boolean;
+  hasEncryptedApiKey: boolean;
   rootFolderId: string;
 }) {
+  const [hasGeminiApiKey, setHasGeminiApiKey] = useState(initialHasGeminiApiKey);
   useApplySettings(settings.language, settings.fontSize, settings.theme);
   const [searchParams] = useSearchParams();
 
@@ -185,6 +193,7 @@ function IDELayout({
   } = useSync();
 
   const [showConflictDialog, setShowConflictDialog] = useState(false);
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
 
   // AI Workflow dialog state
   const [aiDialog, setAiDialog] = useState<AIDialogState | null>(null);
@@ -328,12 +337,22 @@ function IDELayout({
             <span className="text-yellow-800 dark:text-yellow-200">
               Gemini API key is not set. AI features will not work.
             </span>
-            <a
-              href="/settings"
-              className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
-            >
-              Settings
-            </a>
+            <div className="flex items-center gap-3">
+              {hasEncryptedApiKey && (
+                <button
+                  onClick={() => setShowPasswordPrompt(true)}
+                  className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
+                >
+                  Unlock
+                </button>
+              )}
+              <a
+                href="/settings"
+                className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
+              >
+                Settings
+              </a>
+            </div>
           </div>
         )}
 
@@ -365,6 +384,8 @@ function IDELayout({
               <ChatPanel
                 settings={settings}
                 hasApiKey={hasGeminiApiKey}
+                hasEncryptedApiKey={hasEncryptedApiKey}
+                onNeedUnlock={() => setShowPasswordPrompt(true)}
                 slashCommands={settings.slashCommands || []}
               />
             ) : (
@@ -398,6 +419,17 @@ function IDELayout({
             apiPlan={settings.apiPlan}
             onAccept={handleAIAccept}
             onClose={() => setAiDialog(null)}
+          />
+        )}
+
+        {/* Password prompt for API key unlock */}
+        {showPasswordPrompt && (
+          <PasswordPromptDialog
+            onSuccess={() => {
+              setShowPasswordPrompt(false);
+              setHasGeminiApiKey(true);
+            }}
+            onClose={() => setShowPasswordPrompt(false)}
           />
         )}
       </div>

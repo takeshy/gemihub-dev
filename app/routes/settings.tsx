@@ -7,8 +7,6 @@ import { getSettings, saveSettings } from "~/services/user-settings.server";
 import type {
   UserSettings,
   McpServerConfig,
-  EncryptionSettings,
-  EditHistorySettings,
   RagSetting,
   ApiPlan,
   ModelType,
@@ -22,6 +20,7 @@ import type {
 import {
   DEFAULT_USER_SETTINGS,
   DEFAULT_RAG_SETTING,
+  DEFAULT_ENCRYPTION_SETTINGS,
   getAvailableModels,
   getDefaultModelForPlan,
   isModelAllowedForPlan,
@@ -33,12 +32,16 @@ import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { ensureRootFolder } from "~/services/google-drive.server";
 import {
+  encryptPrivateKey,
+  decryptPrivateKey,
+  generateKeyPair,
+} from "~/services/crypto-core";
+import {
   ArrowLeft,
   Settings as SettingsIcon,
   Server,
   Database,
   Lock,
-  History,
   Terminal,
   Plus,
   Trash2,
@@ -69,7 +72,7 @@ function maskApiKey(key: string): string {
   return key.slice(0, 4) + "***" + key.slice(-4);
 }
 
-type TabId = "general" | "mcp" | "rag" | "encryption" | "editHistory" | "commands" | "sync";
+type TabId = "general" | "mcp" | "rag" | "commands" | "sync";
 
 import type { TranslationStrings } from "~/i18n/translations";
 
@@ -78,8 +81,6 @@ const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof Settin
   { id: "sync", labelKey: "settings.tab.sync", icon: RefreshCw },
   { id: "mcp", labelKey: "settings.tab.mcp", icon: Server },
   { id: "rag", labelKey: "settings.tab.rag", icon: Database },
-  { id: "encryption", labelKey: "settings.tab.encryption", icon: Lock },
-  { id: "editHistory", labelKey: "settings.tab.editHistory", icon: History },
   { id: "commands", labelKey: "settings.tab.commands", icon: Terminal },
 ];
 
@@ -123,6 +124,14 @@ export async function action({ request }: Route.ActionArgs) {
         const fontSize = Number(formData.get("fontSize")) as FontSize || currentSettings.fontSize;
         const theme = (formData.get("theme") as Theme) || currentSettings.theme || "system";
 
+        // Encryption-related fields
+        const password = (formData.get("password") as string)?.trim() || "";
+        const confirmPassword = (formData.get("confirmPassword") as string)?.trim() || "";
+        const currentPassword = (formData.get("currentPassword") as string)?.trim() || "";
+        const newPassword = (formData.get("newPassword") as string)?.trim() || "";
+        const encryptChatHistory = formData.get("encryptChatHistory") === "on";
+        const encryptWorkflowHistory = formData.get("encryptWorkflowHistory") === "on";
+
         const updatedSettings: UserSettings = {
           ...currentSettings,
           apiPlan,
@@ -136,6 +145,77 @@ export async function action({ request }: Route.ActionArgs) {
           theme,
         };
 
+        // Update file encryption toggles
+        updatedSettings.encryption = {
+          ...updatedSettings.encryption,
+          encryptChatHistory,
+          encryptWorkflowHistory,
+        };
+
+        let effectiveApiKey = geminiApiKey;
+
+        const isInitialSetup = !currentSettings.encryptedApiKey && geminiApiKey && password;
+        const isPasswordChange = !!currentSettings.encryptedApiKey && currentPassword && newPassword;
+
+        if (isInitialSetup) {
+          // Initial setup: encrypt API key + generate RSA key pair
+          if (password !== confirmPassword) {
+            return Response.json({ success: false, message: "Passwords do not match." });
+          }
+          if (password.length < 8) {
+            return Response.json({ success: false, message: "Password must be at least 8 characters." });
+          }
+
+          const { encryptedPrivateKey: encApiKey, salt: apiSalt } = await encryptPrivateKey(geminiApiKey, password);
+          updatedSettings.encryptedApiKey = encApiKey;
+          updatedSettings.apiKeySalt = apiSalt;
+
+          // Generate RSA key pair
+          const keyPair = await generateKeyPair();
+          const { encryptedPrivateKey: encRsaKey, salt: rsaSalt } = await encryptPrivateKey(keyPair.privateKey, password);
+          updatedSettings.encryption = {
+            ...updatedSettings.encryption,
+            enabled: true,
+            publicKey: keyPair.publicKey,
+            encryptedPrivateKey: encRsaKey,
+            salt: rsaSalt,
+          };
+        } else if (isPasswordChange) {
+          // Password change: decrypt with old, re-encrypt with new
+          if (newPassword !== confirmPassword) {
+            return Response.json({ success: false, message: "Passwords do not match." });
+          }
+          if (newPassword.length < 8) {
+            return Response.json({ success: false, message: "Password must be at least 8 characters." });
+          }
+
+          try {
+            const decryptedApiKey = await decryptPrivateKey(
+              currentSettings.encryptedApiKey, currentSettings.apiKeySalt, currentPassword
+            );
+            effectiveApiKey = geminiApiKey || decryptedApiKey;
+
+            const { encryptedPrivateKey: encApiKey, salt: apiSalt } = await encryptPrivateKey(effectiveApiKey, newPassword);
+            updatedSettings.encryptedApiKey = encApiKey;
+            updatedSettings.apiKeySalt = apiSalt;
+
+            // Re-encrypt RSA private key if exists
+            if (currentSettings.encryption.encryptedPrivateKey && currentSettings.encryption.salt) {
+              const rsaPrivateKey = await decryptPrivateKey(
+                currentSettings.encryption.encryptedPrivateKey, currentSettings.encryption.salt, currentPassword
+              );
+              const { encryptedPrivateKey: encRsaKey, salt: rsaSalt } = await encryptPrivateKey(rsaPrivateKey, newPassword);
+              updatedSettings.encryption = {
+                ...updatedSettings.encryption,
+                encryptedPrivateKey: encRsaKey,
+                salt: rsaSalt,
+              };
+            }
+          } catch {
+            return Response.json({ success: false, message: "Current password is incorrect." });
+          }
+        }
+
         // If root folder name changed, ensure the new folder exists and update session
         let newRootFolderId = validTokens.rootFolderId;
         if (rootFolderName !== currentSettings.rootFolderName) {
@@ -146,8 +226,8 @@ export async function action({ request }: Route.ActionArgs) {
 
         // Update session with API key and plan/model
         const session = await getSession(request);
-        if (geminiApiKey) {
-          session.set("geminiApiKey", geminiApiKey);
+        if (effectiveApiKey) {
+          session.set("geminiApiKey", effectiveApiKey);
         }
         session.set("apiPlan", apiPlan);
         session.set("selectedModel", updatedSettings.selectedModel);
@@ -195,39 +275,28 @@ export async function action({ request }: Route.ActionArgs) {
         return { success: true, message: "RAG settings saved." };
       }
 
-      case "saveEncryption": {
-        const encryptionJson = formData.get("encryption") as string;
-        const encryption: EncryptionSettings = encryptionJson
-          ? JSON.parse(encryptionJson)
-          : currentSettings.encryption;
-        const updatedSettings: UserSettings = { ...currentSettings, encryption };
-        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
-        return { success: true, message: "Encryption settings saved." };
-      }
-
-      case "saveEditHistory": {
-        const editHistoryJson = formData.get("editHistory") as string;
-        const editHistory: EditHistorySettings = editHistoryJson
-          ? JSON.parse(editHistoryJson)
-          : currentSettings.editHistory;
-        const updatedSettings: UserSettings = { ...currentSettings, editHistory };
-        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
-        return { success: true, message: "Edit history settings saved." };
-      }
-
-      case "saveSync": {
-        const syncExcludePatterns = (formData.get("syncExcludePatterns") as string || "")
-          .split("\n")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        const syncConflictFolder = (formData.get("syncConflictFolder") as string)?.trim() || "sync_conflicts";
+      case "saveEncryptionReset": {
         const updatedSettings: UserSettings = {
           ...currentSettings,
-          syncExcludePatterns,
-          syncConflictFolder,
+          encryptedApiKey: "",
+          apiKeySalt: "",
+          encryption: { ...DEFAULT_ENCRYPTION_SETTINGS },
         };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
-        return { success: true, message: "Sync settings saved." };
+
+        // Clear API key from session too
+        const session = await getSession(request);
+        session.unset("geminiApiKey");
+        return new Response(
+          JSON.stringify({ success: true, message: "Encryption has been reset." }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "Set-Cookie": await commitSession(session),
+            },
+          }
+        );
       }
 
       case "saveCommands": {
@@ -334,8 +403,6 @@ function SettingsInner({
         {activeTab === "sync" && <SyncTab settings={settings} />}
         {activeTab === "mcp" && <McpTab settings={settings} />}
         {activeTab === "rag" && <RagTab settings={settings} />}
-        {activeTab === "encryption" && <EncryptionTab settings={settings} />}
-        {activeTab === "editHistory" && <EditHistoryTab settings={settings} />}
         {activeTab === "commands" && <CommandsTab settings={settings} />}
       </main>
     </div>
@@ -437,12 +504,29 @@ function GeneralTab({
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
   const availableModels = getAvailableModels(apiPlan);
 
+  // Encryption state
+  const [encryptChatHistory, setEncryptChatHistory] = useState(settings.encryption.encryptChatHistory);
+  const [encryptWorkflowHistory, setEncryptWorkflowHistory] = useState(settings.encryption.encryptWorkflowHistory);
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  const isEncryptionSetup = !!settings.encryptedApiKey;
+  const isRsaSetup = settings.encryption.enabled && !!settings.encryption.publicKey;
+
   // When plan changes, reset model if it's not available
   useEffect(() => {
     if (selectedModel && !isModelAllowedForPlan(apiPlan, selectedModel as ModelType)) {
       setSelectedModel(getDefaultModelForPlan(apiPlan));
     }
   }, [apiPlan, selectedModel]);
+
+  const handleResetEncryption = useCallback(() => {
+    // Reset encryption by submitting with cleared values
+    const fd = new FormData();
+    fd.set("_action", "saveEncryptionReset");
+    fetcher.submit(fd, { method: "post" });
+    setConfirmReset(false);
+  }, [fetcher]);
 
   return (
     <SectionCard>
@@ -451,8 +535,14 @@ function GeneralTab({
       <fetcher.Form method="post">
         <input type="hidden" name="_action" value="saveGeneral" />
 
+        {/* API Key & Password Section */}
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
+          <KeyRound size={16} />
+          {t("settings.general.apiKeyPasswordSection")}
+        </h3>
+
         {/* API Key */}
-        <div className="mb-6">
+        <div className="mb-4">
           <Label htmlFor="geminiApiKey">{t("settings.general.apiKey")}</Label>
           {hasApiKey && (
             <p className="text-xs text-green-600 dark:text-green-400 mb-1">
@@ -467,6 +557,97 @@ function GeneralTab({
             className={inputClass}
           />
         </div>
+
+        {/* Password fields */}
+        {!isEncryptionSetup ? (
+          /* Initial setup: password + confirm */
+          <>
+            <div className="mb-4">
+              <Label htmlFor="password">{t("settings.general.password")}</Label>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                placeholder={t("settings.general.password")}
+                className={inputClass}
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t("settings.general.passwordRequired")}
+              </p>
+            </div>
+            <div className="mb-6">
+              <Label htmlFor="confirmPassword">{t("settings.general.confirmPassword")}</Label>
+              <input
+                type="password"
+                id="confirmPassword"
+                name="confirmPassword"
+                placeholder={t("settings.general.confirmPassword")}
+                className={inputClass}
+              />
+            </div>
+          </>
+        ) : (
+          /* Already setup: show configured status and password change option */
+          <div className="mb-6">
+            <div className="mb-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+              <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
+                <Check size={16} />
+                {t("settings.general.configured")}
+              </p>
+            </div>
+            {!showPasswordChange ? (
+              <button
+                type="button"
+                onClick={() => setShowPasswordChange(true)}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {t("settings.general.changePassword")}
+              </button>
+            ) : (
+              <div className="space-y-3 p-4 border border-gray-200 dark:border-gray-700 rounded-md">
+                <div>
+                  <Label htmlFor="currentPassword">{t("settings.general.currentPassword")}</Label>
+                  <input
+                    type="password"
+                    id="currentPassword"
+                    name="currentPassword"
+                    placeholder={t("settings.general.currentPassword")}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="newPassword">{t("settings.general.newPassword")}</Label>
+                  <input
+                    type="password"
+                    id="newPassword"
+                    name="newPassword"
+                    placeholder={t("settings.general.newPassword")}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="confirmPassword">{t("settings.general.confirmPassword")}</Label>
+                  <input
+                    type="password"
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    placeholder={t("settings.general.confirmPassword")}
+                    className={inputClass}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordChange(false)}
+                  className="text-sm text-gray-500 dark:text-gray-400 hover:underline"
+                >
+                  {t("common.cancel")}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <hr className="my-6 border-gray-200 dark:border-gray-700" />
 
         {/* API Plan */}
         <div className="mb-6">
@@ -520,6 +701,76 @@ function GeneralTab({
             className={inputClass + " resize-y"}
           />
         </div>
+
+        <hr className="my-6 border-gray-200 dark:border-gray-700" />
+
+        {/* File Encryption Section */}
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
+          <Lock size={16} />
+          {t("settings.general.encryptionSection")}
+        </h3>
+
+        <div className="mb-4 flex items-center gap-3">
+          <input
+            type="checkbox"
+            id="encryptChatHistory"
+            name="encryptChatHistory"
+            checked={encryptChatHistory}
+            onChange={(e) => setEncryptChatHistory(e.target.checked)}
+            className={checkboxClass}
+          />
+          <Label htmlFor="encryptChatHistory">{t("settings.encryption.encryptChat")}</Label>
+        </div>
+        <div className="mb-6 flex items-center gap-3">
+          <input
+            type="checkbox"
+            id="encryptWorkflowHistory"
+            name="encryptWorkflowHistory"
+            checked={encryptWorkflowHistory}
+            onChange={(e) => setEncryptWorkflowHistory(e.target.checked)}
+            className={checkboxClass}
+          />
+          <Label htmlFor="encryptWorkflowHistory">{t("settings.encryption.encryptWorkflow")}</Label>
+        </div>
+
+        {/* Reset encryption keys */}
+        {isRsaSetup && (
+          <div className="mb-6">
+            {!confirmReset ? (
+              <button
+                type="button"
+                onClick={() => setConfirmReset(true)}
+                className="text-sm text-red-600 dark:text-red-400 hover:underline"
+              >
+                {t("settings.encryption.reset")}
+              </button>
+            ) : (
+              <div className="p-3 border border-red-200 dark:border-red-800 rounded-md bg-red-50 dark:bg-red-900/20 space-y-2">
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  {t("settings.encryption.resetWarning")}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResetEncryption}
+                    className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
+                  >
+                    {t("settings.encryption.confirmReset")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmReset(false)}
+                    className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <hr className="my-6 border-gray-200 dark:border-gray-700" />
 
         {/* Root Folder Name */}
         <div className="mb-6">
@@ -603,22 +854,16 @@ function GeneralTab({
 // ---------------------------------------------------------------------------
 
 function SyncTab({ settings }: { settings: UserSettings }) {
-  const fetcher = useFetcher();
-  const loading = fetcher.state !== "idle";
   const { t } = useI18n();
 
-  const [excludePatterns, setExcludePatterns] = useState(
-    (settings.syncExcludePatterns ?? []).join("\n")
-  );
-  const [conflictFolder, setConflictFolder] = useState(
-    settings.syncConflictFolder || "sync_conflicts"
-  );
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [showTempFiles, setShowTempFiles] = useState(false);
   const [untrackedFiles, setUntrackedFiles] = useState<Array<{ id: string; name: string; mimeType: string; modifiedTime: string }> | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [pruneMsg, setPruneMsg] = useState<string | null>(null);
+  const [historyStats, setHistoryStats] = useState<Record<string, unknown> | null>(null);
 
   // Load lastUpdatedAt from IndexedDB
   useEffect(() => {
@@ -758,23 +1003,53 @@ function SyncTab({ settings }: { settings: UserSettings }) {
     }
   }, []);
 
-  const handleSubmit = useCallback(() => {
-    const fd = new FormData();
-    fd.set("_action", "saveSync");
-    fd.set("syncExcludePatterns", excludePatterns);
-    fd.set("syncConflictFolder", conflictFolder);
-    fetcher.submit(fd, { method: "post" });
-  }, [fetcher, excludePatterns, conflictFolder]);
+  const handlePrune = useCallback(async () => {
+    setActionLoading("prune");
+    setPruneMsg(null);
+    try {
+      const res = await fetch("/api/settings/edit-history-prune", { method: "POST" });
+      const data = await res.json();
+      setPruneMsg(data.message || (res.ok ? "Prune complete." : "Prune failed."));
+    } catch (err) {
+      setPruneMsg(err instanceof Error ? err.message : "Prune error.");
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
+  const handleHistoryStats = useCallback(async () => {
+    setActionLoading("historyStats");
+    try {
+      const res = await fetch("/api/settings/edit-history-stats");
+      const data = await res.json();
+      setHistoryStats(data);
+    } catch {
+      setHistoryStats({ error: "Failed to load stats." });
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
+  const actionBtnClass = "inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm disabled:opacity-50";
+  const dangerBtnClass = "inline-flex items-center gap-2 px-3 py-1.5 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 text-sm disabled:opacity-50";
 
   return (
-    <SectionCard>
-      <StatusBanner fetcher={fetcher} />
+    <div className="space-y-6">
+      {/* Status message */}
+      {actionMsg && (
+        <div className="p-3 rounded-md border text-sm bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
+          {actionMsg}
+        </div>
+      )}
 
       {/* Sync Status */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
-          {t("settings.sync.status")}
-        </h3>
+      <SectionCard>
+        <div className="flex items-center gap-2 mb-3">
+          <RefreshCw size={16} className="text-blue-600 dark:text-blue-400" />
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+            {t("settings.sync.status")}
+          </h3>
+        </div>
         <div className="text-sm text-gray-600 dark:text-gray-400">
           <span className="font-medium">{t("settings.sync.lastUpdatedAt")}:</span>{" "}
           {loadingMeta ? (
@@ -785,152 +1060,136 @@ function SyncTab({ settings }: { settings: UserSettings }) {
             <span className="italic text-gray-400">{t("settings.sync.notSynced")}</span>
           )}
         </div>
-      </div>
+      </SectionCard>
 
-      {/* Exclude Patterns */}
-      <div className="mb-6">
-        <Label htmlFor="syncExcludePatterns">{t("settings.sync.excludePatterns")}</Label>
-        <textarea
-          id="syncExcludePatterns"
-          rows={3}
-          value={excludePatterns}
-          onChange={(e) => setExcludePatterns(e.target.value)}
-          placeholder="\.tmp$\n^temp_"
-          className={inputClass + " font-mono resize-y"}
-        />
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          {t("settings.sync.excludePatternsDescription")}
-        </p>
-      </div>
-
-      {/* Conflict Resolution */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
-          {t("settings.sync.conflictResolution")}
-        </h3>
-        <div className="mb-3">
-          <Label htmlFor="syncConflictFolder">{t("settings.sync.conflictFolder")}</Label>
-          <input
-            type="text"
-            id="syncConflictFolder"
-            value={conflictFolder}
-            onChange={(e) => setConflictFolder(e.target.value)}
-            className={inputClass + " max-w-[300px]"}
-          />
+      {/* Data Management */}
+      <SectionCard>
+        <div className="flex items-center gap-2 mb-4">
+          <FileBox size={16} className="text-gray-600 dark:text-gray-400" />
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+            {t("settings.sync.dataManagement")}
+          </h3>
         </div>
-        <button
-          type="button"
-          onClick={handleClearConflicts}
-          disabled={actionLoading === "clearConflicts"}
-          className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm disabled:opacity-50"
-        >
-          {actionLoading === "clearConflicts" ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Trash2 size={14} />
-          )}
-          {t("settings.sync.clearConflicts")}
-        </button>
-      </div>
-
-      {/* Full Sync Operations */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
-          {t("settings.sync.fullSyncOps")}
-        </h3>
-        <div className="flex flex-wrap gap-3">
-          <div>
+        <div className="space-y-4">
+          {/* Temporary Files */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.sync.tempFiles")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.general.tempFilesDescription")}</p>
+            </div>
+            <button type="button" onClick={() => setShowTempFiles(true)} className={actionBtnClass}>
+              <FileBox size={14} />
+              {t("settings.sync.manageTempFiles")}
+            </button>
+          </div>
+          {/* Untracked Files */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.sync.untrackedFiles")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.sync.untrackedDescription")}</p>
+            </div>
             <button
               type="button"
-              onClick={handleFullPush}
-              disabled={!!actionLoading}
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm disabled:opacity-50"
+              onClick={handleDetectUntracked}
+              disabled={actionLoading === "detectUntracked"}
+              className={actionBtnClass}
             >
-              {actionLoading === "fullPush" ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <RefreshCw size={14} />
-              )}
+              {actionLoading === "detectUntracked" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              {t("settings.sync.detectUntracked")}
+            </button>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Edit History */}
+      <SectionCard>
+        <div className="flex items-center gap-2 mb-4">
+          <Scissors size={16} className="text-gray-600 dark:text-gray-400" />
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+            {t("settings.editHistory.sectionTitle")}
+          </h3>
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.editHistory.pruneLabel")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.editHistory.pruneDescription")}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {pruneMsg && <span className="text-xs text-gray-500 dark:text-gray-400">{pruneMsg}</span>}
+              <button type="button" disabled={actionLoading === "prune"} onClick={handlePrune} className={actionBtnClass}>
+                <Scissors size={14} className={actionLoading === "prune" ? "animate-pulse" : ""} />
+                {t("settings.editHistory.prune")}
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.editHistory.statsLabel")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.editHistory.statsDescription")}</p>
+            </div>
+            <button type="button" disabled={actionLoading === "historyStats"} onClick={handleHistoryStats} className={actionBtnClass}>
+              {actionLoading === "historyStats" ? <Loader2 size={14} className="animate-spin" /> : <BarChart3 size={14} />}
+              {t("settings.editHistory.stats")}
+            </button>
+          </div>
+        </div>
+        {historyStats && (
+          <div className="mt-4 p-3 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50">
+            <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">
+              {JSON.stringify(historyStats, null, 2)}
+            </pre>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Danger Zone */}
+      <SectionCard>
+        <div className="flex items-center gap-2 mb-1">
+          <AlertCircle size={16} className="text-red-600 dark:text-red-400" />
+          <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">
+            {t("settings.sync.dangerZone")}
+          </h3>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          {t("settings.sync.dangerZoneDescription")}
+        </p>
+        <div className="space-y-4">
+          {/* Clear Conflicts */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.sync.clearConflicts")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.sync.clearConflictsDescription")}</p>
+            </div>
+            <button type="button" onClick={handleClearConflicts} disabled={actionLoading === "clearConflicts"} className={dangerBtnClass}>
+              {actionLoading === "clearConflicts" ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {t("settings.sync.clearConflicts")}
+            </button>
+          </div>
+          {/* Full Push */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.sync.fullPush")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.sync.fullPushDescription")}</p>
+            </div>
+            <button type="button" onClick={handleFullPush} disabled={!!actionLoading} className={dangerBtnClass}>
+              {actionLoading === "fullPush" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               {t("settings.sync.fullPush")}
             </button>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {t("settings.sync.fullPushDescription")}
-            </p>
           </div>
-          <div>
-            <button
-              type="button"
-              onClick={handleFullPull}
-              disabled={!!actionLoading}
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm disabled:opacity-50"
-            >
-              {actionLoading === "fullPull" ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <RefreshCw size={14} />
-              )}
+          {/* Full Pull */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.sync.fullPull")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.sync.fullPullDescription")}</p>
+            </div>
+            <button type="button" onClick={handleFullPull} disabled={!!actionLoading} className={dangerBtnClass}>
+              {actionLoading === "fullPull" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               {t("settings.sync.fullPull")}
             </button>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {t("settings.sync.fullPullDescription")}
-            </p>
           </div>
         </div>
-      </div>
-
-      {/* Temporary Files */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
-          {t("settings.sync.tempFiles")}
-        </h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-          {t("settings.general.tempFilesDescription")}
-        </p>
-        <button
-          type="button"
-          onClick={() => setShowTempFiles(true)}
-          className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
-        >
-          <FileBox size={14} />
-          {t("settings.sync.manageTempFiles")}
-        </button>
-      </div>
-
-      {/* Untracked Files */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
-          {t("settings.sync.untrackedFiles")}
-        </h3>
-        <button
-          type="button"
-          onClick={handleDetectUntracked}
-          disabled={actionLoading === "detectUntracked"}
-          className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm disabled:opacity-50"
-        >
-          {actionLoading === "detectUntracked" ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <RefreshCw size={14} />
-          )}
-          {t("settings.sync.detectUntracked")}
-        </button>
-      </div>
-
-      {actionMsg && (
-        <div className="mb-6 p-3 rounded-md border text-sm bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
-          {actionMsg}
-        </div>
-      )}
-
-      <button
-        type="button"
-        disabled={loading}
-        onClick={handleSubmit}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
-      >
-        {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-        {t("settings.sync.save")}
-      </button>
+      </SectionCard>
 
       {showTempFiles && (
         <TempFilesDialog onClose={() => setShowTempFiles(false)} />
@@ -943,7 +1202,7 @@ function SyncTab({ settings }: { settings: UserSettings }) {
           onRefresh={handleDetectUntracked}
         />
       )}
-    </SectionCard>
+    </div>
   );
 }
 
@@ -1641,9 +1900,11 @@ function RagTab({ settings }: { settings: UserSettings }) {
   const [ragSettings, setRagSettings] = useState<Record<string, RagSetting>>(settings.ragSettings);
   const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(settings.selectedRagSetting);
   const [syncing, setSyncing] = useState(false);
+  const [syncingKey, setSyncingKey] = useState<string | null>(null);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [editingKey, setEditingKey] = useState<string | null>(null);
 
   const settingNames = Object.keys(ragSettings);
 
@@ -1657,6 +1918,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
     }
     setRagSettings((prev) => ({ ...prev, [name]: { ...DEFAULT_RAG_SETTING } }));
     setSelectedRagSetting(name);
+    setEditingKey(name);
     // Start rename immediately so user can type a proper name
     setRenamingKey(name);
     setRenameValue(name);
@@ -1673,9 +1935,10 @@ function RagTab({ settings }: { settings: UserSettings }) {
         const remaining = settingNames.filter((n) => n !== name);
         setSelectedRagSetting(remaining.length > 0 ? remaining[0] : null);
       }
+      if (editingKey === name) setEditingKey(null);
       if (renamingKey === name) setRenamingKey(null);
     },
-    [selectedRagSetting, settingNames, renamingKey]
+    [selectedRagSetting, settingNames, renamingKey, editingKey]
   );
 
   const commitRename = useCallback(() => {
@@ -1698,8 +1961,9 @@ function RagTab({ settings }: { settings: UserSettings }) {
       return copy;
     });
     if (selectedRagSetting === renamingKey) setSelectedRagSetting(newName);
+    if (editingKey === renamingKey) setEditingKey(newName);
     setRenamingKey(null);
-  }, [renamingKey, renameValue, ragSettings, selectedRagSetting]);
+  }, [renamingKey, renameValue, ragSettings, selectedRagSetting, editingKey]);
 
   const updateCurrentSetting = useCallback(
     (patch: Partial<RagSetting>) => {
@@ -1712,7 +1976,15 @@ function RagTab({ settings }: { settings: UserSettings }) {
     [selectedRagSetting]
   );
 
-  const currentSetting = selectedRagSetting ? ragSettings[selectedRagSetting] : null;
+  const updateCurrentSettingByKey = useCallback(
+    (key: string, patch: Partial<RagSetting>) => {
+      setRagSettings((prev) => ({
+        ...prev,
+        [key]: { ...prev[key], ...patch },
+      }));
+    },
+    []
+  );
 
   const handleSync = useCallback(async () => {
     if (!selectedRagSetting || !ragSettings[selectedRagSetting]) {
@@ -1785,6 +2057,70 @@ function RagTab({ settings }: { settings: UserSettings }) {
     }
   }, [selectedRagSetting, ragSettings, ragTopK]);
 
+  const handleSyncByKey = useCallback(async (key: string) => {
+    if (!ragSettings[key]) return;
+    setSyncing(true);
+    setSyncingKey(key);
+    setSyncMsg(null);
+    try {
+      const hasSettings = Object.keys(ragSettings).length > 0;
+      const fd = new FormData();
+      fd.set("_action", "saveRag");
+      fd.set("ragEnabled", hasSettings ? "on" : "off");
+      fd.set("ragTopK", String(ragTopK));
+      fd.set("ragSettings", JSON.stringify(ragSettings));
+      fd.set("selectedRagSetting", key);
+      const saveRes = await fetch("/settings", { method: "POST", body: fd });
+      if (!saveRes.ok) {
+        setSyncMsg("Failed to save settings before sync.");
+        return;
+      }
+
+      const res = await fetch("/api/settings/rag-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ragSettingName: key }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setSyncMsg(data.error || "Sync failed.");
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setSyncMsg("No response body.");
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+          try {
+            const evt = JSON.parse(raw);
+            if (evt.message) setSyncMsg(evt.message);
+          } catch {
+            // skip
+          }
+        }
+      }
+    } catch (err) {
+      setSyncMsg(err instanceof Error ? err.message : "Sync error.");
+    } finally {
+      setSyncing(false);
+    }
+  }, [ragSettings, ragTopK]);
+
   const handleSubmit = useCallback(() => {
     const hasSettings = Object.keys(ragSettings).length > 0;
     const fd = new FormData();
@@ -1816,175 +2152,213 @@ function RagTab({ settings }: { settings: UserSettings }) {
 
       {/* RAG settings list */}
       <div className="mb-6">
-        <Label>{t("settings.rag.settings")}</Label>
-        <div className="flex flex-wrap items-center gap-2 mt-1 mb-3">
-          {settingNames.map((name) => (
-            <div
-              key={name}
-              className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm cursor-pointer border ${
-                selectedRagSetting === name
-                  ? "bg-blue-100 dark:bg-blue-900/30 border-blue-400 dark:border-blue-600 text-blue-700 dark:text-blue-300"
-                  : "bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-300"
-              }`}
-              onClick={() => setSelectedRagSetting(name)}
-            >
-              {renamingKey === name ? (
-                <input
-                  type="text"
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onBlur={commitRename}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); commitRename(); }
-                    if (e.key === "Escape") setRenamingKey(null);
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="bg-transparent border-none outline-none text-sm w-24 focus:ring-0 p-0"
-                  autoFocus
-                />
-              ) : (
-                <>
-                  {name}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRenamingKey(name);
-                      setRenameValue(name);
-                    }}
-                    className="ml-0.5 text-gray-400 hover:text-blue-500"
-                    title="Rename"
-                  >
-                    <Pencil size={11} />
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeRagSetting(name);
-                }}
-                className="ml-0.5 text-gray-400 hover:text-red-500"
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          ))}
+        <div className="flex items-center justify-between mb-3">
+          <Label>{t("settings.rag.settings")}</Label>
           <button
             type="button"
             onClick={addRagSetting}
-            className="inline-flex items-center gap-1 px-3 py-1 border border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-full hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
           >
             <Plus size={14} />
+            Add Setting
           </button>
         </div>
-      </div>
 
-      {/* Selected setting editor */}
-      {currentSetting && selectedRagSetting && (
-        <div className="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-md space-y-4">
-          {/* Internal / External toggle */}
-          <div>
-            <Label>Type</Label>
-            <div className="flex gap-4 mt-1">
-              {[
-                { value: false, label: "Internal (Google Drive folders)" },
-                { value: true, label: "External (store IDs)" },
-              ].map((opt) => (
-                <label
-                  key={String(opt.value)}
-                  className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
-                >
-                  <input
-                    type="radio"
-                    checked={currentSetting.isExternal === opt.value}
-                    onChange={() => updateCurrentSetting({ isExternal: opt.value })}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
+        {settingNames.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400 italic">No RAG settings configured.</p>
+        ) : (
+          <div className="border border-gray-200 dark:border-gray-700 rounded-md divide-y divide-gray-200 dark:divide-gray-700">
+            {settingNames.map((name) => {
+              const s = ragSettings[name];
+              const isEditing = editingKey === name;
+              const isSelected = selectedRagSetting === name;
+              return (
+                <div key={name}>
+                  {/* Row */}
+                  <div
+                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer ${
+                      isSelected
+                        ? "bg-blue-50 dark:bg-blue-900/20"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                    }`}
+                    onClick={() => setSelectedRagSetting(name)}
+                  >
+                    {/* Name */}
+                    <div className="flex-1 min-w-0">
+                      {renamingKey === name ? (
+                        <input
+                          type="text"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onBlur={commitRename}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                            if (e.key === "Escape") setRenamingKey(null);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="bg-transparent border border-blue-400 rounded px-1.5 py-0.5 outline-none text-sm w-full max-w-[200px] focus:ring-1 focus:ring-blue-500 dark:text-gray-100"
+                          autoFocus
+                        />
+                      ) : (
+                        <span
+                          className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate block"
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setRenamingKey(name);
+                            setRenameValue(name);
+                          }}
+                        >
+                          {name}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Type badge */}
+                    <span className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium ${
+                      s.isExternal
+                        ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+                        : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                    }`}>
+                      {s.isExternal ? "External" : "Internal"}
+                    </span>
+
+                    {/* Sync button */}
+                    <button
+                      type="button"
+                      disabled={syncing}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedRagSetting(name);
+                        handleSyncByKey(name);
+                      }}
+                      className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-xs disabled:opacity-50"
+                    >
+                      <RefreshCw size={12} className={syncing && syncingKey === name ? "animate-spin" : ""} />
+                      Sync
+                    </button>
+
+                    {/* Edit (pencil) */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedRagSetting(name);
+                        setEditingKey(isEditing ? null : name);
+                      }}
+                      className={`shrink-0 p-1.5 rounded ${
+                        isEditing
+                          ? "text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30"
+                          : "text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      }`}
+                      title="Edit"
+                    >
+                      <Pencil size={14} />
+                    </button>
+
+                    {/* Delete */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (editingKey === name) setEditingKey(null);
+                        removeRagSetting(name);
+                      }}
+                      className="shrink-0 p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+
+                  {/* Expanded editor */}
+                  {isEditing && (
+                    <div className="px-4 py-4 bg-gray-50 dark:bg-gray-800/50 space-y-4 border-t border-gray-200 dark:border-gray-700">
+                      {/* Internal / External toggle */}
+                      <div>
+                        <Label>Type</Label>
+                        <div className="flex gap-4 mt-1">
+                          {[
+                            { value: false, label: "Internal (Google Drive folders)" },
+                            { value: true, label: "External (store IDs)" },
+                          ].map((opt) => (
+                            <label
+                              key={String(opt.value)}
+                              className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
+                            >
+                              <input
+                                type="radio"
+                                checked={s.isExternal === opt.value}
+                                onChange={() => updateCurrentSettingByKey(name, { isExternal: opt.value })}
+                                className="text-blue-600 focus:ring-blue-500"
+                              />
+                              {opt.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {s.isExternal ? (
+                        <div>
+                          <Label htmlFor={`rag-storeIds-${name}`}>Store IDs (one per line)</Label>
+                          <textarea
+                            id={`rag-storeIds-${name}`}
+                            rows={3}
+                            value={s.storeIds.join("\n")}
+                            onChange={(e) =>
+                              updateCurrentSettingByKey(name, {
+                                storeIds: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
+                              })
+                            }
+                            className={inputClass + " font-mono resize-y"}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <Label htmlFor={`rag-targetFolders-${name}`}>Target Folders (one per line, name or ID)</Label>
+                            <textarea
+                              id={`rag-targetFolders-${name}`}
+                              rows={3}
+                              value={s.targetFolders.join("\n")}
+                              onChange={(e) =>
+                                updateCurrentSettingByKey(name, {
+                                  targetFolders: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
+                                })
+                              }
+                              className={inputClass + " font-mono resize-y"}
+                            />
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              Folder names (e.g. <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">workflows</code>) or Drive folder IDs. Leave empty to use the root folder.
+                            </p>
+                          </div>
+                          <div>
+                            <Label htmlFor={`rag-excludePatterns-${name}`}>Exclude Patterns (one per line)</Label>
+                            <textarea
+                              id={`rag-excludePatterns-${name}`}
+                              rows={2}
+                              value={s.excludePatterns.join("\n")}
+                              onChange={(e) =>
+                                updateCurrentSettingByKey(name, {
+                                  excludePatterns: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
+                                })
+                              }
+                              className={inputClass + " font-mono resize-y"}
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {/* Sync message */}
+                      {syncMsg && syncingKey === name && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{syncMsg}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-
-          {currentSetting.isExternal ? (
-            <div>
-              <Label htmlFor="rag-storeIds">Store IDs (one per line)</Label>
-              <textarea
-                id="rag-storeIds"
-                rows={3}
-                value={currentSetting.storeIds.join("\n")}
-                onChange={(e) =>
-                  updateCurrentSetting({
-                    storeIds: e.target.value
-                      .split("\n")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  })
-                }
-                className={inputClass + " font-mono resize-y"}
-              />
-            </div>
-          ) : (
-            <>
-              <div>
-                <Label htmlFor="rag-targetFolders">Target Folders (one per line, name or ID)</Label>
-                <textarea
-                  id="rag-targetFolders"
-                  rows={3}
-                  value={currentSetting.targetFolders.join("\n")}
-                  onChange={(e) =>
-                    updateCurrentSetting({
-                      targetFolders: e.target.value
-                        .split("\n")
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  className={inputClass + " font-mono resize-y"}
-                />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Folder names (e.g. <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">workflows</code>) or Drive folder IDs. Leave empty to use the root folder.
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="rag-excludePatterns">Exclude Patterns (one per line)</Label>
-                <textarea
-                  id="rag-excludePatterns"
-                  rows={2}
-                  value={currentSetting.excludePatterns.join("\n")}
-                  onChange={(e) =>
-                    updateCurrentSetting({
-                      excludePatterns: e.target.value
-                        .split("\n")
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  className={inputClass + " font-mono resize-y"}
-                />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Regex patterns matched against file names. e.g. <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">\.pdf$</code> <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">^temp_</code> <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">\.tmp$</code>
-                </p>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Sync */}
-      <div className="mb-6 flex items-center gap-3">
-        <button
-          type="button"
-          disabled={syncing}
-          onClick={handleSync}
-          className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm disabled:opacity-50"
-        >
-          <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
-          Sync
-        </button>
-        {syncMsg && <span className="text-xs text-gray-500 dark:text-gray-400">{syncMsg}</span>}
+        )}
       </div>
 
       <button
@@ -2000,360 +2374,3 @@ function RagTab({ settings }: { settings: UserSettings }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Encryption Tab
-// ---------------------------------------------------------------------------
-
-function EncryptionTab({ settings }: { settings: UserSettings }) {
-  const fetcher = useFetcher();
-  const loading = fetcher.state !== "idle";
-  const { t } = useI18n();
-
-  const [encryption, setEncryption] = useState<EncryptionSettings>(settings.encryption);
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [setupError, setSetupError] = useState<string | null>(null);
-  const [setting, setSetting] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
-
-  const isSetup = encryption.enabled && !!encryption.publicKey;
-
-  const handleSetup = useCallback(async () => {
-    if (!password || password !== confirmPassword) {
-      setSetupError("Passwords do not match.");
-      return;
-    }
-    if (password.length < 8) {
-      setSetupError("Password must be at least 8 characters.");
-      return;
-    }
-    setSetupError(null);
-    setSetting(true);
-    try {
-      const res = await fetch("/api/settings/encryption", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate", password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setSetupError(data.error || data.message || "Setup failed.");
-        return;
-      }
-      setEncryption({
-        ...encryption,
-        enabled: true,
-        publicKey: data.publicKey || encryption.publicKey,
-        encryptedPrivateKey: data.encryptedPrivateKey || encryption.encryptedPrivateKey,
-        salt: data.salt || encryption.salt,
-      });
-      setPassword("");
-      setConfirmPassword("");
-    } catch (err) {
-      setSetupError(err instanceof Error ? err.message : "Error setting up encryption.");
-    } finally {
-      setSetting(false);
-    }
-  }, [password, confirmPassword, encryption]);
-
-  const handleReset = useCallback(() => {
-    setEncryption({
-      enabled: false,
-      encryptChatHistory: false,
-      encryptWorkflowHistory: false,
-      publicKey: "",
-      encryptedPrivateKey: "",
-      salt: "",
-    });
-    setConfirmReset(false);
-  }, []);
-
-  const handleSubmit = useCallback(() => {
-    const fd = new FormData();
-    fd.set("_action", "saveEncryption");
-    fd.set("encryption", JSON.stringify(encryption));
-    fetcher.submit(fd, { method: "post" });
-  }, [fetcher, encryption]);
-
-  return (
-    <SectionCard>
-      <StatusBanner fetcher={fetcher} />
-
-      {/* Setup or status */}
-      {!isSetup ? (
-        <div className="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-md space-y-3">
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-            {t("settings.encryption.setup")}
-          </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {t("settings.encryption.setupDescription")}
-          </p>
-          {setupError && (
-            <p className="text-xs text-red-600 dark:text-red-400">{setupError}</p>
-          )}
-          <div>
-            <Label htmlFor="enc-password">{t("settings.encryption.password")}</Label>
-            <input
-              id="enc-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <Label htmlFor="enc-confirm">{t("settings.encryption.confirmPassword")}</Label>
-            <input
-              id="enc-confirm"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <button
-            type="button"
-            disabled={setting}
-            onClick={handleSetup}
-            className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50"
-          >
-            {setting ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
-            {t("settings.encryption.generateKeys")}
-          </button>
-        </div>
-      ) : (
-        <div className="mb-6 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
-          <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
-            <Check size={16} />
-            {t("settings.encryption.configured")}
-          </p>
-        </div>
-      )}
-
-      {/* Toggles */}
-      <div className="mb-4 flex items-center gap-3">
-        <input
-          type="checkbox"
-          id="encryptChatHistory"
-          checked={encryption.encryptChatHistory}
-          onChange={(e) => setEncryption((p) => ({ ...p, encryptChatHistory: e.target.checked }))}
-          className={checkboxClass}
-        />
-        <Label htmlFor="encryptChatHistory">{t("settings.encryption.encryptChat")}</Label>
-      </div>
-      <div className="mb-6 flex items-center gap-3">
-        <input
-          type="checkbox"
-          id="encryptWorkflowHistory"
-          checked={encryption.encryptWorkflowHistory}
-          onChange={(e) => setEncryption((p) => ({ ...p, encryptWorkflowHistory: e.target.checked }))}
-          className={checkboxClass}
-        />
-        <Label htmlFor="encryptWorkflowHistory">{t("settings.encryption.encryptWorkflow")}</Label>
-      </div>
-
-      {/* Reset */}
-      {isSetup && (
-        <div className="mb-6">
-          {!confirmReset ? (
-            <button
-              type="button"
-              onClick={() => setConfirmReset(true)}
-              className="text-sm text-red-600 dark:text-red-400 hover:underline"
-            >
-              {t("settings.encryption.reset")}
-            </button>
-          ) : (
-            <div className="p-3 border border-red-200 dark:border-red-800 rounded-md bg-red-50 dark:bg-red-900/20 space-y-2">
-              <p className="text-sm text-red-700 dark:text-red-300">
-                {t("settings.encryption.resetWarning")}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
-                >
-                  {t("settings.encryption.confirmReset")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmReset(false)}
-                  className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
-                >
-                  {t("common.cancel")}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      <button
-        type="button"
-        disabled={loading}
-        onClick={handleSubmit}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
-      >
-        {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-        {t("settings.encryption.save")}
-      </button>
-    </SectionCard>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Edit History Tab
-// ---------------------------------------------------------------------------
-
-function EditHistoryTab({ settings }: { settings: UserSettings }) {
-  const fetcher = useFetcher();
-  const loading = fetcher.state !== "idle";
-  const { t } = useI18n();
-
-  const [editHistory, setEditHistory] = useState<EditHistorySettings>(settings.editHistory);
-  const [pruning, setPruning] = useState(false);
-  const [pruneMsg, setPruneMsg] = useState<string | null>(null);
-  const [stats, setStats] = useState<Record<string, unknown> | null>(null);
-  const [loadingStats, setLoadingStats] = useState(false);
-
-  const handlePrune = useCallback(async () => {
-    setPruning(true);
-    setPruneMsg(null);
-    try {
-      const res = await fetch("/api/settings/edit-history-prune", { method: "POST" });
-      const data = await res.json();
-      setPruneMsg(data.message || (res.ok ? "Prune complete." : "Prune failed."));
-    } catch (err) {
-      setPruneMsg(err instanceof Error ? err.message : "Prune error.");
-    } finally {
-      setPruning(false);
-    }
-  }, []);
-
-  const handleStats = useCallback(async () => {
-    setLoadingStats(true);
-    try {
-      const res = await fetch("/api/settings/edit-history-stats");
-      const data = await res.json();
-      setStats(data);
-    } catch {
-      setStats({ error: "Failed to load stats." });
-    } finally {
-      setLoadingStats(false);
-    }
-  }, []);
-
-  const handleSubmit = useCallback(() => {
-    const fd = new FormData();
-    fd.set("_action", "saveEditHistory");
-    fd.set("editHistory", JSON.stringify(editHistory));
-    fetcher.submit(fd, { method: "post" });
-  }, [fetcher, editHistory]);
-
-  return (
-    <SectionCard>
-      <StatusBanner fetcher={fetcher} />
-
-      {/* Max age */}
-      <div className="mb-6">
-        <Label htmlFor="maxAgeInDays">{t("settings.editHistory.maxAge")}</Label>
-        <input
-          id="maxAgeInDays"
-          type="number"
-          min={1}
-          value={editHistory.retention.maxAgeInDays}
-          onChange={(e) =>
-            setEditHistory((p) => ({
-              ...p,
-              retention: { ...p.retention, maxAgeInDays: Math.max(1, Number(e.target.value) || 1) },
-            }))
-          }
-          className={inputClass + " max-w-[120px]"}
-        />
-      </div>
-
-      {/* Max entries */}
-      <div className="mb-6">
-        <Label htmlFor="maxEntriesPerFile">{t("settings.editHistory.maxEntries")}</Label>
-        <input
-          id="maxEntriesPerFile"
-          type="number"
-          min={1}
-          value={editHistory.retention.maxEntriesPerFile}
-          onChange={(e) =>
-            setEditHistory((p) => ({
-              ...p,
-              retention: {
-                ...p.retention,
-                maxEntriesPerFile: Math.max(1, Number(e.target.value) || 1),
-              },
-            }))
-          }
-          className={inputClass + " max-w-[120px]"}
-        />
-      </div>
-
-      {/* Context lines */}
-      <div className="mb-6">
-        <Label htmlFor="contextLines">{t("settings.editHistory.contextLines")}</Label>
-        <input
-          id="contextLines"
-          type="number"
-          min={0}
-          max={10}
-          value={editHistory.diff.contextLines}
-          onChange={(e) =>
-            setEditHistory((p) => ({
-              ...p,
-              diff: { ...p.diff, contextLines: Math.min(10, Math.max(0, Number(e.target.value) || 0)) },
-            }))
-          }
-          className={inputClass + " max-w-[120px]"}
-        />
-      </div>
-
-      {/* Prune & Stats */}
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          disabled={pruning}
-          onClick={handlePrune}
-          className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm disabled:opacity-50"
-        >
-          <Scissors size={14} className={pruning ? "animate-pulse" : ""} />
-          {t("settings.editHistory.prune")}
-        </button>
-        <button
-          type="button"
-          disabled={loadingStats}
-          onClick={handleStats}
-          className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm disabled:opacity-50"
-        >
-          <BarChart3 size={14} />
-          {t("settings.editHistory.stats")}
-        </button>
-        {pruneMsg && <span className="text-xs text-gray-500 dark:text-gray-400">{pruneMsg}</span>}
-      </div>
-
-      {/* Stats display */}
-      {stats && (
-        <div className="mb-6 p-3 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50">
-          <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">
-            {JSON.stringify(stats, null, 2)}
-          </pre>
-        </div>
-      )}
-
-      <button
-        type="button"
-        disabled={loading}
-        onClick={handleSubmit}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
-      >
-        {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-        {t("settings.editHistory.save")}
-      </button>
-    </SectionCard>
-  );
-}

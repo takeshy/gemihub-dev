@@ -30,12 +30,16 @@ export interface ChatOverrides {
 interface ChatPanelProps {
   settings: UserSettings;
   hasApiKey: boolean;
+  hasEncryptedApiKey?: boolean;
+  onNeedUnlock?: () => void;
   slashCommands?: SlashCommand[];
 }
 
 export function ChatPanel({
   settings,
   hasApiKey,
+  hasEncryptedApiKey = false,
+  onNeedUnlock,
   slashCommands = [],
 }: ChatPanelProps) {
   const { t } = useI18n();
@@ -195,7 +199,12 @@ export function ChatPanel({
   // ---- Send message ----
   const handleSend = useCallback(
     async (content: string, attachments?: Attachment[], overrides?: ChatOverrides) => {
-      if (!hasApiKey) return;
+      if (!hasApiKey) {
+        if (hasEncryptedApiKey && onNeedUnlock) {
+          onNeedUnlock();
+        }
+        return;
+      }
 
       // Apply overrides from slash commands
       const effectiveModel = overrides?.model || selectedModel;
@@ -428,6 +437,8 @@ export function ChatPanel({
     },
     [
       hasApiKey,
+      hasEncryptedApiKey,
+      onNeedUnlock,
       messages,
       selectedModel,
       selectedRagSetting,

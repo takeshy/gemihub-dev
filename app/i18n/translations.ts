@@ -40,9 +40,6 @@ export interface TranslationStrings {
   "settings.tab.general": string;
   "settings.tab.mcp": string;
   "settings.tab.rag": string;
-  "settings.tab.encryption": string;
-  "settings.tab.editHistory": string;
-
   // General tab
   "settings.general.apiKey": string;
   "settings.general.apiKeyPlaceholder": string;
@@ -83,27 +80,41 @@ export interface TranslationStrings {
   "settings.rag.settings": string;
   "settings.rag.save": string;
 
-  // Encryption tab
-  "settings.encryption.setup": string;
-  "settings.encryption.setupDescription": string;
-  "settings.encryption.password": string;
-  "settings.encryption.confirmPassword": string;
-  "settings.encryption.generateKeys": string;
-  "settings.encryption.configured": string;
+  // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": string;
   "settings.encryption.encryptWorkflow": string;
   "settings.encryption.reset": string;
   "settings.encryption.resetWarning": string;
   "settings.encryption.confirmReset": string;
-  "settings.encryption.save": string;
 
-  // Edit History tab
-  "settings.editHistory.maxAge": string;
-  "settings.editHistory.maxEntries": string;
-  "settings.editHistory.contextLines": string;
+  // Password / API Key encryption
+  "settings.general.password": string;
+  "settings.general.confirmPassword": string;
+  "settings.general.currentPassword": string;
+  "settings.general.newPassword": string;
+  "settings.general.changePassword": string;
+  "settings.general.encryptionSection": string;
+  "settings.general.passwordRequired": string;
+  "settings.general.wrongCurrentPassword": string;
+  "settings.general.passwordMismatch": string;
+  "settings.general.passwordMinLength": string;
+  "settings.general.apiKeyPasswordSection": string;
+  "settings.general.configured": string;
+
+  // Unlock dialog
+  "unlock.title": string;
+  "unlock.description": string;
+  "unlock.submit": string;
+  "unlock.error": string;
+
+  // Edit History (in Sync tab)
+  "settings.editHistory.sectionTitle": string;
   "settings.editHistory.prune": string;
+  "settings.editHistory.pruneLabel": string;
+  "settings.editHistory.pruneDescription": string;
   "settings.editHistory.stats": string;
-  "settings.editHistory.save": string;
+  "settings.editHistory.statsLabel": string;
+  "settings.editHistory.statsDescription": string;
 
   // History Modal / Context menu
   "editHistory.title": string;
@@ -134,12 +145,14 @@ export interface TranslationStrings {
   "settings.sync.status": string;
   "settings.sync.lastUpdatedAt": string;
   "settings.sync.notSynced": string;
+  "settings.sync.dataManagement": string;
   "settings.sync.excludePatterns": string;
   "settings.sync.excludePatternsDescription": string;
   "settings.sync.conflictResolution": string;
   "settings.sync.conflictFolder": string;
   "settings.sync.clearConflicts": string;
   "settings.sync.clearConflictsConfirm": string;
+  "settings.sync.clearConflictsDescription": string;
   "settings.sync.conflictsCleared": string;
   "settings.sync.fullSyncOps": string;
   "settings.sync.fullPush": string;
@@ -151,12 +164,15 @@ export interface TranslationStrings {
   "settings.sync.tempFiles": string;
   "settings.sync.manageTempFiles": string;
   "settings.sync.untrackedFiles": string;
+  "settings.sync.untrackedDescription": string;
   "settings.sync.detectUntracked": string;
   "settings.sync.noUntracked": string;
   "settings.sync.deleteSelected": string;
   "settings.sync.restoreSelected": string;
   "settings.sync.save": string;
   "settings.sync.pushRejected": string;
+  "settings.sync.dangerZone": string;
+  "settings.sync.dangerZoneDescription": string;
 
   // Temp diff modal
   "tempDiff.title": string;
@@ -200,7 +216,6 @@ export interface TranslationStrings {
   "settings.commands.update": string;
   "settings.commands.edit": string;
   "settings.commands.delete": string;
-  "settings.commands.save": string;
 }
 
 const en: TranslationStrings = {
@@ -241,8 +256,6 @@ const en: TranslationStrings = {
   "settings.tab.general": "General",
   "settings.tab.mcp": "MCP Servers",
   "settings.tab.rag": "RAG",
-  "settings.tab.encryption": "Encryption",
-  "settings.tab.editHistory": "Edit History",
 
   // General tab
   "settings.general.apiKey": "Gemini API Key",
@@ -284,27 +297,41 @@ const en: TranslationStrings = {
   "settings.rag.settings": "RAG Settings",
   "settings.rag.save": "Save RAG Settings",
 
-  // Encryption tab
-  "settings.encryption.setup": "Set Up Encryption",
-  "settings.encryption.setupDescription": "Create a password to generate encryption keys. This password cannot be recovered.",
-  "settings.encryption.password": "Password",
-  "settings.encryption.confirmPassword": "Confirm Password",
-  "settings.encryption.generateKeys": "Generate Keys",
-  "settings.encryption.configured": "Encryption configured.",
+  // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "Encrypt Chat History",
   "settings.encryption.encryptWorkflow": "Encrypt Workflow History",
   "settings.encryption.reset": "Reset encryption keys...",
   "settings.encryption.resetWarning": "This will remove all encryption keys. Encrypted data will become unreadable. Are you sure?",
   "settings.encryption.confirmReset": "Confirm Reset",
-  "settings.encryption.save": "Save Encryption Settings",
 
-  // Edit History tab
-  "settings.editHistory.maxAge": "Max Age (days)",
-  "settings.editHistory.maxEntries": "Max Entries Per File",
-  "settings.editHistory.contextLines": "Context Lines (0-10)",
+  // Password / API Key encryption
+  "settings.general.password": "Password",
+  "settings.general.confirmPassword": "Confirm Password",
+  "settings.general.currentPassword": "Current Password",
+  "settings.general.newPassword": "New Password",
+  "settings.general.changePassword": "Change Password",
+  "settings.general.encryptionSection": "File Encryption",
+  "settings.general.passwordRequired": "Password is required to save API key",
+  "settings.general.wrongCurrentPassword": "Current password is incorrect",
+  "settings.general.passwordMismatch": "Passwords do not match",
+  "settings.general.passwordMinLength": "Password must be at least 8 characters",
+  "settings.general.apiKeyPasswordSection": "API Key & Password",
+  "settings.general.configured": "API Key & Encryption configured.",
+
+  // Unlock dialog
+  "unlock.title": "Enter Password",
+  "unlock.description": "Enter your password to decrypt the API key.",
+  "unlock.submit": "Unlock",
+  "unlock.error": "Incorrect password",
+
+  // Edit History (in Sync tab)
+  "settings.editHistory.sectionTitle": "Edit History",
   "settings.editHistory.prune": "Prune",
+  "settings.editHistory.pruneLabel": "Prune Old Entries",
+  "settings.editHistory.pruneDescription": "Remove old edit history entries to free up storage.",
   "settings.editHistory.stats": "Stats",
-  "settings.editHistory.save": "Save Edit History Settings",
+  "settings.editHistory.statsLabel": "Storage Statistics",
+  "settings.editHistory.statsDescription": "View edit history storage usage and entry counts.",
 
   // History Modal / Context menu
   "editHistory.title": "History",
@@ -335,29 +362,34 @@ const en: TranslationStrings = {
   "settings.sync.status": "Sync Status",
   "settings.sync.lastUpdatedAt": "Last updated at",
   "settings.sync.notSynced": "Not synced yet",
+  "settings.sync.dataManagement": "Data Management",
   "settings.sync.excludePatterns": "Exclude Patterns",
   "settings.sync.excludePatternsDescription": "Files matching these regex patterns will be excluded from sync (one per line).",
   "settings.sync.conflictResolution": "Conflict Resolution",
   "settings.sync.conflictFolder": "Conflict Folder Name",
   "settings.sync.clearConflicts": "Clear Conflict Files",
   "settings.sync.clearConflictsConfirm": "Delete all files in the conflict folder?",
+  "settings.sync.clearConflictsDescription": "Delete all conflict backup files from Drive.",
   "settings.sync.conflictsCleared": "Deleted {count} conflict file(s).",
   "settings.sync.fullSyncOps": "Full Sync Operations",
   "settings.sync.fullPush": "Full Push",
-  "settings.sync.fullPushDescription": "Upload all cached files to Google Drive (overwrites remote)",
+  "settings.sync.fullPushDescription": "Upload all cached files to Google Drive (overwrites remote).",
   "settings.sync.fullPushConfirm": "This will overwrite all remote files with local cache. Continue?",
   "settings.sync.fullPull": "Full Pull",
-  "settings.sync.fullPullDescription": "Download all files from Google Drive (overwrites local cache)",
+  "settings.sync.fullPullDescription": "Download all files from Google Drive (overwrites local cache).",
   "settings.sync.fullPullConfirm": "This will overwrite all local cache with remote files. Continue?",
   "settings.sync.tempFiles": "Temporary Files",
   "settings.sync.manageTempFiles": "Manage Temp Files",
   "settings.sync.untrackedFiles": "Untracked Remote Files",
-  "settings.sync.detectUntracked": "Detect Untracked Files",
+  "settings.sync.untrackedDescription": "Find remote files not tracked in local cache.",
+  "settings.sync.detectUntracked": "Detect",
   "settings.sync.noUntracked": "No untracked files found.",
   "settings.sync.deleteSelected": "Delete Selected",
   "settings.sync.restoreSelected": "Restore Selected",
   "settings.sync.save": "Save Sync Settings",
   "settings.sync.pushRejected": "Remote is newer. Pull first.",
+  "settings.sync.dangerZone": "Danger Zone",
+  "settings.sync.dangerZoneDescription": "These operations may cause data loss and cannot be undone.",
 
   // Temp diff modal
   "tempDiff.title": "Temp File Comparison",
@@ -401,7 +433,6 @@ const en: TranslationStrings = {
   "settings.commands.update": "Update",
   "settings.commands.edit": "Edit",
   "settings.commands.delete": "Delete",
-  "settings.commands.save": "Save Command Settings",
 };
 
 const ja: TranslationStrings = {
@@ -442,8 +473,6 @@ const ja: TranslationStrings = {
   "settings.tab.general": "一般",
   "settings.tab.mcp": "MCPサーバー",
   "settings.tab.rag": "RAG",
-  "settings.tab.encryption": "暗号化",
-  "settings.tab.editHistory": "編集履歴",
 
   // General tab
   "settings.general.apiKey": "Gemini APIキー",
@@ -485,27 +514,41 @@ const ja: TranslationStrings = {
   "settings.rag.settings": "RAG設定",
   "settings.rag.save": "RAG設定を保存",
 
-  // Encryption tab
-  "settings.encryption.setup": "暗号化のセットアップ",
-  "settings.encryption.setupDescription": "暗号化キーを生成するためのパスワードを作成してください。このパスワードは復元できません。",
-  "settings.encryption.password": "パスワード",
-  "settings.encryption.confirmPassword": "パスワード確認",
-  "settings.encryption.generateKeys": "キーを生成",
-  "settings.encryption.configured": "暗号化が設定されています。",
+  // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "チャット履歴を暗号化",
   "settings.encryption.encryptWorkflow": "ワークフロー履歴を暗号化",
   "settings.encryption.reset": "暗号化キーをリセット...",
   "settings.encryption.resetWarning": "すべての暗号化キーが削除されます。暗号化されたデータは読み取れなくなります。よろしいですか？",
   "settings.encryption.confirmReset": "リセットを確認",
-  "settings.encryption.save": "暗号化設定を保存",
 
-  // Edit History tab
-  "settings.editHistory.maxAge": "最大保存日数",
-  "settings.editHistory.maxEntries": "ファイルごとの最大エントリ数",
-  "settings.editHistory.contextLines": "コンテキスト行数 (0-10)",
+  // Password / API Key encryption
+  "settings.general.password": "パスワード",
+  "settings.general.confirmPassword": "パスワード確認",
+  "settings.general.currentPassword": "現在のパスワード",
+  "settings.general.newPassword": "新しいパスワード",
+  "settings.general.changePassword": "パスワード変更",
+  "settings.general.encryptionSection": "ファイル暗号化",
+  "settings.general.passwordRequired": "APIキーの保存にはパスワードが必要です",
+  "settings.general.wrongCurrentPassword": "現在のパスワードが正しくありません",
+  "settings.general.passwordMismatch": "パスワードが一致しません",
+  "settings.general.passwordMinLength": "パスワードは8文字以上である必要があります",
+  "settings.general.apiKeyPasswordSection": "APIキー & パスワード",
+  "settings.general.configured": "APIキーと暗号化が設定されています。",
+
+  // Unlock dialog
+  "unlock.title": "パスワードを入力",
+  "unlock.description": "APIキーを復号するためにパスワードを入力してください。",
+  "unlock.submit": "ロック解除",
+  "unlock.error": "パスワードが正しくありません",
+
+  // Edit History (in Sync tab)
+  "settings.editHistory.sectionTitle": "編集履歴",
   "settings.editHistory.prune": "整理",
+  "settings.editHistory.pruneLabel": "古いエントリを整理",
+  "settings.editHistory.pruneDescription": "古い編集履歴を削除してストレージを解放します。",
   "settings.editHistory.stats": "統計",
-  "settings.editHistory.save": "編集履歴設定を保存",
+  "settings.editHistory.statsLabel": "ストレージ統計",
+  "settings.editHistory.statsDescription": "編集履歴のストレージ使用量とエントリ数を表示します。",
 
   // History Modal / Context menu
   "editHistory.title": "履歴",
@@ -536,29 +579,34 @@ const ja: TranslationStrings = {
   "settings.sync.status": "同期ステータス",
   "settings.sync.lastUpdatedAt": "最終更新日時",
   "settings.sync.notSynced": "未同期",
+  "settings.sync.dataManagement": "データ管理",
   "settings.sync.excludePatterns": "除外パターン",
   "settings.sync.excludePatternsDescription": "これらの正規表現パターンに一致するファイルは同期から除外されます（1行に1パターン）。",
   "settings.sync.conflictResolution": "コンフリクト解決",
   "settings.sync.conflictFolder": "コンフリクトフォルダ名",
   "settings.sync.clearConflicts": "コンフリクトファイルを削除",
   "settings.sync.clearConflictsConfirm": "コンフリクトフォルダ内のすべてのファイルを削除しますか？",
+  "settings.sync.clearConflictsDescription": "Driveのコンフリクトバックアップファイルをすべて削除します。",
   "settings.sync.conflictsCleared": "{count}件のコンフリクトファイルを削除しました。",
   "settings.sync.fullSyncOps": "完全同期操作",
   "settings.sync.fullPush": "完全Push",
-  "settings.sync.fullPushDescription": "キャッシュされたすべてのファイルをGoogle Driveにアップロード（リモートを上書き）",
+  "settings.sync.fullPushDescription": "キャッシュされたすべてのファイルをGoogle Driveにアップロード（リモートを上書き）。",
   "settings.sync.fullPushConfirm": "すべてのリモートファイルをローカルキャッシュで上書きします。続行しますか？",
   "settings.sync.fullPull": "完全Pull",
-  "settings.sync.fullPullDescription": "Google Driveからすべてのファイルをダウンロード（ローカルキャッシュを上書き）",
+  "settings.sync.fullPullDescription": "Google Driveからすべてのファイルをダウンロード（ローカルキャッシュを上書き）。",
   "settings.sync.fullPullConfirm": "すべてのローカルキャッシュをリモートファイルで上書きします。続行しますか？",
   "settings.sync.tempFiles": "一時ファイル",
   "settings.sync.manageTempFiles": "一時ファイルを管理",
   "settings.sync.untrackedFiles": "未追跡リモートファイル",
-  "settings.sync.detectUntracked": "未追跡ファイルを検出",
+  "settings.sync.untrackedDescription": "ローカルキャッシュで追跡されていないリモートファイルを検出します。",
+  "settings.sync.detectUntracked": "検出",
   "settings.sync.noUntracked": "未追跡ファイルは見つかりませんでした。",
   "settings.sync.deleteSelected": "選択を削除",
   "settings.sync.restoreSelected": "選択を復元",
   "settings.sync.save": "同期設定を保存",
   "settings.sync.pushRejected": "リモートが新しいです。先にPullしてください。",
+  "settings.sync.dangerZone": "危険な操作",
+  "settings.sync.dangerZoneDescription": "これらの操作はデータ損失を引き起こす可能性があり、元に戻せません。",
 
   // Temp diff modal
   "tempDiff.title": "一時ファイルの比較",
@@ -602,7 +650,6 @@ const ja: TranslationStrings = {
   "settings.commands.update": "更新",
   "settings.commands.edit": "編集",
   "settings.commands.delete": "削除",
-  "settings.commands.save": "コマンド設定を保存",
 };
 
 const translations: Record<Language, TranslationStrings> = { en, ja };

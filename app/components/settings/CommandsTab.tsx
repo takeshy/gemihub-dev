@@ -89,6 +89,13 @@ export function CommandsTab({ settings }: CommandsTabProps) {
 
   const data = fetcher.data as { success?: boolean; message?: string } | undefined;
 
+  const submitCommands = useCallback((updatedCommands: SlashCommand[]) => {
+    const fd = new FormData();
+    fd.set("_action", "saveCommands");
+    fd.set("slashCommands", JSON.stringify(updatedCommands));
+    fetcher.submit(fd, { method: "post" });
+  }, [fetcher]);
+
   const startEdit = useCallback((cmd: SlashCommand) => {
     setEditingId(cmd.id);
     setForm(commandToForm(cmd));
@@ -109,27 +116,31 @@ export function CommandsTab({ settings }: CommandsTabProps) {
 
   const saveEdit = useCallback(() => {
     if (!form.name.trim()) return;
+    let updatedCommands: SlashCommand[];
     if (editingId) {
-      setCommands((prev) =>
-        prev.map((cmd) => (cmd.id === editingId ? formToCommand(form, editingId) : cmd))
+      updatedCommands = commands.map((cmd) =>
+        cmd.id === editingId ? formToCommand(form, editingId) : cmd
       );
     } else {
-      setCommands((prev) => [...prev, formToCommand(form)]);
+      updatedCommands = [...commands, formToCommand(form)];
     }
-    cancelEdit();
-  }, [form, editingId, cancelEdit]);
+    setCommands(updatedCommands);
+    submitCommands(updatedCommands);
+    setEditingId(null);
+    setAdding(false);
+    setForm({ ...emptyForm });
+  }, [form, editingId, commands, submitCommands]);
 
   const removeCommand = useCallback((id: string) => {
-    setCommands((prev) => prev.filter((cmd) => cmd.id !== id));
-    if (editingId === id) cancelEdit();
-  }, [editingId, cancelEdit]);
-
-  const handleSubmit = useCallback(() => {
-    const fd = new FormData();
-    fd.set("_action", "saveCommands");
-    fd.set("slashCommands", JSON.stringify(commands));
-    fetcher.submit(fd, { method: "post" });
-  }, [fetcher, commands]);
+    const updatedCommands = commands.filter((cmd) => cmd.id !== id);
+    setCommands(updatedCommands);
+    submitCommands(updatedCommands);
+    if (editingId === id) {
+      setEditingId(null);
+      setAdding(false);
+      setForm({ ...emptyForm });
+    }
+  }, [commands, editingId, submitCommands]);
 
   const toggleMcpServer = useCallback((serverName: string) => {
     setForm((prev) => {
@@ -193,7 +204,8 @@ export function CommandsTab({ settings }: CommandsTabProps) {
               <button
                 type="button"
                 onClick={() => removeCommand(cmd.id)}
-                className="p-1.5 text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                disabled={loading}
+                className="p-1.5 text-gray-500 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
                 title={t("settings.commands.delete")}
               >
                 <Trash2 size={ICON.LG} />
@@ -314,8 +326,10 @@ export function CommandsTab({ settings }: CommandsTabProps) {
             <button
               type="button"
               onClick={saveEdit}
-              className="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+              disabled={loading || !form.name.trim()}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
             >
+              {loading ? <Loader2 size={ICON.LG} className="animate-spin" /> : <Save size={ICON.LG} />}
               {editingId ? t("settings.commands.update") : t("settings.commands.add")}
             </button>
             <button
@@ -337,18 +351,6 @@ export function CommandsTab({ settings }: CommandsTabProps) {
           {t("settings.commands.addCommand")}
         </button>
       )}
-
-      <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <button
-          type="button"
-          disabled={loading}
-          onClick={handleSubmit}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
-        >
-          {loading ? <Loader2 size={ICON.LG} className="animate-spin" /> : <Save size={ICON.LG} />}
-          {t("settings.commands.save")}
-        </button>
-      </div>
     </div>
   );
 }
