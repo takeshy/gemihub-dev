@@ -118,6 +118,30 @@ export interface ExecutionRecordItem {
   stepCount: number;
 }
 
+// Workflow request (AI generation) record
+export interface WorkflowRequestRecord {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  createdAt: string;
+  description: string;
+  thinking: string;
+  model: string;
+  mode: "create" | "modify";
+  history?: { role: "user" | "model"; text: string }[];
+}
+
+export interface WorkflowRequestRecordItem {
+  id: string;
+  fileId: string;
+  workflowId: string;
+  workflowName: string;
+  createdAt: string;
+  description: string;
+  model: string;
+  mode: "create" | "modify";
+}
+
 // Workflow input for execution
 export interface WorkflowInput {
   variables: Map<string, string | number>;

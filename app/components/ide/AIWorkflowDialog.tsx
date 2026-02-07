@@ -12,12 +12,20 @@ import type { ModelType, ApiPlan } from "~/types/settings";
 import { getAvailableModels } from "~/types/settings";
 import { WorkflowPreviewModal } from "./WorkflowPreviewModal";
 
+export interface AIWorkflowMeta {
+  description: string;
+  thinking: string;
+  model: string;
+  mode: "create" | "modify";
+  history: { role: "user" | "model"; text: string }[];
+}
+
 interface AIWorkflowDialogProps {
   mode: "create" | "modify";
   currentYaml?: string;
   currentName?: string;
   apiPlan: ApiPlan;
-  onAccept: (yaml: string, name: string) => void;
+  onAccept: (yaml: string, name: string, meta: AIWorkflowMeta) => void;
   onClose: () => void;
 }
 
@@ -192,8 +200,14 @@ export function AIWorkflowDialog({
 
   const handleAcceptPreview = useCallback(() => {
     const workflowName = mode === "create" ? name.trim() : (currentName || "workflow");
-    onAccept(generatedText, workflowName);
-  }, [generatedText, name, currentName, mode, onAccept]);
+    onAccept(generatedText, workflowName, {
+      description: lastDescription,
+      thinking,
+      model: selectedModel,
+      mode,
+      history,
+    });
+  }, [generatedText, name, currentName, mode, onAccept, lastDescription, thinking, selectedModel, history]);
 
   const handleRejectPreview = useCallback(() => {
     // Go back to input for refinement, keep history

@@ -18,7 +18,7 @@ import { MainViewer } from "~/components/ide/MainViewer";
 import { ChatPanel } from "~/components/ide/ChatPanel";
 import { WorkflowPropsPanel } from "~/components/ide/WorkflowPropsPanel";
 import { ConflictDialog } from "~/components/ide/ConflictDialog";
-import { AIWorkflowDialog } from "~/components/ide/AIWorkflowDialog";
+import { AIWorkflowDialog, type AIWorkflowMeta } from "~/components/ide/AIWorkflowDialog";
 import { useSync } from "~/hooks/useSync";
 
 // ---------------------------------------------------------------------------
@@ -226,13 +226,17 @@ function IDELayout({
 
   // ---- AI workflow accept handler ----
   const handleAIAccept = useCallback(
-    async (yamlContent: string, workflowName: string) => {
+    async (yamlContent: string, workflowName: string, meta: AIWorkflowMeta) => {
       const dialogState = aiDialog;
       setAiDialog(null);
+
+      let workflowId = "";
+      let finalName = workflowName;
 
       try {
         if (dialogState?.mode === "modify" && dialogState.currentFileId) {
           // Update existing workflow
+          workflowId = dialogState.currentFileId;
           const res = await fetch("/api/drive/files", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -246,10 +250,11 @@ function IDELayout({
             handleWorkflowChanged();
           }
         } else {
-          // Create new workflow file
-          const fileName = workflowName.endsWith(".yaml")
+          // Create new workflow file under workflows/ folder
+          const baseName = workflowName.endsWith(".yaml")
             ? workflowName
             : `${workflowName}.yaml`;
+          const fileName = `workflows/${baseName}`;
           const res = await fetch("/api/drive/files", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -261,8 +266,33 @@ function IDELayout({
           });
           if (res.ok) {
             const data = await res.json();
+            workflowId = data.file.id;
+            finalName = data.file.name;
             handleSelectFile(data.file.id, data.file.name, "text/yaml");
           }
+        }
+
+        // Save request record (fire-and-forget)
+        if (workflowId) {
+          const recordId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          fetch("/api/workflow/request-history", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "save",
+              record: {
+                id: recordId,
+                workflowId,
+                workflowName: finalName,
+                createdAt: new Date().toISOString(),
+                description: meta.description,
+                thinking: meta.thinking,
+                model: meta.model,
+                mode: meta.mode,
+                history: meta.history.length > 0 ? meta.history : undefined,
+              },
+            }),
+          }).catch(() => {});
         }
       } catch {
         // ignore
