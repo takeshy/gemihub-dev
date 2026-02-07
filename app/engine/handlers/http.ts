@@ -79,8 +79,8 @@ export async function handleHttpNode(
   _serviceContext?: ServiceContext
 ): Promise<void> {
   const url = replaceVariables(node.properties["url"] || "", context);
-  const method = (node.properties["method"] || "GET").toUpperCase();
-  const contentType = node.properties["contentType"] || "json";
+  const method = replaceVariables(node.properties["method"] || "GET", context).toUpperCase();
+  const contentType = replaceVariables(node.properties["contentType"] || "json", context);
 
   if (!url) throw new Error("HTTP node missing 'url' property");
 
@@ -144,7 +144,7 @@ export async function handleHttpNode(
   const saveStatus = node.properties["saveStatus"];
   if (saveStatus) context.variables.set(saveStatus, response.status);
 
-  if (response.status >= 400 && node.properties["throwOnError"] === "true") {
+  if (response.status >= 400 && replaceVariables(node.properties["throwOnError"] || "", context) === "true") {
     const responseText = await response.text();
     throw new Error(`HTTP ${response.status} ${method} ${url}: ${responseText}`);
   }

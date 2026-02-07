@@ -18,7 +18,7 @@ export async function handleCommandNode(
   const prompt = replaceVariables(promptTemplate, context);
   const originalPrompt = prompt;
 
-  const modelName = node.properties["model"] || "gemini-2.5-flash";
+  const modelName = replaceVariables(node.properties["model"] || "gemini-2.5-flash", context);
   const apiKey = serviceContext.geminiApiKey;
 
   if (!apiKey) throw new Error("Gemini API key not configured");

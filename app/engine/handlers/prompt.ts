@@ -125,6 +125,22 @@ export async function handleDriveFilePickerNode(
 
   if (directPath) {
     if (savePathTo) context.variables.set(savePathTo, directPath);
+    if (saveTo) {
+      const basename = directPath.includes("/") ? directPath.split("/").pop()! : directPath;
+      const dotIdx = basename.lastIndexOf(".");
+      const name = dotIdx > 0 ? basename.substring(0, dotIdx) : basename;
+      const extension = dotIdx > 0 ? basename.substring(dotIdx + 1) : "";
+      context.variables.set(saveTo, JSON.stringify({
+        id: "",
+        path: directPath,
+        basename,
+        name,
+        extension,
+        mimeType: "application/octet-stream",
+        contentType: "text",
+        data: "",
+      }));
+    }
     return;
   }
 

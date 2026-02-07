@@ -295,8 +295,8 @@ export async function executeWorkflow(
           const previewPath = replaceVariables(node.properties["path"] || "", context);
           log(node.id, node.type, `Preview: ${previewPath}`, "info");
           await handlePreviewNode(node, context, serviceContext);
-          log(node.id, node.type, `Preview generated`, "success", { path: previewPath });
-          addHistoryStep(node.id, node.type, { path: previewPath });
+          log(node.id, node.type, `Preview generated`, "success", { path: previewPath }, previewPath);
+          addHistoryStep(node.id, node.type, { path: previewPath }, previewPath);
           const next = getNextNodes(workflow, node.id);
           for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
           break;

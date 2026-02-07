@@ -16,9 +16,12 @@ export async function handleDriveFileNode(
 
   if (!path) throw new Error("drive-file node missing 'path' property");
 
-  const fileName = path.endsWith(".md") ? path : `${path}.md`;
+  // Only append .md if path has no extension at all
+  const baseName = path.includes("/") ? path.split("/").pop()! : path;
+  const hasExtension = baseName.includes(".");
+  const fileName = hasExtension ? path : `${path}.md`;
   const accessToken = serviceContext.driveAccessToken;
-  const folderId = serviceContext.driveWorkflowsFolderId;
+  const folderId = serviceContext.driveRootFolderId;
 
   // Search for existing file
   const existingFiles = await driveService.searchFiles(
@@ -91,7 +94,7 @@ export async function handleDriveReadNode(
   }
 
   // Search by file name
-  const folderId = serviceContext.driveWorkflowsFolderId;
+  const folderId = serviceContext.driveRootFolderId;
   const files = await driveService.searchFiles(accessToken, folderId, path, false);
   let file = files.find(f => f.name === path || f.name === `${path}.md`);
 

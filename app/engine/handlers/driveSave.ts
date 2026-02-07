@@ -9,23 +9,25 @@ export async function handleDriveSaveNode(
   context: ExecutionContext,
   serviceContext: ServiceContext
 ): Promise<void> {
-  const sourceVar = node.properties["source"] || "";
+  const sourceRaw = node.properties["source"] || "";
   const path = replaceVariables(node.properties["path"] || "", context);
   const savePathTo = node.properties["savePathTo"];
 
-  if (!sourceVar) throw new Error("drive-save node missing 'source' property");
+  if (!sourceRaw) throw new Error("drive-save node missing 'source' property");
   if (!path) throw new Error("drive-save node missing 'path' property");
 
-  const sourceValue = context.variables.get(sourceVar);
+  // Resolve {{variable}} templates, then try variable lookup
+  const resolved = replaceVariables(sourceRaw, context);
+  const sourceValue = context.variables.get(resolved) ?? resolved;
   if (sourceValue === undefined) {
-    throw new Error(`Variable '${sourceVar}' not found`);
+    throw new Error(`Variable '${sourceRaw}' not found`);
   }
 
   let fileData: FileExplorerData;
   try {
     fileData = JSON.parse(String(sourceValue));
   } catch {
-    throw new Error(`Variable '${sourceVar}' does not contain valid FileExplorerData JSON`);
+    throw new Error(`Variable '${sourceRaw}' does not contain valid FileExplorerData JSON`);
   }
 
   // Determine filename
@@ -35,7 +37,7 @@ export async function handleDriveSaveNode(
   }
 
   const accessToken = serviceContext.driveAccessToken;
-  const folderId = serviceContext.driveWorkflowsFolderId;
+  const folderId = serviceContext.driveRootFolderId;
 
   // Create or update the file
   const content = fileData.contentType === "binary"
