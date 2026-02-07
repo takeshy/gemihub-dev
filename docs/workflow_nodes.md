@@ -1,0 +1,785 @@
+# Workflow Node Reference
+
+This document provides detailed specifications for all workflow node types.
+
+## Node Types Overview
+
+| Category | Nodes | Description |
+|----------|-------|-------------|
+| Variables | `variable`, `set` | Declare and update variables |
+| Control | `if`, `while`, `sleep` | Conditional branching, loops, pausing |
+| LLM | `command` | Execute prompts via Gemini API |
+| Data | `http`, `json` | HTTP requests and JSON parsing |
+| Drive | `drive-file`, `drive-read`, `drive-search`, `drive-list`, `drive-folder-list`, `drive-save` | Google Drive file operations |
+| Prompts | `prompt-value`, `dialog`, `drive-file-picker` | User input dialogs |
+| Preview | `preview` | Open file for preview |
+| Composition | `workflow` | Execute another workflow as a sub-workflow |
+| External | `mcp` | Call remote MCP servers |
+
+---
+
+## Node Reference
+
+### variable
+
+Declare and initialize a variable.
+
+```yaml
+- id: init
+  type: variable
+  name: counter
+  value: "0"
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `name` | Yes | No | Variable name |
+| `value` | Yes | Yes | Initial value |
+
+Numeric values are auto-detected: if the value parses as a number, it's stored as a number.
+
+---
+
+### set
+
+Update a variable with an expression.
+
+```yaml
+- id: increment
+  type: set
+  name: counter
+  value: "{{counter}} + 1"
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `name` | Yes | No | Variable name to update |
+| `value` | Yes | Yes | Expression to evaluate |
+
+Supports arithmetic operators: `+`, `-`, `*`, `/`, `%`. Variables are resolved first, then the result is evaluated as arithmetic if it matches the pattern `number operator number`.
+
+---
+
+### if
+
+Conditional branching.
+
+```yaml
+- id: branch
+  type: if
+  condition: "{{count}} > 10"
+  trueNext: handleMany
+  falseNext: handleFew
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `condition` | Yes | Yes | Expression with comparison operator |
+
+**Supported operators:** `==`, `!=`, `<`, `>`, `<=`, `>=`, `contains`
+
+**Edge routing:** `trueNext` / `falseNext` (defined in YAML, not as properties)
+
+The `contains` operator works with both strings and JSON arrays:
+- String: `{{text}} contains error`
+- Array: `{{dialogResult.selected}} contains Option A`
+
+---
+
+### while
+
+Loop with condition.
+
+```yaml
+- id: loop
+  type: while
+  condition: "{{counter}} < {{total}}"
+  trueNext: processItem
+  falseNext: done
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `condition` | Yes | Yes | Loop condition (same format as `if`) |
+
+**Edge routing:** `trueNext` (loop body) / `falseNext` (exit)
+
+Maximum iterations per while node: 1000 (global limit).
+
+---
+
+### sleep
+
+Pause workflow execution.
+
+```yaml
+- id: wait
+  type: sleep
+  duration: "2000"
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `duration` | Yes | Yes | Sleep duration in milliseconds |
+
+---
+
+### command
+
+Execute an LLM prompt via Gemini API.
+
+```yaml
+- id: ask
+  type: command
+  prompt: "Summarize: {{content}}"
+  model: gemini-2.5-flash
+  saveTo: summary
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `prompt` | Yes | Yes | Prompt text to send to the LLM |
+| `model` | No | No | Model name (default: `gemini-2.5-flash`) |
+| `saveTo` | No | No | Variable to store text response |
+
+---
+
+### http
+
+Make HTTP requests.
+
+```yaml
+- id: fetch
+  type: http
+  url: "https://api.example.com/data"
+  method: POST
+  contentType: json
+  headers: '{"Authorization": "Bearer {{token}}"}'
+  body: '{"query": "{{searchTerm}}"}'
+  saveTo: response
+  saveStatus: statusCode
+  throwOnError: "true"
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `url` | Yes | Yes | Request URL |
+| `method` | No | No | `GET` (default), `POST`, `PUT`, `PATCH`, `DELETE` |
+| `contentType` | No | No | `json` (default), `form-data`, `text` |
+| `headers` | No | Yes | JSON object or `Key: Value` format (one per line) |
+| `body` | No | Yes | Request body (for POST/PUT/PATCH) |
+| `saveTo` | No | No | Variable for response body |
+| `saveStatus` | No | No | Variable for HTTP status code |
+| `throwOnError` | No | No | `"true"` to throw error on 4xx/5xx responses |
+
+**Binary responses** are automatically detected and stored as FileExplorerData JSON (Base64 encoded).
+
+**form-data example:**
+```yaml
+- id: upload
+  type: http
+  url: "https://example.com/upload"
+  method: POST
+  contentType: form-data
+  body: '{"file": "{{fileData}}"}'
+  saveTo: response
+```
+
+For `form-data`:
+- FileExplorerData (from `drive-file-picker` / `drive-save`) is auto-detected and sent as binary
+- Use `fieldName:filename` syntax for text file fields (e.g., `"file:report.html": "{{htmlContent}}"`)
+
+---
+
+### json
+
+Parse a JSON string into an object for property access.
+
+```yaml
+- id: parseResponse
+  type: json
+  source: response
+  saveTo: data
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `source` | Yes | Yes | Variable name or template containing JSON string |
+| `saveTo` | Yes | No | Variable for parsed result |
+
+After parsing, access properties using dot notation: `{{data.items[0].name}}`
+
+**JSON in markdown code blocks:** Automatically extracted from `` ```json ... ``` `` fences.
+
+**Template support:** The `source` property resolves `{{variable}}` templates first, then tries variable lookup (backward compat for `source: myVar`), then uses the resolved string directly as JSON.
+
+---
+
+### drive-file
+
+Write content to a Google Drive file.
+
+```yaml
+- id: save
+  type: drive-file
+  path: "output/{{filename}}.md"
+  content: "{{result}}"
+  mode: overwrite
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `path` | Yes | Yes | File path (`.md` extension auto-appended if missing) |
+| `content` | Yes | Yes | Content to write |
+| `mode` | No | No | `overwrite` (default), `append`, `create` (skip if exists) |
+
+Edit history is automatically saved if configured in settings.
+
+---
+
+### drive-read
+
+Read content from a Google Drive file.
+
+```yaml
+- id: read
+  type: drive-read
+  path: "notes/config.md"
+  saveTo: content
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `path` | Yes | Yes | File path or Drive file ID |
+| `saveTo` | Yes | No | Variable to store file content |
+
+**Smart path resolution:**
+- If path looks like a Drive file ID (no extension, >20 chars): reads directly
+- Otherwise: searches by file name, tries with `.md` extension as fallback
+
+---
+
+### drive-search
+
+Search for files on Google Drive.
+
+```yaml
+- id: search
+  type: drive-search
+  query: "{{searchTerm}}"
+  searchContent: "true"
+  saveTo: results
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `query` | Yes | Yes | Search query string |
+| `searchContent` | No | No | `"true"` to search file contents (default: name only) |
+| `saveTo` | Yes | No | Variable for results |
+
+**Output format:**
+```json
+[
+  {"id": "abc123", "name": "notes/todo.md", "modifiedTime": "2026-01-01T00:00:00Z"}
+]
+```
+
+---
+
+### drive-list
+
+List files with filtering.
+
+```yaml
+- id: list
+  type: drive-list
+  folder: "Projects"
+  limit: "20"
+  saveTo: fileList
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `folder` | No | Yes | Virtual folder prefix (e.g., `"Projects"`) |
+| `limit` | No | No | Maximum results (default: 50) |
+| `saveTo` | Yes | No | Variable for results |
+
+**Output format:**
+```json
+{
+  "notes": [
+    {"id": "abc123", "name": "Projects/todo.md", "modifiedTime": "...", "createdTime": "..."}
+  ],
+  "count": 5,
+  "totalCount": 12,
+  "hasMore": true
+}
+```
+
+Uses sync metadata for fast listing (no per-file API calls). "Folders" are virtual — derived from path prefixes in file names.
+
+---
+
+### drive-folder-list
+
+List virtual folders.
+
+```yaml
+- id: listFolders
+  type: drive-folder-list
+  folder: "Projects"
+  saveTo: folderList
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `folder` | No | Yes | Parent virtual folder path |
+| `saveTo` | Yes | No | Variable for results |
+
+**Output format:**
+```json
+{
+  "folders": [{"name": "Active"}, {"name": "Archive"}],
+  "count": 2
+}
+```
+
+Returns only immediate subfolders (one level deep), sorted alphabetically.
+
+---
+
+### drive-save
+
+Save FileExplorerData as a file on Google Drive.
+
+```yaml
+- id: saveImage
+  type: drive-save
+  source: imageData
+  path: "images/output"
+  savePathTo: savedPath
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `source` | Yes | No | Variable name containing FileExplorerData JSON |
+| `path` | Yes | Yes | Target file path (extension auto-added from source data) |
+| `savePathTo` | No | No | Variable to store final file name |
+
+---
+
+### prompt-value
+
+Show a text input dialog.
+
+```yaml
+- id: input
+  type: prompt-value
+  title: "Enter a value"
+  default: "{{defaultText}}"
+  multiline: "true"
+  saveTo: userInput
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `title` | No | Yes | Prompt label (default: `"Input"`) |
+| `default` | No | Yes | Default value |
+| `multiline` | No | No | `"true"` for multi-line textarea |
+| `saveTo` | Yes | No | Variable to store user input |
+
+Throws error if user cancels.
+
+---
+
+### dialog
+
+Display a dialog with options, buttons, and/or text input.
+
+```yaml
+- id: ask
+  type: dialog
+  title: Select Options
+  message: "Choose items to process"
+  markdown: "true"
+  options: "Option A, Option B, Option C"
+  multiSelect: "true"
+  inputTitle: "Additional notes"
+  multiline: "true"
+  defaults: '{"input": "default text", "selected": ["Option A"]}'
+  button1: Confirm
+  button2: Cancel
+  saveTo: dialogResult
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `title` | No | Yes | Dialog title (default: `"Dialog"`) |
+| `message` | No | Yes | Message content |
+| `markdown` | No | No | `"true"` renders message as Markdown |
+| `options` | No | Yes | Comma-separated list of choices |
+| `multiSelect` | No | No | `"true"` for checkboxes, `"false"` for radio |
+| `inputTitle` | No | Yes | Label for text input field (shows input when set) |
+| `multiline` | No | No | `"true"` for multi-line textarea |
+| `defaults` | No | Yes | JSON with `input` and `selected` initial values |
+| `button1` | No | Yes | Primary button label (default: `"OK"`) |
+| `button2` | No | Yes | Secondary button label |
+| `saveTo` | No | No | Variable for result |
+
+**Result format** (`saveTo` variable):
+```json
+{
+  "button": "Confirm",
+  "selected": ["Option A", "Option B"],
+  "input": "some text"
+}
+```
+
+> **Important:** When checking selected value in an `if` condition:
+> - Single option: `{{dialogResult.selected[0]}} == Option A`
+> - Array contains (multiSelect): `{{dialogResult.selected}} contains Option A`
+
+---
+
+### drive-file-picker
+
+Show a file picker dialog to select a Drive file.
+
+```yaml
+- id: selectFile
+  type: drive-file-picker
+  title: "Select a file"
+  extensions: "pdf,doc,md"
+  saveTo: fileData
+  savePathTo: filePath
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `title` | No | Yes | Picker dialog title (default: `"Select a file"`) |
+| `extensions` | No | No | Comma-separated allowed extensions |
+| `path` | No | Yes | Direct file path (bypasses picker when set) |
+| `saveTo` | No | No | Variable for FileExplorerData JSON |
+| `savePathTo` | No | No | Variable for file name/path |
+
+At least one of `saveTo` or `savePathTo` is required.
+
+**FileExplorerData format:**
+```json
+{
+  "id": "abc123",
+  "path": "notes/file.md",
+  "basename": "file.md",
+  "name": "file",
+  "extension": "md",
+  "mimeType": "application/octet-stream",
+  "contentType": "text",
+  "data": ""
+}
+```
+
+> **Note:** The picker returns metadata only. The `data` field is empty. Use `drive-read` to fetch file content.
+
+---
+
+### preview
+
+Store a file path for client-side preview.
+
+```yaml
+- id: show
+  type: preview
+  path: "{{outputPath}}"
+  saveTo: previewPath
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `path` | Yes | Yes | File path to preview |
+| `saveTo` | No | No | Variable to store the path |
+
+---
+
+### workflow
+
+Execute another workflow as a sub-workflow.
+
+```yaml
+- id: runSub
+  type: workflow
+  path: "workflows/summarize.yaml"
+  name: "Summarizer"
+  input: '{"text": "{{content}}"}'
+  output: '{"result": "summary"}'
+  prefix: "sub_"
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `path` | Yes | Yes | Path to workflow file |
+| `name` | No | Yes | Workflow name (for multi-workflow files) |
+| `input` | No | Yes | JSON or `key=value` mapping for sub-workflow input |
+| `output` | No | Yes | JSON or `key=value` mapping for output variables |
+| `prefix` | No | No | Prefix for all output variables (when `output` not specified) |
+
+**Input mapping:** `'{"subVar": "{{parentValue}}"}'` or `subVar={{parentValue}},x=hello`
+
+**Output mapping:** `'{"parentVar": "subResultVar"}'` or `parentVar=subResultVar`
+
+If neither `output` nor `prefix` is specified, all sub-workflow variables are copied directly.
+
+---
+
+### mcp
+
+Call a remote MCP (Model Context Protocol) server tool via HTTP.
+
+```yaml
+- id: search
+  type: mcp
+  url: "https://mcp.example.com/v1"
+  tool: "web_search"
+  args: '{"query": "{{searchTerm:json}}"}'
+  headers: '{"Authorization": "Bearer {{apiKey}}"}'
+  saveTo: searchResults
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `url` | Yes | Yes | MCP server endpoint URL |
+| `tool` | Yes | Yes | Tool name to call |
+| `args` | No | Yes | JSON object with tool arguments |
+| `headers` | No | Yes | JSON object with HTTP headers |
+| `saveTo` | No | No | Variable for result |
+
+Uses JSON-RPC 2.0 protocol (`tools/call` method). Text content parts from the response are joined with newlines.
+
+---
+
+## Variable Expansion
+
+Use `{{variable}}` syntax to reference variables:
+
+```yaml
+# Basic
+path: "{{folder}}/{{filename}}.md"
+
+# Object/Array access
+url: "https://api.example.com?id={{data.id}}"
+content: "{{items[0].name}}"
+
+# Dynamic index (for loops)
+path: "{{parsed.notes[counter].path}}"
+```
+
+### JSON Escape Modifier
+
+Use `{{variable:json}}` to escape the value for embedding in JSON strings. This properly escapes newlines, quotes, and other special characters.
+
+```yaml
+# Without :json - breaks if content has newlines/quotes
+args: '{"text": "{{content}}"}'       # ERROR if content has special chars
+
+# With :json - safe for any content
+args: '{"text": "{{content:json}}"}'  # OK - properly escaped
+```
+
+---
+
+## Workflow Termination
+
+Use `next: end` to explicitly terminate the workflow:
+
+```yaml
+- id: save
+  type: drive-file
+  path: "output.md"
+  content: "{{result}}"
+  next: end    # Workflow ends here
+
+- id: branch
+  type: if
+  condition: "{{cancel}}"
+  trueNext: end      # End workflow on true branch
+  falseNext: continue
+```
+
+---
+
+## Practical Examples
+
+### 1. Drive File Summary
+
+```yaml
+name: Summarize File
+nodes:
+  - id: select
+    type: drive-file-picker
+    title: "Select a file to summarize"
+    extensions: "md,txt"
+    savePathTo: filePath
+  - id: read
+    type: drive-read
+    path: "{{filePath}}"
+    saveTo: content
+  - id: summarize
+    type: command
+    prompt: "Summarize this text:\n\n{{content}}"
+    saveTo: summary
+  - id: save
+    type: drive-file
+    path: "summaries/{{filePath}}"
+    content: "# Summary\n\n{{summary}}"
+```
+
+### 2. API Integration
+
+```yaml
+name: Weather Report
+nodes:
+  - id: city
+    type: dialog
+    title: City name
+    inputTitle: City
+    saveTo: cityInput
+  - id: geocode
+    type: http
+    url: "https://geocoding-api.open-meteo.com/v1/search?name={{cityInput.input}}&count=1"
+    method: GET
+    saveTo: geoResponse
+  - id: parseGeo
+    type: json
+    source: geoResponse
+    saveTo: geo
+  - id: weather
+    type: http
+    url: "https://api.open-meteo.com/v1/forecast?latitude={{geo.results[0].latitude}}&longitude={{geo.results[0].longitude}}&current=temperature_2m"
+    method: GET
+    saveTo: weatherData
+  - id: report
+    type: command
+    prompt: "Create a weather report:\n{{weatherData}}"
+    saveTo: summary
+  - id: save
+    type: drive-file
+    path: "weather/{{cityInput.input}}.md"
+    content: "# Weather: {{cityInput.input}}\n\n{{summary}}"
+```
+
+### 3. Batch Processing with Loop
+
+```yaml
+name: Tag Analyzer
+nodes:
+  - id: init
+    type: variable
+    name: counter
+    value: "0"
+  - id: initReport
+    type: variable
+    name: report
+    value: "# Tag Suggestions\n\n"
+  - id: list
+    type: drive-list
+    folder: "Clippings"
+    limit: "5"
+    saveTo: notes
+  - id: parse
+    type: json
+    source: notes
+    saveTo: parsed
+  - id: loop
+    type: while
+    condition: "{{counter}} < {{parsed.count}}"
+    trueNext: read
+    falseNext: finish
+  - id: read
+    type: drive-read
+    path: "{{parsed.notes[counter].name}}"
+    saveTo: content
+  - id: analyze
+    type: command
+    prompt: "Suggest 3 tags for:\n\n{{content}}"
+    saveTo: tags
+  - id: append
+    type: set
+    name: report
+    value: "{{report}}## {{parsed.notes[counter].name}}\n{{tags}}\n\n"
+  - id: increment
+    type: set
+    name: counter
+    value: "{{counter}} + 1"
+    next: loop
+  - id: finish
+    type: drive-file
+    path: "reports/tag-suggestions.md"
+    content: "{{report}}"
+```
+
+### 4. Sub-Workflow Composition
+
+**File: `workflows/translate.yaml`**
+```yaml
+name: Translator
+nodes:
+  - id: translate
+    type: command
+    prompt: "Translate to {{targetLang}}:\n\n{{text}}"
+    saveTo: translated
+```
+
+**File: `workflows/main.yaml`**
+```yaml
+name: Multi-Language Export
+nodes:
+  - id: input
+    type: dialog
+    title: Enter text to translate
+    inputTitle: Text
+    multiline: "true"
+    saveTo: userInput
+  - id: toJapanese
+    type: workflow
+    path: "workflows/translate.yaml"
+    name: "Translator"
+    input: '{"text": "{{userInput.input}}", "targetLang": "Japanese"}'
+    output: '{"japaneseText": "translated"}'
+  - id: toSpanish
+    type: workflow
+    path: "workflows/translate.yaml"
+    name: "Translator"
+    input: '{"text": "{{userInput.input}}", "targetLang": "Spanish"}'
+    output: '{"spanishText": "translated"}'
+  - id: save
+    type: drive-file
+    path: "translations/output.md"
+    content: |
+      # Original
+      {{userInput.input}}
+
+      ## Japanese
+      {{japaneseText}}
+
+      ## Spanish
+      {{spanishText}}
+```
+
+### 5. MCP with RAG Server
+
+```yaml
+name: RAG Search
+nodes:
+  - id: query
+    type: mcp
+    url: "http://localhost:8080"
+    tool: "query"
+    args: '{"store_name": "mystore", "question": "How does auth work?", "show_citations": true}'
+    headers: '{"X-API-Key": "mysecretkey"}'
+    saveTo: result
+  - id: show
+    type: dialog
+    title: "Search Result"
+    message: "{{result}}"
+    markdown: "true"
+    button1: "OK"
+```
