@@ -145,7 +145,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 // GET: SSE stream
-export async function loader({ request, params }: Route.LoaderArgs) {
+export async function loader({ request, params: _params }: Route.LoaderArgs) {
   await requireAuth(request);
 
   const url = new URL(request.url);

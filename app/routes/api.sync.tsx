@@ -238,7 +238,7 @@ export async function action({ request }: Route.ActionArgs) {
       const remoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
 
       const fileEntries = Object.entries(remoteMeta.files).filter(
-        ([id, f]) => f.name !== "_sync-meta.json" && f.name !== "settings.json"
+        ([_id, f]) => f.name !== "_sync-meta.json" && f.name !== "settings.json"
       );
 
       // Skip files where local hash matches remote

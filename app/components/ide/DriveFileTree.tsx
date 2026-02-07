@@ -83,17 +83,6 @@ function removeNodeFromTree(
     );
 }
 
-function findInChildren(
-  nodes: CachedTreeNode[],
-  targetId: string
-): boolean {
-  for (const node of nodes) {
-    if (node.id === targetId) return true;
-    if (node.children && findInChildren(node.children, targetId)) return true;
-  }
-  return false;
-}
-
 function buildTreeFromMeta(meta: CachedRemoteMeta): CachedTreeNode[] {
   const root: CachedTreeNode[] = [];
   const folderMap = new Map<string, CachedTreeNode>();

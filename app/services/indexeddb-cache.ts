@@ -182,21 +182,6 @@ function txGetAll<T>(db: IDBDatabase, storeName: string): Promise<T[]> {
   });
 }
 
-function txGetAllByIndex<T>(
-  db: IDBDatabase,
-  storeName: string,
-  indexName: string,
-  key: IDBValidKey
-): Promise<T[]> {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readonly");
-    const store = tx.objectStore(storeName);
-    const index = store.index(indexName);
-    const req = index.getAll(key);
-    req.onsuccess = () => resolve(req.result as T[]);
-    req.onerror = () => reject(req.error);
-  });
-}
 
 // --- files store ---
 

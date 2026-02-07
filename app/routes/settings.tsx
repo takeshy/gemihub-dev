@@ -18,7 +18,6 @@ import type {
   McpToolInfo,
 } from "~/types/settings";
 import {
-  DEFAULT_USER_SETTINGS,
   DEFAULT_RAG_SETTING,
   DEFAULT_ENCRYPTION_SETTINGS,
   getAvailableModels,
@@ -865,7 +864,7 @@ function GeneralTab({
 // Sync Tab
 // ---------------------------------------------------------------------------
 
-function SyncTab({ settings }: { settings: UserSettings }) {
+function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   const { t } = useI18n();
 
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
@@ -1264,7 +1263,6 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
 
 function McpTab({ settings }: { settings: UserSettings }) {
   const fetcher = useFetcher();
-  const loading = fetcher.state !== "idle";
   const { t } = useI18n();
 
   const [servers, setServers] = useState<McpServerConfig[]>(settings.mcpServers);
@@ -1990,17 +1988,6 @@ function RagTab({ settings }: { settings: UserSettings }) {
     setRenamingKey(null);
   }, [renamingKey, renameValue, ragSettings, selectedRagSetting, editingKey]);
 
-  const updateCurrentSetting = useCallback(
-    (patch: Partial<RagSetting>) => {
-      if (!selectedRagSetting) return;
-      setRagSettings((prev) => ({
-        ...prev,
-        [selectedRagSetting]: { ...prev[selectedRagSetting], ...patch },
-      }));
-    },
-    [selectedRagSetting]
-  );
-
   const updateCurrentSettingByKey = useCallback(
     (key: string, patch: Partial<RagSetting>) => {
       setRagSettings((prev) => ({
@@ -2010,77 +1997,6 @@ function RagTab({ settings }: { settings: UserSettings }) {
     },
     []
   );
-
-  const handleSync = useCallback(async () => {
-    if (!selectedRagSetting || !ragSettings[selectedRagSetting]) {
-      setSyncMsg("No RAG setting selected.");
-      return;
-    }
-    setSyncing(true);
-    setSyncMsg(null);
-    try {
-      // Save settings to Drive first so the sync API can find them
-      const hasSettings = Object.keys(ragSettings).length > 0;
-      const fd = new FormData();
-      fd.set("_action", "saveRag");
-      fd.set("ragEnabled", hasSettings ? "on" : "off");
-      fd.set("ragTopK", String(ragTopK));
-      fd.set("ragSettings", JSON.stringify(ragSettings));
-      fd.set("selectedRagSetting", selectedRagSetting || "");
-      const saveRes = await fetch("/settings", { method: "POST", body: fd });
-      if (!saveRes.ok) {
-        setSyncMsg("Failed to save settings before sync.");
-        return;
-      }
-
-      const res = await fetch("/api/settings/rag-sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ragSettingName: selectedRagSetting }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setSyncMsg(data.error || "Sync failed.");
-        return;
-      }
-
-      // Response is SSE stream — read events
-      const reader = res.body?.getReader();
-      if (!reader) {
-        setSyncMsg("No response body.");
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const raw = line.slice(6).trim();
-          if (!raw) continue;
-          try {
-            const evt = JSON.parse(raw);
-            if (evt.message) setSyncMsg(evt.message);
-          } catch {
-            // skip malformed events
-          }
-        }
-      }
-    } catch (err) {
-      setSyncMsg(err instanceof Error ? err.message : "Sync error.");
-    } finally {
-      setSyncing(false);
-    }
-  }, [selectedRagSetting, ragSettings, ragTopK]);
 
   const handleSyncByKey = useCallback(async (key: string) => {
     if (!ragSettings[key]) return;

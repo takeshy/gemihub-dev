@@ -204,7 +204,7 @@ export function useSync() {
       setError(err instanceof Error ? err.message : "Push failed");
       setSyncStatus("error");
     }
-  }, [checkSync]);
+  }, []);
 
   const pull = useCallback(async () => {
     setSyncStatus("pulling");

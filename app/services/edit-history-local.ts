@@ -31,7 +31,7 @@ import {
  */
 export async function initSnapshot(
   fileId: string,
-  content: string
+  _content: string
 ): Promise<void> {
   const existing = await getEditHistoryForFile(fileId);
   if (existing && existing.diffs.length > 0) {
@@ -104,7 +104,7 @@ export async function saveLocalEdit(
  */
 export async function commitSnapshot(
   fileId: string,
-  newContent: string
+  _newContent: string
 ): Promise<void> {
   const existing = await getEditHistoryForFile(fileId);
   if (existing && existing.diffs.length > 0) {
