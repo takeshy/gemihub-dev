@@ -162,13 +162,15 @@ export function PluginProvider({
 
   // Cleanup all plugins on unmount
   useEffect(() => {
+    const loaded = loadedRef;
+    const apiMap = apiMapRef;
     return () => {
       setPlugins((prev) => {
         for (const p of prev) unloadPlugin(p);
         return [];
       });
-      loadedRef.current.clear();
-      apiMapRef.current.clear();
+      loaded.current.clear();
+      apiMap.current.clear();
     };
   }, []);
 

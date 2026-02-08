@@ -25,7 +25,7 @@ interface PluginsTabProps {
 
 export function PluginsTab({ settings }: PluginsTabProps) {
   const { t } = useI18n();
-  const { settingsTabs, getPluginAPI, loading: pluginsLoading } = usePlugins();
+  const { settingsTabs, getPluginAPI } = usePlugins();
   const [plugins, setPlugins] = useState<PluginConfig[]>(
     settings.plugins || []
   );

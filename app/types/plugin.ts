@@ -100,7 +100,6 @@ export interface PluginInstance {
   id: string;
   manifest: PluginManifest;
   config: PluginConfig;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   instance: { onload: (api: PluginAPI) => void; onunload?: () => void };
   views: PluginView[];
   slashCommands: PluginSlashCommand[];
