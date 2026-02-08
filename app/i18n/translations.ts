@@ -39,6 +39,9 @@ export interface TranslationStrings {
   "chat.toolModeLockFlashLiteRag": string;
   "chat.toolModeLocked": string;
 
+  "chat.saveToDrive": string;
+  "chat.savedToDrive": string;
+
   // Settings page
   "settings.title": string;
   "settings.tab.general": string;
@@ -149,6 +152,7 @@ export interface TranslationStrings {
   "contextMenu.linkCopied": string;
   "contextMenu.publishFailed": string;
   "contextMenu.unpublishFailed": string;
+  "contextMenu.fileAlreadyExists": string;
 
   // Temp files
   "settings.general.tempFiles": string;
@@ -307,6 +311,9 @@ const en: TranslationStrings = {
   "chat.toolModeLockFlashLiteRag": "Drive tools are disabled when Flash Lite uses RAG",
   "chat.toolModeLocked": "Auto (locked)",
 
+  "chat.saveToDrive": "Save to Drive",
+  "chat.savedToDrive": "Saved to Drive",
+
   // Settings
   "settings.title": "Settings",
   "settings.tab.general": "General",
@@ -418,6 +425,7 @@ const en: TranslationStrings = {
   "contextMenu.linkCopied": "Link copied to clipboard.",
   "contextMenu.publishFailed": "Failed to publish file.",
   "contextMenu.unpublishFailed": "Failed to unpublish file.",
+  "contextMenu.fileAlreadyExists": "\"{name}\" already exists. Overwrite?",
 
   // Temp files
   "settings.general.tempFiles": "Temporary Files",
@@ -576,6 +584,9 @@ const ja: TranslationStrings = {
   "chat.toolModeLockFlashLiteRag": "Flash LiteでRAG使用時はDriveツールは無効です",
   "chat.toolModeLocked": "自動（ロック中）",
 
+  "chat.saveToDrive": "Driveに保存",
+  "chat.savedToDrive": "Drive保存済み",
+
   // Settings
   "settings.title": "設定",
   "settings.tab.general": "一般",
@@ -687,6 +698,7 @@ const ja: TranslationStrings = {
   "contextMenu.linkCopied": "リンクをクリップボードにコピーしました。",
   "contextMenu.publishFailed": "ファイルの公開に失敗しました。",
   "contextMenu.unpublishFailed": "公開の解除に失敗しました。",
+  "contextMenu.fileAlreadyExists": "「{name}」は既に存在します。上書きしますか？",
 
   // Temp files
   "settings.general.tempFiles": "一時ファイル",

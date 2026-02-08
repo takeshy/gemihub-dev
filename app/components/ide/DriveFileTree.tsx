@@ -148,6 +148,19 @@ function flattenTree(nodes: CachedTreeNode[], parentPath: string): FileListItem[
   return result;
 }
 
+/** Find a file node by its full path (e.g. "folder/file.txt") */
+function findFileByPath(nodes: CachedTreeNode[], fullPath: string, parentPath: string = ""): CachedTreeNode | null {
+  for (const node of nodes) {
+    const path = parentPath ? `${parentPath}/${node.name}` : node.name;
+    if (!node.isFolder && path === fullPath) return node;
+    if (node.isFolder && node.children) {
+      const found = findFileByPath(node.children, fullPath, path);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 export function DriveFileTree({
   rootFolderId,
   onSelectFile,
@@ -396,6 +409,25 @@ export function DriveFileTree({
       : "";
     const fullName = folderPath ? `${folderPath}/${name.trim()}` : name.trim();
 
+    // Check for duplicate
+    const existing = findFileByPath(treeItems, fullName);
+    if (existing) {
+      const msg = t("contextMenu.fileAlreadyExists").replace("{name}", name.trim());
+      if (!confirm(msg)) return;
+      // Overwrite existing file
+      try {
+        const res = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "update", fileId: existing.id, content: "" }),
+        });
+        if (res.ok) {
+          onSelectFile(existing.id, existing.name, existing.mimeType);
+        }
+      } catch { /* ignore */ }
+      return;
+    }
+
     try {
       const res = await fetch("/api/drive/files", {
         method: "POST",
@@ -424,7 +456,7 @@ export function DriveFileTree({
     } catch {
       // ignore
     }
-  }, [selectedFolderId, fetchAndCacheTree, updateTreeFromMeta, onSelectFile]);
+  }, [selectedFolderId, fetchAndCacheTree, updateTreeFromMeta, onSelectFile, treeItems, t]);
 
   // Auto-clear progress after 3 seconds when all done
   useEffect(() => {
@@ -532,6 +564,20 @@ export function DriveFileTree({
 
       // For virtual folders, add path prefix to uploaded file names
       const namePrefix = folderId.startsWith("vfolder:") ? getFolderPath(folderId) : undefined;
+
+      // Check for duplicates
+      const duplicates: { file: File; existing: CachedTreeNode }[] = [];
+      for (const file of files) {
+        const fullPath = namePrefix ? `${namePrefix}/${file.name}` : file.name;
+        const existing = findFileByPath(treeItems, fullPath);
+        if (existing) duplicates.push({ file, existing });
+      }
+      if (duplicates.length > 0) {
+        const names = duplicates.map((d) => d.file.name).join(", ");
+        const msg = t("contextMenu.fileAlreadyExists").replace("{name}", names);
+        if (!confirm(msg)) return;
+      }
+
       const success = await upload(files, rootFolderId, namePrefix);
       if (success) {
         // Expand folder if dropping into a subfolder
@@ -541,7 +587,7 @@ export function DriveFileTree({
         await fetchAndCacheTree();
       }
     },
-    [upload, rootFolderId, fetchAndCacheTree, handleMoveItem, getFolderPath]
+    [upload, rootFolderId, fetchAndCacheTree, handleMoveItem, getFolderPath, treeItems, t]
   );
 
   const handleTreeDragOver = useCallback((e: React.DragEvent) => {
