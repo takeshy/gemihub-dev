@@ -8,7 +8,6 @@ Manual push/pull synchronization between the browser (IndexedDB) and Google Driv
 - **Offline-First**: Files are cached in IndexedDB for instant access
 - **Soft Delete**: Deleted files are moved to a `trash/` folder on Drive (recoverable)
 - **Conflict Resolution**: Choose local or remote version with automatic backup
-- **Auto-Check**: Detects changes every 5 minutes
 - **Full Push / Full Pull**: Bulk sync for initial setup or recovery
 - **Untracked File Management**: Detect, restore, or delete orphaned remote files
 - **Trash & Conflict Backup Management**: Restore or permanently delete trashed files and conflict backups

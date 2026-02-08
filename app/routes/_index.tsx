@@ -188,13 +188,11 @@ function IDELayout({
   const {
     syncStatus,
     lastSyncTime,
-    diff: syncDiff,
     conflicts,
     error: syncError,
     localModifiedCount,
     push,
     pull,
-    checkSync,
     resolveConflict,
   } = useSync();
 
@@ -329,14 +327,12 @@ function IDELayout({
           activeFileName={activeFileName}
           activeFileId={activeFileId}
           syncStatus={syncStatus}
-          syncDiff={syncDiff}
           lastSyncTime={lastSyncTime}
           syncError={syncError}
           syncConflicts={conflicts}
           localModifiedCount={localModifiedCount}
           onPush={push}
           onPull={pull}
-          onCheckSync={checkSync}
           onShowConflicts={() => setShowConflictDialog(true)}
           onSelectFile={handleSelectFile}
         />

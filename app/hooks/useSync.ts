@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   getLocalSyncMeta,
   setLocalSyncMeta,
@@ -23,26 +23,14 @@ export interface ConflictInfo {
   remoteModifiedTime: string;
 }
 
-export interface SyncDiff {
-  toPush: string[];
-  toPull: string[];
-  conflicts: ConflictInfo[];
-  localOnly: string[];
-  remoteOnly: string[];
-}
-
-export type SyncStatus = "idle" | "checking" | "pushing" | "pulling" | "conflict" | "error";
-
-const SYNC_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+export type SyncStatus = "idle" | "pushing" | "pulling" | "conflict" | "error";
 
 export function useSync() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [diff, setDiff] = useState<SyncDiff | null>(null);
   const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [localModifiedCount, setLocalModifiedCount] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshLocalModifiedCount = useCallback(async () => {
     try {
@@ -59,45 +47,6 @@ export function useSync() {
     window.addEventListener("file-modified", handler);
     refreshLocalModifiedCount();
     return () => window.removeEventListener("file-modified", handler);
-  }, [refreshLocalModifiedCount]);
-
-  const checkSync = useCallback(async () => {
-    setSyncStatus("checking");
-    setError(null);
-    try {
-      await refreshLocalModifiedCount();
-
-      const localMeta = (await getLocalSyncMeta()) ?? null;
-      const localMetaPayload = localMeta
-        ? { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files }
-        : null;
-
-      const res = await fetch("/api/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "diff", localMeta: localMetaPayload }),
-      });
-
-      if (!res.ok) throw new Error("Failed to check sync status");
-      const data = await res.json();
-
-      setDiff(data.diff);
-      if (data.diff.conflicts.length > 0) {
-        setConflicts(data.diff.conflicts);
-        setSyncStatus("conflict");
-      } else {
-        setConflicts([]);
-        setSyncStatus("idle");
-      }
-      // If new remote-only files were detected, refresh the file tree
-      // (rebuildSyncMeta in the diff action already updated _sync-meta.json)
-      if (data.diff.remoteOnly?.length > 0) {
-        window.dispatchEvent(new Event("sync-complete"));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Sync check failed");
-      setSyncStatus("error");
-    }
   }, [refreshLocalModifiedCount]);
 
   const push = useCallback(async () => {
@@ -122,7 +71,6 @@ export function useSync() {
 
         if (diffData.diff.conflicts.length > 0) {
           setConflicts(diffData.diff.conflicts);
-          setDiff(diffData.diff);
           setSyncStatus("conflict");
           return;
         }
@@ -202,7 +150,6 @@ export function useSync() {
           }
           await setLocalSyncMeta(newLocal);
         }
-        setDiff(syncData.diff);
       }
 
       setLastSyncTime(new Date().toISOString());
@@ -236,7 +183,6 @@ export function useSync() {
 
       if (diffData.diff.conflicts.length > 0) {
         setConflicts(diffData.diff.conflicts);
-        setDiff(diffData.diff);
         setSyncStatus("conflict");
         return;
       }
@@ -259,14 +205,12 @@ export function useSync() {
       }
 
       const filesToPull = [...diffData.diff.toPull, ...diffData.diff.remoteOnly];
-      if (filesToPull.length === 0 && localOnlyIds.length > 0) {
-        // Only local cleanups happened, trigger tree refresh
-        window.dispatchEvent(new Event("sync-complete"));
-        setLastSyncTime(new Date().toISOString());
-        await checkSync();
-        return;
-      }
       if (filesToPull.length === 0) {
+        if (localOnlyIds.length > 0) {
+          // Only local cleanups happened, trigger tree refresh
+          window.dispatchEvent(new Event("sync-complete"));
+          setLastSyncTime(new Date().toISOString());
+        }
         setSyncStatus("idle");
         return;
       }
@@ -311,12 +255,13 @@ export function useSync() {
       await setLocalSyncMeta(updatedMeta);
 
       setLastSyncTime(new Date().toISOString());
-      await checkSync();
+      window.dispatchEvent(new Event("sync-complete"));
+      setSyncStatus("idle");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pull failed");
       setSyncStatus("error");
     }
-  }, [checkSync]);
+  }, []);
 
   const resolveConflict = useCallback(
     async (fileId: string, choice: "local" | "remote") => {
@@ -514,29 +459,14 @@ export function useSync() {
     }
   }, []);
 
-  // Auto-check every 5 minutes
-  useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      checkSync();
-    }, SYNC_CHECK_INTERVAL);
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [checkSync]);
-
   return {
     syncStatus,
     lastSyncTime,
-    diff,
     conflicts,
     error,
     localModifiedCount,
     push,
     pull,
-    checkSync,
     resolveConflict,
     fullPush,
     fullPull,

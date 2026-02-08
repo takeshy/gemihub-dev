@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { RefreshCw, ArrowUp, ArrowDown, AlertTriangle, Loader2 } from "lucide-react";
+import { ArrowUp, ArrowDown, AlertTriangle, Loader2 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
-import type { SyncStatus, SyncDiff, ConflictInfo } from "~/hooks/useSync";
+import type { SyncStatus, ConflictInfo } from "~/hooks/useSync";
 import {
   getCachedRemoteMeta,
   getLocallyModifiedFileIds,
@@ -9,13 +9,11 @@ import {
 
 interface SyncStatusBarProps {
   syncStatus: SyncStatus;
-  diff: SyncDiff | null;
   lastSyncTime: string | null;
   error: string | null;
   localModifiedCount: number;
   onPush: () => void;
   onPull: () => void;
-  onCheckSync: () => void;
   onShowConflicts: () => void;
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
   conflicts: ConflictInfo[];
@@ -28,29 +26,24 @@ interface FileListItem {
 
 export function SyncStatusBar({
   syncStatus,
-  diff,
   lastSyncTime,
   error,
   localModifiedCount,
   onPush,
   onPull,
-  onCheckSync,
   onShowConflicts,
   onSelectFile,
   conflicts,
 }: SyncStatusBarProps) {
-  const remotePushCount = diff ? diff.toPush.length + diff.localOnly.length : 0;
-  const pullCount = diff ? diff.toPull.length + diff.remoteOnly.length : 0;
   const conflictCount = conflicts.length;
+  const isBusy = syncStatus === "pushing" || syncStatus === "pulling";
 
-  const isBusy = syncStatus === "checking" || syncStatus === "pushing" || syncStatus === "pulling";
-
-  const [openList, setOpenList] = useState<"push" | "pull" | null>(null);
+  const [openList, setOpenList] = useState<"push" | null>(null);
   const [listFiles, setListFiles] = useState<FileListItem[]>([]);
   const [listLoading, setListLoading] = useState(false);
   // Filtered local modified count (only files tracked in remoteMeta)
   const [filteredLocalModifiedCount, setFilteredLocalModifiedCount] = useState(0);
-  const pushCount = remotePushCount + filteredLocalModifiedCount;
+  const pushCount = filteredLocalModifiedCount;
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Close on click outside
@@ -87,42 +80,26 @@ export function SyncStatusBar({
     })();
   }, [localModifiedCount]);
 
-  const loadFileList = useCallback(async (type: "push" | "pull") => {
-    if (openList === type) {
+  const loadFileList = useCallback(async () => {
+    if (openList === "push") {
       setOpenList(null);
       return;
     }
 
     setListLoading(true);
-    setOpenList(type);
+    setOpenList("push");
 
     try {
       const remoteMeta = await getCachedRemoteMeta();
       const nameMap = remoteMeta?.files ?? {};
 
-      const fileIds = new Set<string>();
-
-      if (type === "push") {
-        if (diff) {
-          diff.toPush.forEach((id) => fileIds.add(id));
-          diff.localOnly.forEach((id) => fileIds.add(id));
-        }
-        const localModified = await getLocallyModifiedFileIds();
-        // Only include files tracked in remoteMeta (exclude history/logs)
-        for (const id of localModified) {
-          if (nameMap[id]) fileIds.add(id);
-        }
-      } else {
-        if (diff) {
-          diff.toPull.forEach((id) => fileIds.add(id));
-          diff.remoteOnly.forEach((id) => fileIds.add(id));
-        }
-      }
-
+      const localModified = await getLocallyModifiedFileIds();
       const files: FileListItem[] = [];
-      for (const id of fileIds) {
-        const meta = nameMap[id];
-        files.push({ id, name: meta?.name ?? id });
+      // Only include files tracked in remoteMeta (exclude history/logs)
+      for (const id of localModified) {
+        if (nameMap[id]) {
+          files.push({ id, name: nameMap[id].name ?? id });
+        }
       }
 
       files.sort((a, b) => a.name.localeCompare(b.name));
@@ -132,7 +109,7 @@ export function SyncStatusBar({
     } finally {
       setListLoading(false);
     }
-  }, [openList, diff]);
+  }, [openList]);
 
   const formatLastSync = (time: string | null) => {
     if (!time) return null;
@@ -146,19 +123,10 @@ export function SyncStatusBar({
 
   return (
     <div className="flex items-center gap-1">
-      {/* Sync check button */}
-      <button
-        onClick={onCheckSync}
-        disabled={isBusy}
-        className="flex items-center gap-1 rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 disabled:opacity-50"
-        title="Check sync status"
-      >
-        {isBusy ? (
-          <Loader2 size={ICON.SM} className="animate-spin" />
-        ) : (
-          <RefreshCw size={ICON.SM} />
-        )}
-      </button>
+      {/* Busy indicator */}
+      {isBusy && (
+        <Loader2 size={ICON.SM} className="animate-spin text-gray-400" />
+      )}
 
       {/* Push button + count badge */}
       <button
@@ -172,7 +140,7 @@ export function SyncStatusBar({
       {pushCount > 0 && (
         <div className="relative" ref={openList === "push" ? popoverRef : undefined}>
           <button
-            onClick={() => loadFileList("push")}
+            onClick={() => loadFileList()}
             className="rounded-full bg-blue-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
           >
             {pushCount}
@@ -183,7 +151,7 @@ export function SyncStatusBar({
         </div>
       )}
 
-      {/* Pull button + count badge */}
+      {/* Pull button */}
       <button
         onClick={onPull}
         disabled={isBusy}
@@ -192,19 +160,6 @@ export function SyncStatusBar({
         <ArrowDown size={ICON.SM} />
         Pull
       </button>
-      {pullCount > 0 && (
-        <div className="relative" ref={openList === "pull" ? popoverRef : undefined}>
-          <button
-            onClick={() => loadFileList("pull")}
-            className="rounded-full bg-green-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
-          >
-            {pullCount}
-          </button>
-          {openList === "pull" && (
-            <FileListPopover files={listFiles} loading={listLoading} onSelect={(f) => { setOpenList(null); onSelectFile?.(f.id, f.name, guessMimeType(f.name)); }} />
-          )}
-        </div>
-      )}
 
       {/* Conflict indicator */}
       {conflictCount > 0 && (

@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { SyncStatusBar } from "./SyncStatusBar";
-import type { SyncStatus, SyncDiff, ConflictInfo } from "~/hooks/useSync";
+import type { SyncStatus, ConflictInfo } from "~/hooks/useSync";
 import { useI18n } from "~/i18n/context";
 
 interface HeaderProps {
@@ -16,14 +16,12 @@ interface HeaderProps {
   activeFileName: string | null;
   activeFileId: string | null;
   syncStatus: SyncStatus;
-  syncDiff: SyncDiff | null;
   lastSyncTime: string | null;
   syncError: string | null;
   syncConflicts: ConflictInfo[];
   localModifiedCount: number;
   onPush: () => void;
   onPull: () => void;
-  onCheckSync: () => void;
   onShowConflicts: () => void;
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
 }
@@ -34,14 +32,12 @@ export function Header({
   activeFileName,
   activeFileId: _activeFileId,
   syncStatus,
-  syncDiff,
   lastSyncTime,
   syncError,
   syncConflicts,
   localModifiedCount,
   onPush,
   onPull,
-  onCheckSync,
   onShowConflicts,
   onSelectFile,
 }: HeaderProps) {
@@ -62,13 +58,11 @@ export function Header({
         <div className="mx-1 h-4 w-px bg-gray-200 dark:bg-gray-700" />
         <SyncStatusBar
           syncStatus={syncStatus}
-          diff={syncDiff}
           lastSyncTime={lastSyncTime}
           error={syncError}
           localModifiedCount={localModifiedCount}
           onPush={onPush}
           onPull={onPull}
-          onCheckSync={onCheckSync}
           onShowConflicts={onShowConflicts}
           onSelectFile={onSelectFile}
           conflicts={syncConflicts}
