@@ -10,6 +10,7 @@ import { LogIn } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
+import { setCachedFile } from "~/services/indexeddb-cache";
 import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
 
 import { Header, type RightPanelId } from "~/components/ide/Header";
@@ -279,6 +280,16 @@ function IDELayout({
             }),
           });
           if (res.ok) {
+            const resData = await res.json();
+            // Update IndexedDB cache so the viewer picks up the new content
+            await setCachedFile({
+              fileId: dialogState.currentFileId,
+              content: yamlContent,
+              md5Checksum: resData.md5Checksum ?? "",
+              modifiedTime: resData.file?.modifiedTime ?? "",
+              cachedAt: Date.now(),
+              fileName: resData.file?.name,
+            });
             handleWorkflowChanged();
           }
         } else {
