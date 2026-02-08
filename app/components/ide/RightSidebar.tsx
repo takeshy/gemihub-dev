@@ -41,19 +41,26 @@ export function RightSidebar({ children }: RightSidebarProps) {
     const startX = e.clientX;
     const startWidth = width;
 
-    function onMouseMove(ev: MouseEvent) {
-      if (!isDragging.current) return;
-      // Right sidebar: dragging left increases width
-      const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidth - (ev.clientX - startX)));
-      setWidth(newWidth);
-    }
+    // Full-screen overlay to prevent iframes from capturing mouse events
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;z-index:9999;cursor:col-resize";
+    document.body.appendChild(overlay);
 
     function onMouseUp() {
       isDragging.current = false;
+      overlay.remove();
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+    }
+
+    function onMouseMove(ev: MouseEvent) {
+      if (!isDragging.current) return;
+      if (ev.buttons === 0) { onMouseUp(); return; }
+      // Right sidebar: dragging left increases width
+      const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidth - (ev.clientX - startX)));
+      setWidth(newWidth);
     }
 
     document.body.style.cursor = "col-resize";
