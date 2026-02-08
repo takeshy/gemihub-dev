@@ -8,10 +8,13 @@ import {
   AlertCircle,
   Power,
   PowerOff,
+  Settings,
 } from "lucide-react";
 import type { UserSettings, PluginConfig } from "~/types/settings";
 import { useI18n } from "~/i18n/context";
 import { invalidateIndexCache } from "~/routes/_index";
+import { usePlugins } from "~/contexts/PluginContext";
+import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 
 const inputClass =
   "w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
@@ -22,6 +25,7 @@ interface PluginsTabProps {
 
 export function PluginsTab({ settings }: PluginsTabProps) {
   const { t } = useI18n();
+  const { settingsTabs, getPluginAPI, loading: pluginsLoading } = usePlugins();
   const [plugins, setPlugins] = useState<PluginConfig[]>(
     settings.plugins || []
   );
@@ -30,6 +34,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [openSettingsId, setOpenSettingsId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -235,90 +240,120 @@ export function PluginsTab({ settings }: PluginsTabProps) {
           </p>
         ) : (
           <div className="space-y-3">
-            {plugins.map((plugin) => (
-              <div
-                key={plugin.id}
-                className={`flex items-center justify-between p-3 rounded-md border ${
-                  plugin.enabled
-                    ? "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
-                    : "border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800/30 opacity-60"
-                }`}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {plugin.id}
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {plugin.version}
-                    </span>
-                    {plugin.source === "local" && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium">
-                        Local
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {plugin.source === "local" ? `plugins/${plugin.id}/` : plugin.repo}
-                  </div>
-                </div>
-                {plugin.source !== "local" && (
-                <div className="flex items-center gap-1 ml-2">
-                  {/* Toggle */}
-                  <button
-                    onClick={() => handleToggle(plugin.id)}
-                    disabled={togglingId === plugin.id}
-                    className={`p-1.5 rounded transition-colors ${
-                      plugin.enabled
-                        ? "text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20"
-                        : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
-                    }`}
-                    title={
-                      plugin.enabled
-                        ? t("plugins.disable")
-                        : t("plugins.enable")
-                    }
-                  >
-                    {togglingId === plugin.id ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : plugin.enabled ? (
-                      <Power size={14} />
-                    ) : (
-                      <PowerOff size={14} />
-                    )}
-                  </button>
+            {plugins.map((plugin) => {
+              const settingsTab = settingsTabs.find((t) => t.pluginId === plugin.id);
+              const isSettingsOpen = openSettingsId === plugin.id;
+              const api = settingsTab ? getPluginAPI(plugin.id) : null;
 
-                  {/* Update */}
-                  <button
-                    onClick={() => handleUpdate(plugin.id)}
-                    disabled={updatingId === plugin.id}
-                    className="p-1.5 rounded text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
-                    title={t("plugins.update")}
+              return (
+                <div key={plugin.id}>
+                  <div
+                    className={`flex items-center justify-between p-3 rounded-md border ${
+                      plugin.enabled
+                        ? "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
+                        : "border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800/30 opacity-60"
+                    } ${isSettingsOpen ? "rounded-b-none" : ""}`}
                   >
-                    {updatingId === plugin.id ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <RefreshCw size={14} />
-                    )}
-                  </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {plugin.id}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {plugin.version}
+                        </span>
+                        {plugin.source === "local" && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium">
+                            Local
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {plugin.source === "local" ? `plugins/${plugin.id}/` : plugin.repo}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 ml-2">
+                      {/* Settings */}
+                      {settingsTab && (
+                        <button
+                          onClick={() => setOpenSettingsId(isSettingsOpen ? null : plugin.id)}
+                          className={`p-1.5 rounded transition-colors ${
+                            isSettingsOpen
+                              ? "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-900/20"
+                              : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                          }`}
+                          title={t("plugins.settings")}
+                        >
+                          <Settings size={14} />
+                        </button>
+                      )}
+                      {plugin.source !== "local" && (
+                        <>
+                          {/* Toggle */}
+                          <button
+                            onClick={() => handleToggle(plugin.id)}
+                            disabled={togglingId === plugin.id}
+                            className={`p-1.5 rounded transition-colors ${
+                              plugin.enabled
+                                ? "text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20"
+                                : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            }`}
+                            title={
+                              plugin.enabled
+                                ? t("plugins.disable")
+                                : t("plugins.enable")
+                            }
+                          >
+                            {togglingId === plugin.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : plugin.enabled ? (
+                              <Power size={14} />
+                            ) : (
+                              <PowerOff size={14} />
+                            )}
+                          </button>
 
-                  {/* Uninstall */}
-                  <button
-                    onClick={() => handleUninstall(plugin.id)}
-                    disabled={deletingId === plugin.id}
-                    className="p-1.5 rounded text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
-                    title={t("plugins.uninstall")}
-                  >
-                    {deletingId === plugin.id ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Trash2 size={14} />
-                    )}
-                  </button>
+                          {/* Update */}
+                          <button
+                            onClick={() => handleUpdate(plugin.id)}
+                            disabled={updatingId === plugin.id}
+                            className="p-1.5 rounded text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
+                            title={t("plugins.update")}
+                          >
+                            {updatingId === plugin.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <RefreshCw size={14} />
+                            )}
+                          </button>
+                        </>
+                      )}
+                      {/* Uninstall */}
+                      <button
+                        onClick={() => handleUninstall(plugin.id)}
+                        disabled={deletingId === plugin.id}
+                        className="p-1.5 rounded text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+                        title={t("plugins.uninstall")}
+                      >
+                        {deletingId === plugin.id ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={14} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  {/* Plugin settings panel */}
+                  {isSettingsOpen && settingsTab && api && (
+                    <div className="border border-t-0 border-gray-200 dark:border-gray-700 rounded-b-md p-4 bg-white dark:bg-gray-900">
+                      <PanelErrorBoundary fallbackLabel={`${plugin.id} settings error`}>
+                        <settingsTab.component api={api} onClose={() => setOpenSettingsId(null)} />
+                      </PanelErrorBoundary>
+                    </div>
+                  )}
                 </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

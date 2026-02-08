@@ -230,6 +230,7 @@ export interface TranslationStrings {
   "plugins.uninstalled": string;
   "plugins.confirmUninstall": string;
   "plugins.invalidRepo": string;
+  "plugins.settings": string;
 
   // Commands tab
   "settings.tab.commands": string;
@@ -498,6 +499,7 @@ const en: TranslationStrings = {
   "plugins.uninstalled": "Plugin uninstalled.",
   "plugins.confirmUninstall": "Uninstall this plugin? This will remove all plugin data.",
   "plugins.invalidRepo": "Invalid repository format. Use owner/repo.",
+  "plugins.settings": "Settings",
 
   // Commands tab
   "settings.tab.commands": "Commands",
@@ -766,6 +768,7 @@ const ja: TranslationStrings = {
   "plugins.uninstalled": "プラグインをアンインストールしました。",
   "plugins.confirmUninstall": "このプラグインをアンインストールしますか？すべてのプラグインデータが削除されます。",
   "plugins.invalidRepo": "リポジトリの形式が無効です。owner/repo の形式で入力してください。",
+  "plugins.settings": "設定",
 
   // Commands tab
   "settings.tab.commands": "コマンド",

@@ -66,6 +66,7 @@ import { UntrackedFilesDialog } from "~/components/settings/UntrackedFilesDialog
 import { TrashDialog } from "~/components/settings/TrashDialog";
 import { ConflictsDialog } from "~/components/settings/ConflictsDialog";
 import { invalidateIndexCache } from "~/routes/_index";
+import { PluginProvider } from "~/contexts/PluginContext";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -354,13 +355,15 @@ export default function Settings() {
 
   return (
     <I18nProvider language={settings.language}>
-      <SettingsInner
-        settings={settings}
-        hasApiKey={hasApiKey}
-        maskedKey={maskedKey}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-      />
+      <PluginProvider pluginConfigs={settings.plugins || []}>
+        <SettingsInner
+          settings={settings}
+          hasApiKey={hasApiKey}
+          maskedKey={maskedKey}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
+      </PluginProvider>
     </I18nProvider>
   );
 }

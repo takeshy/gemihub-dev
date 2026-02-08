@@ -19,7 +19,7 @@ import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand, Mcp
 import type { ChatOverrides } from "~/components/ide/ChatPanel";
 import { useI18n } from "~/i18n/context";
 import type { TranslationStrings } from "~/i18n/translations";
-import { useEditorContext, type FileListItem } from "~/contexts/EditorContext";
+import { useEditorContext, type FileListItem, type SelectionInfo } from "~/contexts/EditorContext";
 import { useAutocomplete, type AutocompleteItem } from "~/hooks/useAutocomplete";
 import { AutocompletePopup } from "./AutocompletePopup";
 
@@ -71,9 +71,10 @@ const ACCEPTED_FILE_TYPES = "image/*,application/pdf";
 
 function resolveTemplateVariables(
   text: string,
+  activeFileId: string | null,
   activeFileContent: string | null,
   activeFileName: string | null,
-  activeSelection: string | null
+  activeSelection: SelectionInfo | null
 ): string {
   let result = text;
   if (result.includes("{content}") && activeFileContent) {
@@ -81,7 +82,14 @@ function resolveTemplateVariables(
     result = result.replace(/\{content\}/g, prefix + activeFileContent);
   }
   if (result.includes("{selection}") && activeSelection) {
-    result = result.replace(/\{selection\}/g, activeSelection);
+    const meta: string[] = [];
+    if (activeFileName) meta.push(`file: ${activeFileName}`);
+    if (activeFileId) meta.push(`fileId: ${activeFileId}`);
+    if (activeSelection.start >= 0) {
+      meta.push(`start: ${activeSelection.start}, end: ${activeSelection.end}`);
+    }
+    const header = meta.length > 0 ? `[${meta.join(", ")}]\n` : "";
+    result = result.replace(/\{selection\}/g, header + activeSelection.text);
   }
   return result;
 }
@@ -255,6 +263,7 @@ export function ChatInput({
     // Resolve template variables
     let resolved = resolveTemplateVariables(
       trimmed,
+      editorCtx.activeFileId,
       editorCtx.activeFileContent,
       editorCtx.activeFileName,
       editorCtx.getActiveSelection()

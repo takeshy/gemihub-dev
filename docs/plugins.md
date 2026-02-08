@@ -126,6 +126,11 @@ api.registerSlashCommand({
     return "result text";
   },
 });
+
+// Register a settings tab (shown in Settings > Plugins via gear icon)
+api.registerSettingsTab({
+  component: MySettingsComponent, // receives { api } as props
+});
 ```
 
 #### Gemini AI

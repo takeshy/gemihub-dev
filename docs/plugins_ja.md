@@ -126,6 +126,11 @@ api.registerSlashCommand({
     return "結果テキスト";
   },
 });
+
+// 設定タブを登録（設定 > プラグインの歯車アイコンから表示）
+api.registerSettingsTab({
+  component: MySettingsComponent, // props に { api } を受け取る
+});
 ```
 
 #### Gemini AI

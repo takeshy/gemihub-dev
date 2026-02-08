@@ -31,6 +31,12 @@ export interface PluginSlashCommand {
   execute: (args: string) => Promise<string>;
 }
 
+/** Settings tab registered by a plugin */
+export interface PluginSettingsTab {
+  pluginId: string;
+  component: React.ComponentType<{ api: PluginAPI; onClose?: () => void }>;
+}
+
 /** API exposed to plugins */
 export interface PluginAPI {
   // UI registration
@@ -45,6 +51,9 @@ export interface PluginAPI {
     name: string;
     description: string;
     execute: (args: string) => Promise<string>;
+  }): void;
+  registerSettingsTab(tab: {
+    component: React.ComponentType<{ api: PluginAPI; onClose?: () => void }>;
   }): void;
 
   // Gemini API (via host /api/chat)

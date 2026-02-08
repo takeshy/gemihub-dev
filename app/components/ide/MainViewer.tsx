@@ -7,9 +7,46 @@ import { EncryptedFileViewer } from "./EncryptedFileViewer";
 import { isEncryptedFile } from "~/services/crypto-core";
 import { useFileWithCache } from "~/hooks/useFileWithCache";
 import { useI18n } from "~/i18n/context";
-import { useEditorContext } from "~/contexts/EditorContext";
+import { useEditorContext, type SelectionInfo } from "~/contexts/EditorContext";
 import { TempDiffModal } from "./TempDiffModal";
 import { commitSnapshot } from "~/services/edit-history-local";
+
+function WysiwygSelectionTracker({
+  setActiveSelection,
+  children,
+}: {
+  setActiveSelection: (sel: SelectionInfo | null) => void;
+  children: React.ReactNode;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = () => {
+      const sel = document.getSelection();
+      if (!sel || sel.rangeCount === 0) {
+        setActiveSelection(null);
+        return;
+      }
+      // Only track if selection is within this container
+      const container = containerRef.current;
+      if (!container) return;
+      if (!container.contains(sel.anchorNode)) {
+        return;
+      }
+      const text = sel.toString();
+      // WYSIWYG doesn't have reliable character offsets into markdown source
+      setActiveSelection(text ? { text, start: -1, end: -1 } : null);
+    };
+    document.addEventListener("selectionchange", handler);
+    return () => document.removeEventListener("selectionchange", handler);
+  }, [setActiveSelection]);
+
+  return (
+    <div ref={containerRef} className="flex-1 overflow-hidden p-4 flex flex-col">
+      {children}
+    </div>
+  );
+}
 
 interface MainViewerProps {
   fileId: string | null;
@@ -107,15 +144,16 @@ function TextBasedViewer({
   const { t } = useI18n();
   const { content, loading, error, saveToCache, refresh, forceRefresh } =
     useFileWithCache(fileId, refreshKey);
-  const { setActiveFileContent, setActiveFileName, setActiveSelection } = useEditorContext();
+  const { setActiveFileId, setActiveFileContent, setActiveFileName, setActiveSelection } = useEditorContext();
 
-  // Push content and file name to EditorContext
+  // Push content, file name, and file ID to EditorContext
   useEffect(() => {
+    setActiveFileId(fileId);
     setActiveFileContent(content);
     setActiveFileName(fileName);
     // Reset selection on file change
     setActiveSelection(null);
-  }, [content, fileName, fileId, setActiveFileContent, setActiveFileName, setActiveSelection]);
+  }, [content, fileName, fileId, setActiveFileId, setActiveFileContent, setActiveFileName, setActiveSelection]);
 
   if (loading && content === null) {
     return (
@@ -318,7 +356,9 @@ function MarkdownFileEditor({
     (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
       const ta = e.currentTarget;
       const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd);
-      editorCtx.setActiveSelection(sel || null);
+      editorCtx.setActiveSelection(
+        sel ? { text: sel, start: ta.selectionStart, end: ta.selectionEnd } : null
+      );
     },
     [editorCtx]
   );
@@ -418,7 +458,7 @@ function MarkdownFileEditor({
       )}
 
       {mode === "wysiwyg" && (
-        <div className="flex-1 overflow-hidden p-4 flex flex-col">
+        <WysiwygSelectionTracker setActiveSelection={editorCtx.setActiveSelection}>
           {MarkdownEditorComponent ? (
             <MarkdownEditorComponent
               value={content}
@@ -428,7 +468,7 @@ function MarkdownFileEditor({
           ) : (
             <Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />
           )}
-        </div>
+        </WysiwygSelectionTracker>
       )}
 
       {mode === "raw" && (
@@ -572,7 +612,9 @@ function HtmlFileEditor({
     (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
       const ta = e.currentTarget;
       const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd);
-      editorCtx.setActiveSelection(sel || null);
+      editorCtx.setActiveSelection(
+        sel ? { text: sel, start: ta.selectionStart, end: ta.selectionEnd } : null
+      );
     },
     [editorCtx]
   );
@@ -785,7 +827,9 @@ function TextFileEditor({
     (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
       const ta = e.currentTarget;
       const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd);
-      editorCtx.setActiveSelection(sel || null);
+      editorCtx.setActiveSelection(
+        sel ? { text: sel, start: ta.selectionStart, end: ta.selectionEnd } : null
+      );
     },
     [editorCtx]
   );

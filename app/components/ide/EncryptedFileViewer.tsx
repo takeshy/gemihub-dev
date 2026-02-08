@@ -165,7 +165,9 @@ export function EncryptedFileViewer({
     (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
       const ta = e.currentTarget;
       const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd);
-      setActiveSelection(sel || null);
+      setActiveSelection(
+        sel ? { text: sel, start: ta.selectionStart, end: ta.selectionEnd } : null
+      );
     },
     [setActiveSelection]
   );

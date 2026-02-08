@@ -2,11 +2,12 @@
 
 import React from "react";
 import ReactDOM from "react-dom";
-import type { PluginAPI, PluginView, PluginSlashCommand } from "~/types/plugin";
+import type { PluginAPI, PluginView, PluginSlashCommand, PluginSettingsTab } from "~/types/plugin";
 
 interface PluginAPICallbacks {
   onRegisterView: (view: PluginView) => void;
   onRegisterSlashCommand: (cmd: PluginSlashCommand) => void;
+  onRegisterSettingsTab: (tab: PluginSettingsTab) => void;
 }
 
 /**
@@ -37,6 +38,13 @@ export function createPluginAPI(
       });
     },
 
+    registerSettingsTab(tab) {
+      callbacks.onRegisterSettingsTab({
+        pluginId,
+        component: tab.component,
+      });
+    },
+
     gemini: {
       async chat(messages, options) {
         const res = await fetch("/api/chat", {
@@ -44,12 +52,12 @@ export function createPluginAPI(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             messages: messages.map((m) => ({
-              role: m.role,
-              parts: [{ text: m.content }],
+              role: m.role === "user" ? "user" : "assistant",
+              content: m.content,
+              timestamp: Date.now(),
             })),
-            model: options?.model,
+            model: options?.model || "gemini-2.5-flash",
             systemPrompt: options?.systemPrompt,
-            stream: false,
           }),
         });
         if (!res.ok) throw new Error(`Chat API error: ${res.status}`);

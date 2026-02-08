@@ -72,3 +72,60 @@ export function getLocalPluginFile(
     return null;
   }
 }
+
+/**
+ * Check if a plugin ID corresponds to a local plugin.
+ */
+export function isLocalPlugin(pluginId: string): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+
+  const filePath = path.resolve(PLUGINS_DIR, pluginId, "manifest.json");
+  if (!filePath.startsWith(PLUGINS_DIR + path.sep)) return false;
+
+  return fs.existsSync(filePath);
+}
+
+/**
+ * Read data.json for a local plugin. Returns {} if not found.
+ */
+export function getLocalPluginData(
+  pluginId: string
+): Record<string, unknown> {
+  const filePath = path.resolve(PLUGINS_DIR, pluginId, "data.json");
+  if (!filePath.startsWith(PLUGINS_DIR + path.sep)) return {};
+
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Save data.json for a local plugin.
+ */
+export function saveLocalPluginData(
+  pluginId: string,
+  data: Record<string, unknown>
+): void {
+  const filePath = path.resolve(PLUGINS_DIR, pluginId, "data.json");
+  if (!filePath.startsWith(PLUGINS_DIR + path.sep)) {
+    throw new Error("Invalid plugin ID");
+  }
+
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+}
+
+/**
+ * Uninstall a local plugin by deleting its directory.
+ */
+export function uninstallLocalPlugin(pluginId: string): void {
+  const dirPath = path.resolve(PLUGINS_DIR, pluginId);
+  if (!dirPath.startsWith(PLUGINS_DIR + path.sep)) {
+    throw new Error("Invalid plugin ID");
+  }
+  if (!fs.existsSync(dirPath)) {
+    throw new Error(`Plugin directory not found: ${pluginId}`);
+  }
+  fs.rmSync(dirPath, { recursive: true, force: true });
+}

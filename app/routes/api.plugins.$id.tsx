@@ -10,7 +10,13 @@ import {
   installPlugin,
   checkPluginUpdate,
 } from "~/services/plugin-manager.server";
-import { getLocalPluginFile } from "~/services/local-plugins.server";
+import {
+  getLocalPluginFile,
+  isLocalPlugin,
+  getLocalPluginData,
+  saveLocalPluginData,
+  uninstallLocalPlugin,
+} from "~/services/local-plugins.server";
 
 // ---------------------------------------------------------------------------
 // GET /api/plugins/:id?file=main.js — serve plugin files
@@ -96,6 +102,11 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (request.method === "DELETE") {
     // Uninstall plugin
     try {
+      if (isLocalPlugin(pluginId)) {
+        uninstallLocalPlugin(pluginId);
+        return jsonWithCookie({ success: true });
+      }
+
       await uninstallPlugin(
         validTokens.accessToken,
         validTokens.rootFolderId,
@@ -155,6 +166,9 @@ export async function action({ request, params }: Route.ActionArgs) {
       }
 
       case "getData": {
+        if (isLocalPlugin(pluginId)) {
+          return jsonWithCookie({ data: getLocalPluginData(pluginId) });
+        }
         const data = await getPluginDataFile(
           validTokens.accessToken,
           validTokens.rootFolderId,
@@ -169,6 +183,12 @@ export async function action({ request, params }: Route.ActionArgs) {
           value: unknown;
           action: string;
         };
+        if (isLocalPlugin(pluginId)) {
+          const localData = getLocalPluginData(pluginId);
+          localData[key] = value;
+          saveLocalPluginData(pluginId, localData);
+          return jsonWithCookie({ success: true });
+        }
         const data = await getPluginDataFile(
           validTokens.accessToken,
           validTokens.rootFolderId,
