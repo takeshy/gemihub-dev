@@ -47,24 +47,15 @@ Terraform で管理する Google Cloud デプロイ構成。
                                  └─────────────────────┘
 ```
 
-## GCP プロジェクト
-
-| 項目 | 値 |
-|------|------|
-| プロジェクト ID | `geminihub-486523` |
-| プロジェクト番号 | `495062043717` |
-| リージョン | `asia-northeast1`（東京） |
-| ドメイン | `gemini-hub.online` |
-
 ## 使用サービス
 
 | サービス | 用途 |
 |---------|------|
 | **Cloud Run** | Node.js SSR アプリケーションホスティング（ゼロスケール対応） |
-| **Artifact Registry** | Docker イメージリポジトリ（`gemini-hub`） |
+| **Artifact Registry** | Docker イメージリポジトリ |
 | **Secret Manager** | OAuth 認証情報、セッションシークレット |
 | **Compute Engine** | グローバル HTTPS ロードバランサー、静的 IP、マネージド SSL |
-| **Cloud DNS** | `gemini-hub.online` の DNS ゾーン |
+| **Cloud DNS** | DNS ゾーン管理 |
 | **Cloud Build** | CI/CD パイプライン（push 時にビルド＆デプロイ） |
 | **IAM** | サービスアカウントと権限管理 |
 
@@ -83,19 +74,17 @@ terraform/
   cloud-run.tf         # Cloud Run サービス
   networking.tf        # ロードバランサー（IP、NEG、バックエンド、URL マップ、SSL、プロキシ、転送ルール）
   dns.tf               # Cloud DNS マネージドゾーンと A レコード
-  cloud-build.tf       # Cloud Build トリガー（コメントアウト、GitHub 接続の手動作成が必要）
+  cloud-build.tf       # Cloud Build トリガー（参照用、gcloud で作成）
 ```
 
 ## 環境変数（Cloud Run）
 
-Secret Manager から実行時に注入：
-
 | 変数 | ソース |
 |------|--------|
-| `GOOGLE_CLIENT_ID` | Secret Manager (`google-client-id`) |
-| `GOOGLE_CLIENT_SECRET` | Secret Manager (`google-client-secret`) |
-| `SESSION_SECRET` | Secret Manager (`session-secret`) |
-| `GOOGLE_REDIRECT_URI` | 直接設定: `https://gemini-hub.online/auth/google/callback` |
+| `GOOGLE_CLIENT_ID` | Secret Manager |
+| `GOOGLE_CLIENT_SECRET` | Secret Manager |
+| `SESSION_SECRET` | Secret Manager |
+| `GOOGLE_REDIRECT_URI` | 直接設定（`https://<domain>/auth/google/callback`） |
 | `NODE_ENV` | Dockerfile で設定: `production` |
 | `PORT` | Dockerfile で設定: `8080` |
 
@@ -103,22 +92,20 @@ Secret Manager から実行時に注入：
 
 | 設定 | 値 |
 |------|------|
-| サービス名 | `gemini-hub` |
-| イメージ | `asia-northeast1-docker.pkg.dev/geminihub-486523/gemini-hub/gemini-hub:latest` |
 | CPU | 1 vCPU（リクエストがない間はアイドル） |
 | メモリ | 512 Mi |
 | 最小インスタンス数 | 0（ゼロスケール） |
 | 最大インスタンス数 | 3 |
 | ポート | 8080 |
 | Ingress | 全トラフィック |
-| 認証 | パブリック（allUsers: roles/run.invoker） |
+| 認証 | パブリック（allUsers） |
 
 ## サービスアカウント
 
 | アカウント | 用途 |
 |---------|------|
-| `gemini-hub-run@geminihub-486523.iam.gserviceaccount.com` | Cloud Run 実行用（シークレット読み取り） |
-| `495062043717@cloudbuild.gserviceaccount.com` | Cloud Build（Cloud Run へのデプロイ） |
+| `gemini-hub-run` | Cloud Run 実行用（シークレット読み取り） |
+| `gemini-hub-build` | Cloud Build トリガー（イメージビルド、Cloud Run デプロイ） |
 
 ## ネットワーク
 
@@ -129,12 +116,7 @@ Secret Manager から実行時に注入：
 
 ## DNS
 
-Google Cloud DNS で管理。ドメインレジストラ（お名前.com）でネームサーバーを設定：
-
-- `ns-cloud-a1.googledomains.com`
-- `ns-cloud-a2.googledomains.com`
-- `ns-cloud-a3.googledomains.com`
-- `ns-cloud-a4.googledomains.com`
+Google Cloud DNS で管理。ドメインレジストラでネームサーバーを設定。
 
 ## CI/CD（Cloud Build）
 
@@ -144,7 +126,7 @@ Google Cloud DNS で管理。ドメインレジストラ（お名前.com）で�
 2. Artifact Registry に**プッシュ**
 3. `gcloud run deploy` で Cloud Run に**デプロイ**
 
-Cloud Build トリガーは `main` ブランチへの push で実行。GitHub 接続は Cloud Console で手動作成が必要（OAuth フローのため）。
+トリガーは `main` ブランチへの push で自動実行（PR マージも含む）。GitHub 接続は 2nd-gen Cloud Build リポジトリリンクを使用。
 
 ## Docker
 
@@ -175,15 +157,13 @@ terraform apply
 ```bash
 # Cloud Build でイメージをビルド＆プッシュ
 gcloud builds submit \
-  --project=geminihub-486523 \
   --region=asia-northeast1 \
-  --tag=asia-northeast1-docker.pkg.dev/geminihub-486523/gemini-hub/gemini-hub:latest
+  --tag=<artifact-registry-image-path>:latest
 
 # Cloud Run を新しいイメージで更新
 gcloud run deploy gemini-hub \
-  --image=asia-northeast1-docker.pkg.dev/geminihub-486523/gemini-hub/gemini-hub:latest \
-  --region=asia-northeast1 \
-  --project=geminihub-486523
+  --image=<artifact-registry-image-path>:latest \
+  --region=asia-northeast1
 ```
 
 ### 状態確認

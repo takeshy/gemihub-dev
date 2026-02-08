@@ -47,24 +47,15 @@ Google Cloud deployment managed by Terraform.
                                  └─────────────────────┘
 ```
 
-## GCP Project
-
-| Item | Value |
-|------|-------|
-| Project ID | `geminihub-486523` |
-| Project Number | `495062043717` |
-| Region | `asia-northeast1` (Tokyo) |
-| Domain | `gemini-hub.online` |
-
 ## Services Used
 
 | Service | Purpose |
 |---------|---------|
 | **Cloud Run** | Node.js SSR application hosting (scale to zero) |
-| **Artifact Registry** | Docker image repository (`gemini-hub`) |
+| **Artifact Registry** | Docker image repository |
 | **Secret Manager** | OAuth credentials, session secret |
 | **Compute Engine** | Global HTTPS Load Balancer, static IP, managed SSL |
-| **Cloud DNS** | DNS zone for `gemini-hub.online` |
+| **Cloud DNS** | DNS zone management |
 | **Cloud Build** | CI/CD pipeline (build & deploy on push) |
 | **IAM** | Service accounts and permissions |
 
@@ -83,19 +74,17 @@ terraform/
   cloud-run.tf         # Cloud Run service
   networking.tf        # Load Balancer (IP, NEG, backend, URL map, SSL, proxies, forwarding rules)
   dns.tf               # Cloud DNS managed zone and A record
-  cloud-build.tf       # Cloud Build trigger (commented, requires manual GitHub connection)
+  cloud-build.tf       # Cloud Build trigger (reference only, created via gcloud)
 ```
 
 ## Environment Variables (Cloud Run)
 
-Injected from Secret Manager at runtime:
-
 | Variable | Source |
 |----------|--------|
-| `GOOGLE_CLIENT_ID` | Secret Manager (`google-client-id`) |
-| `GOOGLE_CLIENT_SECRET` | Secret Manager (`google-client-secret`) |
-| `SESSION_SECRET` | Secret Manager (`session-secret`) |
-| `GOOGLE_REDIRECT_URI` | Set directly: `https://gemini-hub.online/auth/google/callback` |
+| `GOOGLE_CLIENT_ID` | Secret Manager |
+| `GOOGLE_CLIENT_SECRET` | Secret Manager |
+| `SESSION_SECRET` | Secret Manager |
+| `GOOGLE_REDIRECT_URI` | Set directly (`https://<domain>/auth/google/callback`) |
 | `NODE_ENV` | Set in Dockerfile: `production` |
 | `PORT` | Set in Dockerfile: `8080` |
 
@@ -103,22 +92,20 @@ Injected from Secret Manager at runtime:
 
 | Setting | Value |
 |---------|-------|
-| Service name | `gemini-hub` |
-| Image | `asia-northeast1-docker.pkg.dev/geminihub-486523/gemini-hub/gemini-hub:latest` |
 | CPU | 1 vCPU (idle when no requests) |
 | Memory | 512 Mi |
 | Min instances | 0 (scale to zero) |
 | Max instances | 3 |
 | Port | 8080 |
 | Ingress | All traffic |
-| Auth | Public (allUsers: roles/run.invoker) |
+| Auth | Public (allUsers) |
 
 ## Service Accounts
 
 | Account | Purpose |
 |---------|---------|
-| `gemini-hub-run@geminihub-486523.iam.gserviceaccount.com` | Cloud Run runtime (reads secrets) |
-| `495062043717@cloudbuild.gserviceaccount.com` | Cloud Build (deploys to Cloud Run) |
+| `gemini-hub-run` | Cloud Run runtime (reads secrets) |
+| `gemini-hub-build` | Cloud Build trigger (builds images, deploys to Cloud Run) |
 
 ## Networking
 
@@ -129,12 +116,7 @@ Injected from Secret Manager at runtime:
 
 ## DNS
 
-Managed by Google Cloud DNS. Nameservers configured at the domain registrar (Onamae.com):
-
-- `ns-cloud-a1.googledomains.com`
-- `ns-cloud-a2.googledomains.com`
-- `ns-cloud-a3.googledomains.com`
-- `ns-cloud-a4.googledomains.com`
+Managed by Google Cloud DNS. Nameservers configured at the domain registrar.
 
 ## CI/CD (Cloud Build)
 
@@ -144,7 +126,7 @@ The `cloudbuild.yaml` in the project root defines the pipeline:
 2. **Push** to Artifact Registry
 3. **Deploy** to Cloud Run with `gcloud run deploy`
 
-The Cloud Build trigger is configured to run on push to the `main` branch. The GitHub connection must be created manually in the Cloud Console (requires OAuth flow).
+The trigger runs automatically on push to the `main` branch (including PR merges). The GitHub connection uses a 2nd-gen Cloud Build repository link.
 
 ## Docker
 
@@ -175,15 +157,13 @@ terraform apply
 ```bash
 # Build and push image via Cloud Build
 gcloud builds submit \
-  --project=geminihub-486523 \
   --region=asia-northeast1 \
-  --tag=asia-northeast1-docker.pkg.dev/geminihub-486523/gemini-hub/gemini-hub:latest
+  --tag=<artifact-registry-image-path>:latest
 
 # Update Cloud Run to use the new image
 gcloud run deploy gemini-hub \
-  --image=asia-northeast1-docker.pkg.dev/geminihub-486523/gemini-hub/gemini-hub:latest \
-  --region=asia-northeast1 \
-  --project=geminihub-486523
+  --image=<artifact-registry-image-path>:latest \
+  --region=asia-northeast1
 ```
 
 ### Check status
