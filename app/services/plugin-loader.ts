@@ -124,22 +124,23 @@ export async function loadPlugin(
   config: PluginConfig,
   api: PluginAPI
 ): Promise<PluginInstance> {
-  // Try IndexedDB cache first
-  let code = await getCachedAsset(config.id, config.version, "main.js");
-  let manifestJson = await getCachedAsset(config.id, config.version, "manifest.json");
+  // Try IndexedDB cache first (skip for dev version — always fetch fresh)
+  const isDev = config.version === "dev";
+  let code = isDev ? null : await getCachedAsset(config.id, config.version, "main.js");
+  let manifestJson = isDev ? null : await getCachedAsset(config.id, config.version, "manifest.json");
 
   if (!code) {
     const res = await fetch(`/api/plugins/${encodeURIComponent(config.id)}?file=main.js`);
     if (!res.ok) throw new Error(`Failed to fetch plugin ${config.id}: ${res.status}`);
     code = await res.text();
-    await setCachedAsset(config.id, config.version, "main.js", code);
+    if (!isDev) await setCachedAsset(config.id, config.version, "main.js", code);
   }
 
   if (!manifestJson) {
     const res = await fetch(`/api/plugins/${encodeURIComponent(config.id)}?file=manifest.json`);
     if (res.ok) {
       manifestJson = await res.text();
-      await setCachedAsset(config.id, config.version, "manifest.json", manifestJson);
+      if (!isDev) await setCachedAsset(config.id, config.version, "manifest.json", manifestJson);
     }
   }
 
@@ -170,13 +171,14 @@ export async function loadPlugin(
  * Load plugin styles
  */
 export async function loadPluginStyles(config: PluginConfig): Promise<void> {
-  let css = await getCachedAsset(config.id, config.version, "styles.css");
+  const isDev = config.version === "dev";
+  let css = isDev ? null : await getCachedAsset(config.id, config.version, "styles.css");
 
   if (!css) {
     const res = await fetch(`/api/plugins/${encodeURIComponent(config.id)}?file=styles.css`);
     if (!res.ok) return; // styles.css is optional
     css = await res.text();
-    await setCachedAsset(config.id, config.version, "styles.css", css);
+    if (!isDev) await setCachedAsset(config.id, config.version, "styles.css", css);
   }
 
   if (css) {

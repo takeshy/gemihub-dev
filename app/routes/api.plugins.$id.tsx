@@ -10,6 +10,7 @@ import {
   installPlugin,
   checkPluginUpdate,
 } from "~/services/plugin-manager.server";
+import { getLocalPluginFile } from "~/services/local-plugins.server";
 
 // ---------------------------------------------------------------------------
 // GET /api/plugins/:id?file=main.js — serve plugin files
@@ -32,6 +33,24 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     return Response.json({ error: "File not allowed" }, { status: 400 });
   }
 
+  const mimeTypes: Record<string, string> = {
+    "main.js": "application/javascript",
+    "styles.css": "text/css",
+    "manifest.json": "application/json",
+  };
+
+  // Try local plugin first (dev only)
+  const localContent = getLocalPluginFile(pluginId, fileName);
+  if (localContent !== null) {
+    const headers: Record<string, string> = {
+      "Content-Type": mimeTypes[fileName] || "text/plain",
+    };
+    if (setCookieHeader) {
+      headers["Set-Cookie"] = setCookieHeader;
+    }
+    return new Response(localContent, { headers });
+  }
+
   const content = await getPluginFile(
     validTokens.accessToken,
     validTokens.rootFolderId,
@@ -45,12 +64,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined,
     });
   }
-
-  const mimeTypes: Record<string, string> = {
-    "main.js": "application/javascript",
-    "styles.css": "text/css",
-    "manifest.json": "application/json",
-  };
 
   const headers: Record<string, string> = {
     "Content-Type": mimeTypes[fileName] || "text/plain",

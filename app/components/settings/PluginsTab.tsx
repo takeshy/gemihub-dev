@@ -252,11 +252,17 @@ export function PluginsTab({ settings }: PluginsTabProps) {
                     <span className="text-xs text-gray-500 dark:text-gray-400">
                       {plugin.version}
                     </span>
+                    {plugin.source === "local" && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium">
+                        Local
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {plugin.repo}
+                    {plugin.source === "local" ? `plugins/${plugin.id}/` : plugin.repo}
                   </div>
                 </div>
+                {plugin.source !== "local" && (
                 <div className="flex items-center gap-1 ml-2">
                   {/* Toggle */}
                   <button
@@ -310,6 +316,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
                     )}
                   </button>
                 </div>
+                )}
               </div>
             ))}
           </div>

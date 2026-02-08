@@ -4,6 +4,7 @@ import type { Route } from "./+types/_index";
 import { getTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
+import { getLocalPlugins } from "~/services/local-plugins.server";
 import type { UserSettings } from "~/types/settings";
 import { LogIn } from "lucide-react";
 import { I18nProvider } from "~/i18n/context";
@@ -41,7 +42,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   try {
     const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
-    const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+    const driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+
+    // Merge local plugins (dev only) — local plugins take priority over Drive plugins
+    const localPlugins = getLocalPlugins();
+    const localIds = new Set(localPlugins.map((p) => p.id));
+    const mergedPlugins = [
+      ...localPlugins,
+      ...(driveSettings.plugins || []).filter((p) => !localIds.has(p.id)),
+    ];
+    const settings = { ...driveSettings, plugins: mergedPlugins };
 
     return Response.json(
       {

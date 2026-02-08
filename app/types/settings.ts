@@ -340,6 +340,7 @@ export interface PluginConfig {
   repo: string; // "owner/repo"
   version: string;
   enabled: boolean;
+  source?: "local" | "github";
 }
 
 // Slash command for chat
