@@ -185,6 +185,9 @@ export function DriveFileTree({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [cachedFiles, setCachedFiles] = useState<Set<string>>(new Set());
   const [modifiedFiles, setModifiedFiles] = useState<Set<string>>(new Set());
+  const [createFileDialog, setCreateFileDialog] = useState<{
+    open: boolean; name: string; ext: string; customExt: string;
+  }>({ open: false, name: "", ext: ".md", customExt: "" });
   const [decryptTarget, setDecryptTarget] = useState<CachedTreeNode | null>(null);
   const [decryptPassword, setDecryptPassword] = useState("");
   const [decryptError, setDecryptError] = useState<string | null>(null);
@@ -399,20 +402,30 @@ export function DriveFileTree({
     setSelectedFolderId(folderId);
   }, [selectedFolderId]);
 
-  const handleCreateFile = useCallback(async () => {
-    const name = prompt("File name:");
-    if (!name?.trim()) return;
+  const handleCreateFile = useCallback(() => {
+    setCreateFileDialog({ open: true, name: "", ext: ".md", customExt: "" });
+  }, []);
+
+  const handleCreateFileSubmit = useCallback(async () => {
+    const name = createFileDialog.name.trim();
+    if (!name) return;
+    const ext = createFileDialog.ext === "custom"
+      ? (createFileDialog.customExt.startsWith(".") ? createFileDialog.customExt : "." + createFileDialog.customExt)
+      : createFileDialog.ext;
+    const fileName = name + ext;
+
+    setCreateFileDialog((prev) => ({ ...prev, open: false }));
 
     // Prepend selected folder path
     const folderPath = selectedFolderId?.startsWith("vfolder:")
       ? selectedFolderId.slice("vfolder:".length)
       : "";
-    const fullName = folderPath ? `${folderPath}/${name.trim()}` : name.trim();
+    const fullName = folderPath ? `${folderPath}/${fileName}` : fileName;
 
     // Check for duplicate
     const existing = findFileByPath(treeItems, fullName);
     if (existing) {
-      const msg = t("contextMenu.fileAlreadyExists").replace("{name}", name.trim());
+      const msg = t("contextMenu.fileAlreadyExists").replace("{name}", fileName);
       if (!confirm(msg)) return;
       // Overwrite existing file
       try {
@@ -456,7 +469,7 @@ export function DriveFileTree({
     } catch {
       // ignore
     }
-  }, [selectedFolderId, fetchAndCacheTree, updateTreeFromMeta, onSelectFile, treeItems, t]);
+  }, [createFileDialog, selectedFolderId, fetchAndCacheTree, updateTreeFromMeta, onSelectFile, treeItems, t]);
 
   // Auto-clear progress after 3 seconds when all done
   useEffect(() => {
@@ -915,8 +928,7 @@ export function DriveFileTree({
       if (!item.isFolder) {
         // Single file
         if (modifiedFiles.has(item.id)) {
-          alert(t("contextMenu.clearCacheModified"));
-          return;
+          if (!confirm(t("contextMenu.clearCacheModified"))) return;
         }
         await deleteCachedFile(item.id);
         // Remove from localSyncMeta
@@ -931,11 +943,16 @@ export function DriveFileTree({
           next.delete(item.id);
           return next;
         });
+        setModifiedFiles((prev) => {
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
       } else {
         // Folder: collect all file IDs
         const allIds = collectFileIds(item);
         const modifiedInFolder = allIds.filter((id) => modifiedFiles.has(id));
-        const toDelete = allIds.filter((id) => !modifiedFiles.has(id) && cachedFiles.has(id));
+        const toDelete = allIds.filter((id) => cachedFiles.has(id));
 
         if (modifiedInFolder.length > 0) {
           if (!confirm(t("contextMenu.clearCacheSkipModified"))) return;
@@ -955,6 +972,11 @@ export function DriveFileTree({
         setCachedFiles((prev) => {
           const next = new Set(prev);
           for (const id of toDelete) next.delete(id);
+          return next;
+        });
+        setModifiedFiles((prev) => {
+          const next = new Set(prev);
+          for (const id of modifiedInFolder) next.delete(id);
           return next;
         });
       }
@@ -1379,6 +1401,79 @@ export function DriveFileTree({
                 className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
               >
                 {decrypting ? t("crypt.decrypting") : t("crypt.unlock")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {createFileDialog.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setCreateFileDialog((prev) => ({ ...prev, open: false }))}>
+          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              {t("fileTree.newFile")}
+            </h3>
+            <div className="flex gap-2 mb-4">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t("fileTree.fileName")}</label>
+                <input
+                  type="text"
+                  value={createFileDialog.name}
+                  onChange={(e) => setCreateFileDialog((prev) => ({ ...prev, name: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCreateFileSubmit();
+                    if (e.key === "Escape") setCreateFileDialog((prev) => ({ ...prev, open: false }));
+                  }}
+                  placeholder="filename"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  autoFocus
+                />
+              </div>
+              <div className="w-24">
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t("fileTree.extension")}</label>
+                <select
+                  value={createFileDialog.ext}
+                  onChange={(e) => setCreateFileDialog((prev) => ({ ...prev, ext: e.target.value }))}
+                  className="w-full px-2 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value=".md">.md</option>
+                  <option value=".yaml">.yaml</option>
+                  <option value=".json">.json</option>
+                  <option value=".html">.html</option>
+                  <option value=".txt">.txt</option>
+                  <option value="custom">{t("fileTree.customExt")}</option>
+                </select>
+              </div>
+              {createFileDialog.ext === "custom" && (
+                <div className="w-24">
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">&nbsp;</label>
+                  <input
+                    type="text"
+                    value={createFileDialog.customExt}
+                    onChange={(e) => setCreateFileDialog((prev) => ({ ...prev, customExt: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleCreateFileSubmit();
+                      if (e.key === "Escape") setCreateFileDialog((prev) => ({ ...prev, open: false }));
+                    }}
+                    placeholder=".csv"
+                    className="w-full px-2 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setCreateFileDialog((prev) => ({ ...prev, open: false }))}
+                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                {t("fileTree.cancel")}
+              </button>
+              <button
+                onClick={handleCreateFileSubmit}
+                disabled={!createFileDialog.name.trim() || (createFileDialog.ext === "custom" && !createFileDialog.customExt.trim())}
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {t("fileTree.create")}
               </button>
             </div>
           </div>

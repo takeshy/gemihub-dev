@@ -71,7 +71,7 @@ export interface TranslationStrings {
   "settings.mcp.name": string;
   "settings.mcp.url": string;
   "settings.mcp.headers": string;
-  "settings.mcp.enabled": string;
+
   "settings.mcp.add": string;
   "settings.mcp.testAndAdd": string;
   "settings.mcp.tools": string;
@@ -255,6 +255,14 @@ export interface TranslationStrings {
   "settings.commands.edit": string;
   "settings.commands.delete": string;
 
+  // File tree - new file dialog
+  "fileTree.newFile": string;
+  "fileTree.fileName": string;
+  "fileTree.extension": string;
+  "fileTree.customExt": string;
+  "fileTree.create": string;
+  "fileTree.cancel": string;
+
   // Trash & Conflicts
   "settings.sync.trashTitle": string;
   "settings.sync.trashDescription": string;
@@ -345,7 +353,7 @@ const en: TranslationStrings = {
   "settings.mcp.name": "Name",
   "settings.mcp.url": "URL",
   "settings.mcp.headers": "Headers (JSON)",
-  "settings.mcp.enabled": "Enabled",
+
   "settings.mcp.add": "Add",
   "settings.mcp.testAndAdd": "Test & Add",
   "settings.mcp.tools": "Tools: {{tools}}",
@@ -417,8 +425,8 @@ const en: TranslationStrings = {
   "contextMenu.tempUploaded": "Uploaded to temp",
   "contextMenu.noTempFile": "No temp file found for this file.",
   "contextMenu.clearCache": "Clear Cache",
-  "contextMenu.clearCacheModified": "This file has unsaved changes. Push first.",
-  "contextMenu.clearCacheSkipModified": "Some files have unsaved changes and will be skipped. Continue?",
+  "contextMenu.clearCacheModified": "This file has unsaved changes that will be lost. Continue?",
+  "contextMenu.clearCacheSkipModified": "Some files have unsaved changes that will be lost. Continue?",
   "contextMenu.publish": "Publish to Web",
   "contextMenu.unpublish": "Unpublish",
   "contextMenu.copyLink": "Copy Share Link",
@@ -529,6 +537,14 @@ const en: TranslationStrings = {
   "settings.commands.edit": "Edit",
   "settings.commands.delete": "Delete",
 
+  // File tree - new file dialog
+  "fileTree.newFile": "New File",
+  "fileTree.fileName": "File name",
+  "fileTree.extension": "Extension",
+  "fileTree.customExt": "Custom",
+  "fileTree.create": "Create",
+  "fileTree.cancel": "Cancel",
+
   // Trash & Manage Files
   "settings.sync.trashTitle": "Trash",
   "settings.sync.trashDescription": "Restore or permanently delete trashed files.",
@@ -619,7 +635,7 @@ const ja: TranslationStrings = {
   "settings.mcp.name": "名前",
   "settings.mcp.url": "URL",
   "settings.mcp.headers": "ヘッダー (JSON)",
-  "settings.mcp.enabled": "有効",
+
   "settings.mcp.add": "追加",
   "settings.mcp.testAndAdd": "テスト＆追加",
   "settings.mcp.tools": "ツール: {{tools}}",
@@ -691,8 +707,8 @@ const ja: TranslationStrings = {
   "contextMenu.tempUploaded": "一時ファイルにアップロードしました",
   "contextMenu.noTempFile": "このファイルの一時ファイルが見つかりません。",
   "contextMenu.clearCache": "キャッシュクリア",
-  "contextMenu.clearCacheModified": "このファイルには未保存の変更があります。先にPushしてください。",
-  "contextMenu.clearCacheSkipModified": "未保存の変更があるファイルはスキップされます。続行しますか？",
+  "contextMenu.clearCacheModified": "未保存の変更がありますが、変更は失われます。続行しますか？",
+  "contextMenu.clearCacheSkipModified": "未保存の変更があるファイルがありますが、変更は失われます。続行しますか？",
   "contextMenu.publish": "ウェブに公開",
   "contextMenu.unpublish": "公開を解除",
   "contextMenu.copyLink": "共有リンクをコピー",
@@ -802,6 +818,14 @@ const ja: TranslationStrings = {
   "settings.commands.update": "更新",
   "settings.commands.edit": "編集",
   "settings.commands.delete": "削除",
+
+  // File tree - new file dialog
+  "fileTree.newFile": "新規ファイル",
+  "fileTree.fileName": "ファイル名",
+  "fileTree.extension": "拡張子",
+  "fileTree.customExt": "カスタム",
+  "fileTree.create": "作成",
+  "fileTree.cancel": "キャンセル",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "ゴミ箱",
