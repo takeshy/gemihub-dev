@@ -22,14 +22,27 @@ export async function handleDriveFileNode(
   const accessToken = serviceContext.driveAccessToken;
   const folderId = serviceContext.driveRootFolderId;
 
+  // Check for companion _fileId variable from drive-file-picker
+  let existingFile: driveService.DriveFile | undefined;
+  const pathRaw = node.properties["path"] || "";
+  const fileVarMatch = pathRaw.trim().match(/^\{\{(\w+)\}\}/);
+  if (fileVarMatch) {
+    const pickerFileId = context.variables.get(`${fileVarMatch[1]}_fileId`);
+    if (pickerFileId && typeof pickerFileId === "string") {
+      existingFile = { id: pickerFileId, name: fileName, mimeType: "text/plain" };
+    }
+  }
+
   // Search for existing file
-  const existingFiles = await driveService.searchFiles(
-    accessToken,
-    folderId,
-    fileName,
-    false
-  );
-  let existingFile = existingFiles.find(f => f.name === fileName);
+  if (!existingFile) {
+    const existingFiles = await driveService.searchFiles(
+      accessToken,
+      folderId,
+      fileName,
+      false
+    );
+    existingFile = existingFiles.find(f => f.name === fileName);
+  }
 
   // Fallback: exact name match (handles special chars and files in subfolders)
   if (!existingFile) {
@@ -79,6 +92,17 @@ export async function handleDriveReadNode(
     const content = await driveService.readFile(accessToken, path);
     context.variables.set(saveTo, content);
     return;
+  }
+
+  // Check for companion _fileId variable from drive-file-picker
+  const varMatch = pathRaw.trim().match(/^\{\{(\w+)\}\}$/);
+  if (varMatch) {
+    const fileId = context.variables.get(`${varMatch[1]}_fileId`);
+    if (fileId && typeof fileId === "string") {
+      const content = await driveService.readFile(accessToken, fileId);
+      context.variables.set(saveTo, content);
+      return;
+    }
   }
 
   // Search by file name

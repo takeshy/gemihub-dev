@@ -151,7 +151,11 @@ export async function handleDriveFilePickerNode(
   const result = await promptCallbacks.promptForDriveFile(title, extensions);
   if (result === null) throw new Error("File selection cancelled by user");
 
-  if (savePathTo) context.variables.set(savePathTo, result.name);
+  if (savePathTo) {
+    context.variables.set(savePathTo, result.name);
+    // Also store the file ID so drive-read can skip name-based search
+    context.variables.set(`${savePathTo}_fileId`, result.id);
+  }
   if (saveTo) {
     context.variables.set(saveTo, JSON.stringify({
       id: result.id,
