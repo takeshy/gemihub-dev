@@ -11,12 +11,14 @@ import {
   ChevronDown,
   ChevronUp,
   Wrench,
+  Lock,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Attachment } from "~/types/chat";
 import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand, McpServerConfig } from "~/types/settings";
 import type { ChatOverrides } from "~/components/ide/ChatPanel";
 import { useI18n } from "~/i18n/context";
+import type { TranslationStrings } from "~/i18n/translations";
 import { useEditorContext } from "~/contexts/EditorContext";
 import { useAutocomplete, type AutocompleteItem } from "~/hooks/useAutocomplete";
 import { AutocompletePopup } from "./AutocompletePopup";
@@ -38,6 +40,8 @@ interface ChatInputProps {
   enabledMcpServerNames?: string[];
   onEnabledMcpServerNamesChange?: (names: string[]) => void;
   slashCommands?: SlashCommand[];
+  driveToolModeLocked?: boolean;
+  driveToolModeReasonKey?: keyof TranslationStrings;
 }
 
 function fileToAttachment(file: File): Promise<Attachment> {
@@ -99,6 +103,8 @@ export function ChatInput({
   enabledMcpServerNames = [],
   onEnabledMcpServerNamesChange,
   slashCommands = [],
+  driveToolModeLocked = false,
+  driveToolModeReasonKey,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -408,20 +414,30 @@ export function ChatInput({
                   onClick={() => setToolDropdownOpen(!toolDropdownOpen)}
                   disabled={disabled}
                   className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
-                    driveToolMode !== "all" || (mcpServers.length > 0 && enabledMcpServerNames.length < mcpServers.filter(s => s.enabled).length)
+                    driveToolModeLocked
                       ? "text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/30"
-                      : "text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                      : driveToolMode !== "all" || (mcpServers.length > 0 && enabledMcpServerNames.length < mcpServers.filter(s => s.enabled).length)
+                        ? "text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/30"
+                        : "text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   }`}
                   aria-label="Tool settings"
-                  title="Tool settings"
+                  title={driveToolModeLocked && driveToolModeReasonKey ? t(driveToolModeReasonKey) : "Tool settings"}
                 >
-                  <Wrench size={ICON.LG} />
+                  {driveToolModeLocked ? <Lock size={ICON.LG} /> : <Wrench size={ICON.LG} />}
                 </button>
                 {toolDropdownOpen && (
                   <div className="absolute bottom-full left-0 z-10 mb-1 w-64 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
                     <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
                       Drive Tools
+                      {driveToolModeLocked && (
+                        <span className="ml-1 normal-case tracking-normal font-normal">— {t("chat.toolModeLocked")}</span>
+                      )}
                     </div>
+                    {driveToolModeLocked && driveToolModeReasonKey && (
+                      <div className="px-3 pb-1 text-[10px] text-amber-600 dark:text-amber-400">
+                        {t(driveToolModeReasonKey)}
+                      </div>
+                    )}
                     {(["all", "noSearch", "none"] as const).map((mode) => {
                       const labels: Record<DriveToolMode, string> = {
                         all: "All tools",
@@ -432,9 +448,13 @@ export function ChatInput({
                         <button
                           key={mode}
                           onClick={() => {
-                            onDriveToolModeChange(mode);
+                            if (!driveToolModeLocked) onDriveToolModeChange(mode);
                           }}
-                          className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                          className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
+                            driveToolModeLocked
+                              ? "pointer-events-none opacity-50"
+                              : "hover:bg-gray-100 dark:hover:bg-gray-700"
+                          } ${
                             driveToolMode === mode
                               ? "text-blue-700 dark:text-blue-300"
                               : "text-gray-700 dark:text-gray-300"
@@ -457,7 +477,7 @@ export function ChatInput({
                         </div>
                         {mcpServers.filter(s => s.enabled).map((server) => {
                           const isEnabled = enabledMcpServerNames.includes(server.name);
-                          const toolNames = (server.tools || []).map(t => t.name);
+                          const toolNames = (server.tools || []).map(tl => tl.name);
                           const toolCount = toolNames.length;
                           const preview = toolNames.slice(0, 3).join(", ") + (toolNames.length > 3 ? ", ..." : "");
                           const label = toolCount > 0
@@ -467,12 +487,17 @@ export function ChatInput({
                             <button
                               key={server.name}
                               onClick={() => {
+                                if (driveToolModeLocked) return;
                                 const next = isEnabled
                                   ? enabledMcpServerNames.filter(n => n !== server.name)
                                   : [...enabledMcpServerNames, server.name];
                                 onEnabledMcpServerNamesChange(next);
                               }}
-                              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                              className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
+                                driveToolModeLocked
+                                  ? "pointer-events-none opacity-50 text-gray-700 dark:text-gray-300"
+                                  : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                              }`}
                               title={toolNames.length > 0 ? toolNames.join(", ") : undefined}
                             >
                               <span className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded border text-[8px] leading-none ${

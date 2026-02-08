@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Plus, Trash2, ChevronDown } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type {
@@ -14,7 +14,9 @@ import type { UserSettings, ModelType, DriveToolMode, SlashCommand } from "~/typ
 import {
   getAvailableModels,
   getDefaultModelForPlan,
+  getDriveToolModeConstraint,
 } from "~/types/settings";
+import type { TranslationStrings } from "~/i18n/translations";
 import { MessageList } from "~/components/chat/MessageList";
 import { ChatInput } from "~/components/chat/ChatInput";
 import { useI18n } from "~/i18n/context";
@@ -68,7 +70,10 @@ export function ChatPanel({
   const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(
     settings.selectedRagSetting
   );
-  const [driveToolMode, setDriveToolMode] = useState<DriveToolMode>("all");
+  const initialConstraint = getDriveToolModeConstraint(defaultModel, settings.selectedRagSetting);
+  const [driveToolMode, setDriveToolMode] = useState<DriveToolMode>(
+    initialConstraint.forcedMode ?? initialConstraint.defaultMode
+  );
   const [enabledMcpServerNames, setEnabledMcpServerNames] = useState<string[]>(
     settings.mcpServers.filter((s) => s.enabled).map((s) => s.name)
   );
@@ -175,24 +180,50 @@ export function ChatPanel({
     [activeChatId]
   );
 
-  // ---- RAG/WebSearch change with auto-linking ----
+  // ---- Constraint-based auto-control ----
+  const toolConstraint = useMemo(
+    () => getDriveToolModeConstraint(selectedModel, selectedRagSetting),
+    [selectedModel, selectedRagSetting]
+  );
+
+  const applyConstraint = useCallback(
+    (model: string, ragSetting: string | null) => {
+      const c = getDriveToolModeConstraint(model, ragSetting);
+      setDriveToolMode(c.forcedMode ?? c.defaultMode);
+      // Gemma or WebSearch: disable MCP (no function calling)
+      if (model.toLowerCase().includes("gemma") || ragSetting === "__websearch__") {
+        setEnabledMcpServerNames([]);
+      }
+    },
+    []
+  );
+
   const handleRagSettingChange = useCallback(
     (name: string | null) => {
+      const wasLocked = getDriveToolModeConstraint(selectedModel, selectedRagSetting).locked;
       setSelectedRagSetting(name);
-      if (name === "__websearch__") {
-        // Web Search: incompatible with other tools
-        setDriveToolMode("none");
-        setEnabledMcpServerNames([]);
-      } else if (name) {
-        // RAG selected: search tools not needed
-        setDriveToolMode("noSearch");
-      } else {
-        // None: restore defaults
-        setDriveToolMode("all");
+      applyConstraint(selectedModel, name);
+      const willBeLocked = getDriveToolModeConstraint(selectedModel, name).locked;
+      // Restore MCP defaults only when transitioning from locked to unlocked
+      if (wasLocked && !willBeLocked) {
         setEnabledMcpServerNames(settings.mcpServers.filter((s) => s.enabled).map((s) => s.name));
       }
     },
-    [settings.mcpServers]
+    [selectedModel, selectedRagSetting, applyConstraint, settings.mcpServers]
+  );
+
+  const handleModelChange = useCallback(
+    (model: ModelType) => {
+      const wasLocked = getDriveToolModeConstraint(selectedModel, selectedRagSetting).locked;
+      setSelectedModel(model);
+      applyConstraint(model, selectedRagSetting);
+      const willBeLocked = getDriveToolModeConstraint(model, selectedRagSetting).locked;
+      // Restore MCP defaults only when transitioning from locked to unlocked
+      if (wasLocked && !willBeLocked) {
+        setEnabledMcpServerNames(settings.mcpServers.filter((s) => s.enabled).map((s) => s.name));
+      }
+    },
+    [selectedModel, selectedRagSetting, applyConstraint, settings.mcpServers]
   );
 
   // ---- Send message ----
@@ -528,7 +559,7 @@ export function ChatPanel({
         disabled={!hasApiKey}
         models={availableModels}
         selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
+        onModelChange={handleModelChange}
         ragSettings={Object.keys(settings.ragSettings ?? {}).length > 0 ? settings.ragSettings : undefined}
         selectedRagSetting={selectedRagSetting}
         onRagSettingChange={handleRagSettingChange}
@@ -540,6 +571,8 @@ export function ChatPanel({
         enabledMcpServerNames={enabledMcpServerNames}
         onEnabledMcpServerNamesChange={setEnabledMcpServerNames}
         slashCommands={slashCommands}
+        driveToolModeLocked={toolConstraint.locked}
+        driveToolModeReasonKey={toolConstraint.reasonKey as keyof TranslationStrings | undefined}
       />
     </div>
   );

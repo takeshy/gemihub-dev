@@ -34,6 +34,10 @@ export interface TranslationStrings {
   "chat.noHistory": string;
   "chat.confirmDelete": string;
   "chat.mcpToolsLabel": string;
+  "chat.toolModeLockGemma": string;
+  "chat.toolModeLockWebSearch": string;
+  "chat.toolModeLockFlashLiteRag": string;
+  "chat.toolModeLocked": string;
 
   // Settings page
   "settings.title": string;
@@ -280,6 +284,10 @@ const en: TranslationStrings = {
   "chat.noHistory": "No chat history",
   "chat.confirmDelete": "Delete this chat?",
   "chat.mcpToolsLabel": "MCP Tools",
+  "chat.toolModeLockGemma": "Gemma models don't support function calling",
+  "chat.toolModeLockWebSearch": "Drive tools are disabled during Web Search",
+  "chat.toolModeLockFlashLiteRag": "Drive tools are disabled when Flash Lite uses RAG",
+  "chat.toolModeLocked": "Auto (locked)",
 
   // Settings
   "settings.title": "Settings",
@@ -527,6 +535,10 @@ const ja: TranslationStrings = {
   "chat.noHistory": "チャット履歴はありません",
   "chat.confirmDelete": "このチャットを削除しますか？",
   "chat.mcpToolsLabel": "MCPツール",
+  "chat.toolModeLockGemma": "Gemmaモデルはファンクションコールに対応していません",
+  "chat.toolModeLockWebSearch": "Web Search中はDriveツールは無効です",
+  "chat.toolModeLockFlashLiteRag": "Flash LiteでRAG使用時はDriveツールは無効です",
+  "chat.toolModeLocked": "自動（ロック中）",
 
   // Settings
   "settings.title": "設定",

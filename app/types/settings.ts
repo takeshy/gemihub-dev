@@ -76,6 +76,33 @@ export type ApiPlan = "paid" | "free";
 // Drive Tool Mode
 export type DriveToolMode = "all" | "noSearch" | "none";
 
+export interface DriveToolModeConstraint {
+  forcedMode: DriveToolMode | null;
+  defaultMode: DriveToolMode;
+  locked: boolean;
+  reasonKey?: string;
+}
+
+export function getDriveToolModeConstraint(
+  model: string,
+  ragSetting: string | null
+): DriveToolModeConstraint {
+  const m = model.toLowerCase();
+  if (m.includes("gemma")) {
+    return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockGemma" };
+  }
+  if (ragSetting === "__websearch__") {
+    return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockWebSearch" };
+  }
+  if (m.includes("flash-lite") && ragSetting && ragSetting !== "__websearch__") {
+    return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockFlashLiteRag" };
+  }
+  if (ragSetting && ragSetting !== "__websearch__") {
+    return { forcedMode: null, defaultMode: "noSearch", locked: false };
+  }
+  return { forcedMode: null, defaultMode: "all", locked: false };
+}
+
 // Language
 export type Language = "en" | "ja";
 
