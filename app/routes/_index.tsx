@@ -43,9 +43,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   try {
     const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
-    if (validTokens.userId) {
-      console.log(JSON.stringify({ severity: "INFO", message: "user_access", userId: validTokens.userId }));
-    }
     const driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
 
     // Merge local plugins (dev only) — local plugins take priority over Drive plugins

@@ -3,7 +3,8 @@ import { requireAuth } from "~/services/session.server";
 import { generateWorkflowStream } from "~/services/gemini.server";
 import { getWorkflowSpecification } from "~/engine/workflowSpec";
 import { getSettings } from "~/services/user-settings.server";
-import type { ModelType } from "~/types/settings";
+import type { ModelType, ApiPlan } from "~/types/settings";
+import { getDefaultModelForPlan } from "~/types/settings";
 
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
@@ -44,8 +45,10 @@ export async function action({ request }: Route.ActionArgs) {
     // Use defaults if settings can't be loaded
   }
 
+  const apiPlan: ApiPlan = settings?.apiPlan ?? (tokens.apiPlan as ApiPlan) ?? "paid";
+
   const spec = getWorkflowSpecification({
-    apiPlan: settings?.apiPlan ?? (tokens.apiPlan as "paid" | "free") ?? "paid",
+    apiPlan,
     mcpServers: settings?.mcpServers,
     ragSettingNames: settings?.ragSettings
       ? Object.keys(settings.ragSettings)
@@ -62,7 +65,7 @@ export async function action({ request }: Route.ActionArgs) {
       : description;
   }
 
-  const selectedModel = model || (settings?.selectedModel as ModelType) || "gemini-2.5-flash";
+  const selectedModel = model || (settings?.selectedModel as ModelType) || getDefaultModelForPlan(apiPlan);
 
   // SSE streaming response
   const encoder = new TextEncoder();

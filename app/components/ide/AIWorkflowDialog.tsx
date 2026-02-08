@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { ModelType, ApiPlan } from "~/types/settings";
-import { getAvailableModels } from "~/types/settings";
+import { getAvailableModels, getDefaultModelForPlan } from "~/types/settings";
 import { WorkflowPreviewModal } from "./WorkflowPreviewModal";
 
 export interface AIWorkflowMeta {
@@ -47,7 +47,7 @@ export function AIWorkflowDialog({
   // Input state
   const [name, setName] = useState(currentName || "");
   const [description, setDescription] = useState("");
-  const [selectedModel, setSelectedModel] = useState<ModelType>("gemini-2.5-flash");
+  const [selectedModel, setSelectedModel] = useState<ModelType>(getDefaultModelForPlan(apiPlan));
 
   // Generation state
   const [phase, setPhase] = useState<Phase>("input");
