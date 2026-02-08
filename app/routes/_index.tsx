@@ -178,16 +178,19 @@ function IDELayout({
           if (data?.name) {
             setActiveFileName(data.name);
             setActiveFileMimeType(data.mimeType || null);
-            if (data.name.endsWith(".yaml") || data.name.endsWith(".yml")) {
-              setRightPanel("workflow");
-            } else {
-              setRightPanel("chat");
+            // Don't switch away from plugin views
+            if (!rightPanel.startsWith("plugin:") && !rightPanel.startsWith("main-plugin:")) {
+              if (data.name.endsWith(".yaml") || data.name.endsWith(".yml")) {
+                setRightPanel("workflow");
+              } else {
+                setRightPanel("chat");
+              }
             }
           }
         })
         .catch(() => {});
     }
-  }, [activeFileId, activeFileName]);
+  }, [activeFileId, activeFileName, rightPanel]);
 
   // Workflow version for refreshing MainViewer after sidebar edits
   const [workflowVersion, setWorkflowVersion] = useState(0);
@@ -219,18 +222,20 @@ function IDELayout({
       setActiveFileId(fileId);
       setActiveFileName(fileName);
       setActiveFileMimeType(mimeType);
-      // Auto-switch right panel based on file type
-      if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
-        setRightPanel("workflow");
-      } else {
-        setRightPanel("chat");
+      // Auto-switch right panel based on file type, but keep plugin views open
+      if (!rightPanel.startsWith("plugin:") && !rightPanel.startsWith("main-plugin:")) {
+        if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
+          setRightPanel("workflow");
+        } else {
+          setRightPanel("chat");
+        }
       }
       // Update URL without triggering React Router navigation/loader
       const url = new URL(window.location.href);
       url.searchParams.set("file", fileId);
       window.history.replaceState({}, "", url.toString());
     },
-    []
+    [rightPanel]
   );
 
   // ---- New workflow creation (opens AI dialog) ----
