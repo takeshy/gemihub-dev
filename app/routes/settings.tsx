@@ -30,6 +30,7 @@ import {
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { ensureRootFolder } from "~/services/google-drive.server";
+import { getLocalPlugins } from "~/services/local-plugins.server";
 import {
   encryptPrivateKey,
   decryptPrivateKey,
@@ -95,7 +96,16 @@ const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof Settin
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
-  const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+  const driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+
+  // Merge local plugins (dev only)
+  const localPlugins = getLocalPlugins();
+  const localIds = new Set(localPlugins.map((p) => p.id));
+  const mergedPlugins = [
+    ...localPlugins,
+    ...(driveSettings.plugins || []).filter((p) => !localIds.has(p.id)),
+  ];
+  const settings = { ...driveSettings, plugins: mergedPlugins };
 
   return data(
     {
