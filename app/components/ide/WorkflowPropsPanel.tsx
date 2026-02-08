@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   GitBranch,
   Plus,
+  FilePlus,
   FileCode,
   Loader2,
   RefreshCw,
@@ -17,6 +18,7 @@ import {
   ChevronRight,
   Info,
   Sparkles,
+  AppWindow,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Workflow, WorkflowNode } from "~/engine/types";
@@ -28,6 +30,9 @@ import {
 } from "~/utils/workflow-node-summary";
 import { buildOutgoingMap } from "~/utils/workflow-connections";
 import { NodeEditorModal } from "./NodeEditorModal";
+import type { NodePropertyContext } from "~/utils/workflow-node-properties";
+import { McpAppModal } from "~/components/execution/McpAppModal";
+import type { McpAppInfo } from "~/types/chat";
 import { ExecutionHistoryModal } from "./ExecutionHistoryModal";
 import { PromptModal } from "~/components/execution/PromptModal";
 import yaml from "js-yaml";
@@ -47,6 +52,7 @@ interface WorkflowPropsPanelProps {
   onSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
   onWorkflowChanged?: () => void;
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
+  settings?: import("~/types/settings").UserSettings;
 }
 
 function isWorkflowFile(name: string | null): boolean {
@@ -61,14 +67,17 @@ export function WorkflowPropsPanel({
   onSelectFile,
   onWorkflowChanged,
   onModifyWithAI,
+  settings,
 }: WorkflowPropsPanelProps) {
   if (isWorkflowFile(activeFileName) && activeFileId) {
     return (
       <WorkflowNodeListView
         fileId={activeFileId}
         fileName={activeFileName!}
+        onNewWorkflow={onNewWorkflow}
         onWorkflowChanged={onWorkflowChanged}
         onModifyWithAI={onModifyWithAI}
+        settings={settings}
       />
     );
   }
@@ -91,6 +100,7 @@ interface LogEntry {
   timestamp: string;
   input?: Record<string, unknown>;
   output?: unknown;
+  mcpApps?: McpAppInfo[];
 }
 
 function formatValue(value: unknown): string {
@@ -106,15 +116,19 @@ function formatValue(value: unknown): string {
 function WorkflowNodeListView({
   fileId,
   fileName,
+  onNewWorkflow,
   onWorkflowChanged,
   onModifyWithAI,
+  settings,
 }: {
   fileId: string;
   fileName: string;
+  onNewWorkflow: () => void;
   onWorkflowChanged?: () => void;
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
+  settings?: import("~/types/settings").UserSettings;
 }) {
-  const { content: rawContent, error: fileError, save, refresh } = useFileWithCache(fileId);
+  const { content: rawContent, error: fileError, saveToCache, refresh } = useFileWithCache(fileId);
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [workflowName, setWorkflowName] = useState("");
@@ -164,6 +178,7 @@ function WorkflowNodeListView({
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [expandedLogIndex, setExpandedLogIndex] = useState<number | null>(null);
+  const [mcpAppModal, setMcpAppModal] = useState<McpAppInfo[] | null>(null);
   const [promptData, setPromptData] = useState<Record<string, unknown> | null>(null);
   const eventSourceRef = useState<EventSource | null>(null);
 
@@ -171,7 +186,7 @@ function WorkflowNodeListView({
     async (updated: Workflow) => {
       try {
         const yamlContent = serializeWorkflow(updated, workflowName);
-        await save(yamlContent);
+        await saveToCache(yamlContent);
         setWorkflow(updated);
         setRawYaml(yamlContent);
         onWorkflowChanged?.();
@@ -179,7 +194,7 @@ function WorkflowNodeListView({
         setError(err instanceof Error ? err.message : "Failed to save");
       }
     },
-    [save, workflowName, onWorkflowChanged]
+    [saveToCache, workflowName, onWorkflowChanged]
   );
 
   const handleAddNode = useCallback(() => {
@@ -306,6 +321,9 @@ function WorkflowNodeListView({
       es.addEventListener("log", (e) => {
         const log = JSON.parse(e.data);
         setLogs((prev) => [...prev, log]);
+        if (log.mcpApps && log.mcpApps.length > 0) {
+          setMcpAppModal(log.mcpApps);
+        }
       });
       es.addEventListener("complete", () => {
         setExecutionStatus("completed");
@@ -580,7 +598,7 @@ function WorkflowNodeListView({
             <div className="max-h-48 overflow-y-auto px-2 pb-1 font-mono text-[10px]">
               {logs.map((log, i) => {
                 const isExpanded = expandedLogIndex === i;
-                const hasDetail = log.input || log.output;
+                const hasDetail = log.input || log.output || (log.mcpApps && log.mcpApps.length > 0);
                 return (
                   <div key={i}>
                     <div
@@ -603,6 +621,15 @@ function WorkflowNodeListView({
                       {!!hasDetail && (isExpanded ? <ChevronDown size={10} className="mt-0.5 flex-shrink-0" /> : <ChevronRight size={10} className="mt-0.5 flex-shrink-0" />)}
                       <span className="text-gray-400">[{log.nodeId}]</span>
                       <span className="break-all">{log.message}</span>
+                      {log.mcpApps && log.mcpApps.length > 0 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMcpAppModal(log.mcpApps!); }}
+                          className="ml-1 flex-shrink-0 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                          title="Open MCP App"
+                        >
+                          <AppWindow size={12} />
+                        </button>
+                      )}
                     </div>
                     {isExpanded && (
                       <div className="ml-5 mb-1 space-y-1 text-[10px]">
@@ -665,6 +692,14 @@ function WorkflowNodeListView({
             AI
           </button>
         )}
+        <button
+          onClick={onNewWorkflow}
+          className="flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          title="New Workflow"
+        >
+          <FilePlus size={ICON.SM} />
+          New
+        </button>
         {executionStatus !== "idle" && (
           <span className="ml-auto">
             {executionStatus === "running" && (
@@ -698,6 +733,18 @@ function WorkflowNodeListView({
           onSave={handleSaveNode}
           onCancel={() => setEditingNode(null)}
           initialNext={editingNextInfo}
+          propertyContext={{
+            ragSettingNames: settings?.ragSettings ? Object.keys(settings.ragSettings) : [],
+            mcpServerNames: settings?.mcpServers?.map(s => s.name) || [],
+          } satisfies NodePropertyContext}
+        />
+      )}
+
+      {/* MCP App Modal */}
+      {mcpAppModal && (
+        <McpAppModal
+          mcpApps={mcpAppModal}
+          onClose={() => setMcpAppModal(null)}
         />
       )}
 

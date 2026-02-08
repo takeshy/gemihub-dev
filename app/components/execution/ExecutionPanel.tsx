@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
-import { Play, Square, ChevronDown, ChevronRight, CheckCircle, XCircle, Info, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Play, Square, ChevronDown, ChevronRight, CheckCircle, XCircle, Info, Loader2, AppWindow } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { PromptModal } from "./PromptModal";
+import { McpAppModal } from "./McpAppModal";
 import { useWorkflowExecution } from "~/hooks/useWorkflowExecution";
-import { useState } from "react";
+import type { McpAppInfo } from "~/types/chat";
 
 interface ExecutionPanelProps {
   workflowId: string;
@@ -20,6 +21,7 @@ export function ExecutionPanel({ workflowId }: ExecutionPanelProps) {
   } = useWorkflowExecution(workflowId);
 
   const [isExpanded, setIsExpanded] = useState(true);
+  const [mcpAppModal, setMcpAppModal] = useState<McpAppInfo[] | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -95,10 +97,27 @@ export function ExecutionPanel({ workflowId }: ExecutionPanelProps) {
               )}
               <span className="text-gray-400">[{log.nodeId}]</span>
               <span className="break-all">{log.message}</span>
+              {log.mcpApps && log.mcpApps.length > 0 && (
+                <button
+                  onClick={() => setMcpAppModal(log.mcpApps!)}
+                  className="ml-1 flex-shrink-0 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                  title="Open MCP App"
+                >
+                  <AppWindow size={12} />
+                </button>
+              )}
             </div>
           ))}
           <div ref={logsEndRef} />
         </div>
+      )}
+
+      {/* MCP App Modal */}
+      {mcpAppModal && (
+        <McpAppModal
+          mcpApps={mcpAppModal}
+          onClose={() => setMcpAppModal(null)}
+        />
       )}
 
       {/* Prompt Modal */}
