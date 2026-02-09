@@ -265,40 +265,6 @@ export interface TranslationStrings {
   "fileTree.create": string;
   "fileTree.cancel": string;
 
-  // Landing page
-  "lp.hero.tagline": string;
-  "lp.hero.description": string;
-  "lp.signIn": string;
-  "lp.features.aiChat.title": string;
-  "lp.features.aiChat.description": string;
-  "lp.features.rag.title": string;
-  "lp.features.rag.description": string;
-  "lp.features.mcp.title": string;
-  "lp.features.mcp.description": string;
-  "lp.features.workflow.title": string;
-  "lp.features.workflow.description": string;
-  "lp.features.yourData.title": string;
-  "lp.features.yourData.description": string;
-  "lp.screenshots.title": string;
-  "lp.screenshots.ide": string;
-  "lp.screenshots.workflow": string;
-  "lp.screenshots.execution": string;
-  "lp.dataUsage.title": string;
-  "lp.dataUsage.intro": string;
-  "lp.dataUsage.account.title": string;
-  "lp.dataUsage.account.description": string;
-  "lp.dataUsage.drive.title": string;
-  "lp.dataUsage.drive.description": string;
-  "lp.dataUsage.noSharing.title": string;
-  "lp.dataUsage.noSharing.description": string;
-  "lp.dataUsage.portability.title": string;
-  "lp.dataUsage.portability.description": string;
-  "lp.dataUsage.learnMore": string;
-  "lp.cta.ready": string;
-  "lp.footer.terms": string;
-  "lp.footer.policy": string;
-  "lp.footer.contact": string;
-
   // Trash & Conflicts
   "settings.sync.trashTitle": string;
   "settings.sync.trashDescription": string;
@@ -583,40 +549,6 @@ const en: TranslationStrings = {
   "fileTree.create": "Create",
   "fileTree.cancel": "Cancel",
 
-  // Landing page
-  "lp.hero.tagline": "Your AI secretary, powered by Gemini and your own Google Drive",
-  "lp.hero.description": "AI chat with streaming & function calling, visual workflow builder, Drive file management, and offline-first caching — all self-hostable.",
-  "lp.signIn": "Sign in with Google",
-  "lp.features.aiChat.title": "AI Chat",
-  "lp.features.aiChat.description": "Streaming responses with function calling, Google Search integration, and conversation history saved to Drive.",
-  "lp.features.rag.title": "RAG & File Search",
-  "lp.features.rag.description": "Retrieval-augmented generation powered by your own Google Drive files for contextual AI answers.",
-  "lp.features.mcp.title": "MCP & Plugins",
-  "lp.features.mcp.description": "Extend capabilities with Model Context Protocol servers and a plugin system installable from GitHub.",
-  "lp.features.workflow.title": "Workflow Automation",
-  "lp.features.workflow.description": "Build and execute AI-powered workflows visually with 20+ node types including Drive, HTTP, and MCP integrations.",
-  "lp.features.yourData.title": "Your Data, Your Control",
-  "lp.features.yourData.description": "All data stored in your Google Drive — no external database. Self-hostable with optional encryption.",
-  "lp.screenshots.title": "See It in Action",
-  "lp.screenshots.ide": "IDE with AI Chat & Drive File Management",
-  "lp.screenshots.workflow": "Visual Workflow Builder",
-  "lp.screenshots.execution": "Workflow Execution",
-  "lp.dataUsage.title": "How We Use Your Data",
-  "lp.dataUsage.intro": "GemiHub uses Google OAuth to authenticate you. Here is exactly what we access and why:",
-  "lp.dataUsage.account.title": "Google Account Info",
-  "lp.dataUsage.account.description": "Your name and email address are used solely for sign-in and display within the app.",
-  "lp.dataUsage.drive.title": "Google Drive Access",
-  "lp.dataUsage.drive.description": "GemiHub reads and writes files in a dedicated \"GeminiHub\" folder in your Google Drive to store chat history, workflows, and settings. It does not access files outside this folder unless you explicitly select them.",
-  "lp.dataUsage.noSharing.title": "No Third-Party Sharing",
-  "lp.dataUsage.noSharing.description": "Your data is never sold, shared with, or transferred to any third party. All data remains in your own Google Drive.",
-  "lp.dataUsage.portability.title": "Full Portability",
-  "lp.dataUsage.portability.description": "GemiHub has no database — everything lives in your Google Drive. If this service ever shuts down, simply run your own instance locally or in the cloud and all your data, chat history, workflows, and settings are instantly available, exactly as you left them.",
-  "lp.dataUsage.learnMore": "Learn more in our",
-  "lp.cta.ready": "Ready to get started?",
-  "lp.footer.terms": "Terms of Service",
-  "lp.footer.policy": "Privacy Policy",
-  "lp.footer.contact": "Contact",
-
   // Trash & Manage Files
   "settings.sync.trashTitle": "Trash",
   "settings.sync.trashDescription": "Restore or permanently delete trashed files.",
@@ -900,40 +832,6 @@ const ja: TranslationStrings = {
   "fileTree.customExt": "カスタム",
   "fileTree.create": "作成",
   "fileTree.cancel": "キャンセル",
-
-  // Landing page
-  "lp.hero.tagline": "Geminiとあなた自身のGoogle Driveで動く、AIセクレタリー",
-  "lp.hero.description": "ストリーミング対応AIチャット、ビジュアルワークフロービルダー、Driveファイル管理、オフラインキャッシュ — すべてセルフホスト可能。",
-  "lp.signIn": "Googleでサインイン",
-  "lp.features.aiChat.title": "AIチャット",
-  "lp.features.aiChat.description": "ストリーミング応答、ファンクションコール、Google検索連携、会話履歴のDrive保存に対応。",
-  "lp.features.rag.title": "RAG・ファイル検索",
-  "lp.features.rag.description": "Google Driveのファイルを活用した検索拡張生成で、文脈に沿ったAI回答を取得。",
-  "lp.features.mcp.title": "MCP・プラグイン",
-  "lp.features.mcp.description": "Model Context Protocolサーバーと、GitHubからインストール可能なプラグインシステムで機能を拡張。",
-  "lp.features.workflow.title": "ワークフロー自動化",
-  "lp.features.workflow.description": "Drive、HTTP、MCP連携を含む20以上のノードタイプで、AIワークフローをビジュアルに構築・実行。",
-  "lp.features.yourData.title": "データは自分の手に",
-  "lp.features.yourData.description": "すべてのデータはGoogle Driveに保存 — 外部データベースは不要。暗号化オプション付きでセルフホスト可能。",
-  "lp.screenshots.title": "動作イメージ",
-  "lp.screenshots.ide": "AIチャット＆Driveファイル管理",
-  "lp.screenshots.workflow": "ビジュアルワークフロービルダー",
-  "lp.screenshots.execution": "ワークフロー実行",
-  "lp.dataUsage.title": "データの取り扱いについて",
-  "lp.dataUsage.intro": "GemiHubはGoogle OAuthで認証を行います。アクセスするデータとその目的は以下の通りです：",
-  "lp.dataUsage.account.title": "Googleアカウント情報",
-  "lp.dataUsage.account.description": "名前とメールアドレスは、ログインとアプリ内の表示にのみ使用します。",
-  "lp.dataUsage.drive.title": "Google Driveへのアクセス",
-  "lp.dataUsage.drive.description": "Google Drive内の専用フォルダ「GeminiHub」にチャット履歴、ワークフロー、設定を保存します。明示的に選択しない限り、このフォルダ外のファイルにはアクセスしません。",
-  "lp.dataUsage.noSharing.title": "第三者への共有なし",
-  "lp.dataUsage.noSharing.description": "データの販売や第三者への共有・転送は一切行いません。すべてのデータはご自身のGoogle Driveに保存されます。",
-  "lp.dataUsage.portability.title": "完全なポータビリティ",
-  "lp.dataUsage.portability.description": "GemiHubにデータベースはありません。すべてのデータはGoogle Driveに保存されます。万が一このサービスが停止しても、ローカルやクラウドで自分のインスタンスを立ち上げるだけで、チャット履歴・ワークフロー・設定がそのまま復元されます。",
-  "lp.dataUsage.learnMore": "詳しくは",
-  "lp.cta.ready": "さあ、始めましょう",
-  "lp.footer.terms": "利用規約",
-  "lp.footer.policy": "プライバシーポリシー",
-  "lp.footer.contact": "お問い合わせ",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "ゴミ箱",
