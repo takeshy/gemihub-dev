@@ -120,13 +120,13 @@ export async function action({ request }: Route.ActionArgs) {
               }
             } catch {
               // Dynamic registration failed — use fixed clientId as fallback
-              discovery.config.clientId = "gemini-hub-ide";
+              discovery.config.clientId = "gemihub";
             }
           }
 
           // If no registration endpoint was available, use fixed clientId
           if (!discovery.config.clientId) {
-            discovery.config.clientId = "gemini-hub-ide";
+            discovery.config.clientId = "gemihub";
           }
 
           return Response.json({

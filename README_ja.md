@@ -1,18 +1,18 @@
-# Gemini Hub
+# GemiHub
 
 **Gemini と Google Drive で作る、あなた専用のAI秘書。**
 
-Gemini Hub は、Google Gemini を Google Drive と深く統合したセルフホスト対応の Web アプリケーションです。AI があなたのファイルを読み・検索し・書き込める。ビジュアルエディタでワークフローを自動化できる。すべてのデータはあなた自身の Google Drive に保存され、外部データベースは不要です。
+GemiHub は、Google Gemini を Google Drive と深く統合したセルフホスト対応の Web アプリケーションです。AI があなたのファイルを読み・検索し・書き込める。ビジュアルエディタでワークフローを自動化できる。すべてのデータはあなた自身の Google Drive に保存され、外部データベースは不要です。
 
 [English README](./README.md)
 
-![Gemini Hub](./docs/images/cap.png)
+![GemiHub](./docs/images/cap.png)
 
-## Gemini Hub でできること
+## GemiHub でできること
 
 ### あなたのデータを理解する AI
 
-一般的な AI チャットとは違い、Gemini Hub はあなたの Google Drive に直接つながります。AI がファイルを読み取り、横断検索し、新規作成や更新まで — すべて自然な会話で行えます。メモの内容を質問したり、ドキュメントの要約を生成したり、ファイル整理を任せたり。
+一般的な AI チャットとは違い、GemiHub はあなたの Google Drive に直接つながります。AI がファイルを読み取り、横断検索し、新規作成や更新まで — すべて自然な会話で行えます。メモの内容を質問したり、ドキュメントの要約を生成したり、ファイル整理を任せたり。
 
 ### 単語ではなく「意味」で検索する（RAG）
 
@@ -20,7 +20,7 @@ Gemini Hub は、Google Gemini を Google Drive と深く統合したセルフ�
 
 ### 外部ツールを自由に接続（MCP & プラグイン）
 
-Model Context Protocol（MCP）を通じて、Gemini Hub は外部サービスと連携できます。Web 検索、データベース、API、MCP 対応サーバーを接続すれば、AI が会話中にこれらのツールを自動的に発見し活用します。さらに**プラグイン**で機能を拡張可能 — GitHub からインストールまたはローカル開発で、カスタムサイドバービュー、スラッシュコマンド、設定パネルを追加できます。
+Model Context Protocol（MCP）を通じて、GemiHub は外部サービスと連携できます。Web 検索、データベース、API、MCP 対応サーバーを接続すれば、AI が会話中にこれらのツールを自動的に発見し活用します。さらに**プラグイン**で機能を拡張可能 — GitHub からインストールまたはローカル開発で、カスタムサイドバービュー、スラッシュコマンド、設定パネルを追加できます。
 
 ### コード不要のワークフロー自動化
 
@@ -30,7 +30,7 @@ Model Context Protocol（MCP）を通じて、Gemini Hub は外部サービス�
 
 ### あなたのデータは、あなたの管理下に
 
-チャット履歴、ワークフロー、設定、変更履歴 — すべてのデータは Google Drive の `gemini-hub/` フォルダに保存されます。独自データベースもベンダーロックインもありません。オプションのハイブリッド暗号化（RSA + AES）で機密ファイルを保護でき、Python 復号スクリプトも提供されているため、暗号化データには常に独立してアクセスできます。
+チャット履歴、ワークフロー、設定、変更履歴 — すべてのデータは Google Drive の `gemihub/` フォルダに保存されます。独自データベースもベンダーロックインもありません。オプションのハイブリッド暗号化（RSA + AES）で機密ファイルを保護でき、Python 復号スクリプトも提供されているため、暗号化データには常に独立してアクセスできます。
 
 ![Push/Pull 同期](./docs/images/push_pull.png)
 
@@ -112,18 +112,18 @@ Model Context Protocol（MCP）を通じて、Gemini Hub は外部サービス�
 #### OAuth 同意画面の設定
 1. 「API とサービス」→「OAuth 同意画面」
 2. User Type: **外部** を選択
-3. アプリ名（例: Gemini Hub）、ユーザーサポートメール、デベロッパー連絡先を入力
+3. アプリ名（例: GemiHub）、ユーザーサポートメール、デベロッパー連絡先を入力
 4. スコープ追加: `https://www.googleapis.com/auth/drive.file`
 5. テストユーザーに自分の Gmail アドレスを追加（公開前は自分しかアクセスできません）
 
 > **重要: Google Drive のファイルアクセスについて**
 >
-> このアプリは `drive.file` スコープを使用しており、**アプリ自身が作成したファイルにのみアクセスできます**。Google Drive の Web UI や他のアプリから `gemini-hub/` フォルダに直接アップロードしたファイルは Gemini Hub からは**見えません**。ファイルを追加するには、アプリ内のアップロード機能を使用するか、AI チャット経由で作成してください。
+> このアプリは `drive.file` スコープを使用しており、**アプリ自身が作成したファイルにのみアクセスできます**。Google Drive の Web UI や他のアプリから `gemihub/` フォルダに直接アップロードしたファイルは GemiHub からは**見えません**。ファイルを追加するには、アプリ内のアップロード機能を使用するか、AI チャット経由で作成してください。
 
 #### OAuth 認証情報の作成
 1. 「API とサービス」→「認証情報」→「＋認証情報を作成」→「OAuth クライアント ID」
 2. アプリケーションの種類: **ウェブアプリケーション**
-3. 名前: 任意（例: Gemini Hub Local）
+3. 名前: 任意（例: GemiHub Local）
 4. **承認済みリダイレクト URI** に追加: `http://localhost:5170/auth/google/callback`
 5. 作成後、**クライアント ID** と **クライアントシークレット** をメモ
 
@@ -137,7 +137,7 @@ Model Context Protocol（MCP）を通じて、Gemini Hub は外部サービス�
 
 ```bash
 git clone <repository-url>
-cd gemini-hub
+cd gemihub
 npm install
 ```
 
@@ -191,13 +191,13 @@ npm run start
 ### Docker
 
 ```bash
-docker build -t gemini-hub .
+docker build -t gemihub .
 docker run -p 8080:8080 \
   -e GOOGLE_CLIENT_ID=... \
   -e GOOGLE_CLIENT_SECRET=... \
   -e GOOGLE_REDIRECT_URI=https://your-domain/auth/google/callback \
   -e SESSION_SECRET=... \
-  gemini-hub
+  gemihub
 ```
 
 ## アーキテクチャ

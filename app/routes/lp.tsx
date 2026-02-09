@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Sparkles, Zap } from "lucide-react";
+import { LogIn, MessageSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Sparkles, Zap, BookOpen } from "lucide-react";
 import type { ComponentType } from "react";
 import { useLocation } from "react-router";
 import type { Language } from "~/types/settings";
@@ -249,6 +249,10 @@ export default function LandingPage() {
             <a href="https://github.com/takeshy/gemihub" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-gray-700 hover:underline dark:hover:text-gray-200">
               <Github size={14} />
               GitHub
+            </a>
+            <a href={`https://github.com/takeshy/gemihub/blob/main/${lang === "ja" ? "README_ja.md" : "README.md"}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-gray-700 hover:underline dark:hover:text-gray-200">
+              <BookOpen size={14} />
+              README
             </a>
             <a href="mailto:takeshy.work@gmail.com" className="hover:text-gray-700 hover:underline dark:hover:text-gray-200">
               {s.footerContact}

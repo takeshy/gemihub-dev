@@ -9,7 +9,7 @@ import ReactDOM from "react-dom";
 // IndexedDB cache for plugin assets
 // ---------------------------------------------------------------------------
 
-const PLUGIN_DB_NAME = "gemini-hub-plugins";
+const PLUGIN_DB_NAME = "gemihub-plugins";
 const PLUGIN_DB_VERSION = 1;
 
 interface CachedPluginAsset {

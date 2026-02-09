@@ -22,12 +22,12 @@ export function useApplySettings(language: Language, fontSize: FontSize, theme: 
   useEffect(() => {
     document.documentElement.style.fontSize = `${fontSize}px`;
     document.documentElement.lang = language;
-    localStorage.setItem("gemini-hub-fontSize", String(fontSize));
-    localStorage.setItem("gemini-hub-language", language);
+    localStorage.setItem("gemihub-fontSize", String(fontSize));
+    localStorage.setItem("gemihub-language", language);
   }, [language, fontSize]);
 
   useEffect(() => {
-    localStorage.setItem("gemini-hub-theme", theme);
+    localStorage.setItem("gemihub-theme", theme);
     applyTheme(resolveTheme(theme));
 
     if (theme === "system") {

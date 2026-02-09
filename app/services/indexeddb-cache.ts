@@ -1,7 +1,7 @@
 // IndexedDB cache service for browser-side file caching and sync metadata
 // Uses a singleton DB connection for performance.
 
-const DB_NAME = "gemini-hub-cache";
+const DB_NAME = "gemihub-cache";
 const DB_VERSION = 5;
 
 // --- Store types ---

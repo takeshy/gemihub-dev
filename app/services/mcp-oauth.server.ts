@@ -47,7 +47,7 @@ export async function discoverOAuth(serverUrl: string): Promise<OAuthDiscoveryRe
         params: {
           protocolVersion: "2024-11-05",
           capabilities: {},
-          clientInfo: { name: "gemini-hub-oauth-probe", version: "1.0.0" },
+          clientInfo: { name: "gemihub-oauth-probe", version: "1.0.0" },
         },
       }),
     });

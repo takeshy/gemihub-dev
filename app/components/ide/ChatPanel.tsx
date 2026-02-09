@@ -84,7 +84,7 @@ export function ChatPanel({
   );
   const [enabledMcpServerNames, setEnabledMcpServerNames] = useState<string[]>(() => {
     try {
-      const stored = localStorage.getItem("gemini-hub:enabledMcpServers");
+      const stored = localStorage.getItem("gemihub:enabledMcpServers");
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) return parsed;
@@ -96,7 +96,7 @@ export function ChatPanel({
   // Persist MCP selection to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem("gemini-hub:enabledMcpServers", JSON.stringify(enabledMcpServerNames));
+      localStorage.setItem("gemihub:enabledMcpServers", JSON.stringify(enabledMcpServerNames));
     } catch { /* ignore */ }
   }, [enabledMcpServerNames]);
 

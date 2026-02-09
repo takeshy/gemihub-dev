@@ -1,18 +1,18 @@
-# Gemini Hub
+# GemiHub
 
 **Your AI secretary, powered by Gemini and your own Google Drive.**
 
-Gemini Hub is a self-hostable web application that turns Google Gemini into a personal AI assistant deeply integrated with your Google Drive. Chat with AI that can read, search, and write your files. Build automated workflows with a visual editor. All your data stays in your own Google Drive — no external database required.
+GemiHub is a self-hostable web application that turns Google Gemini into a personal AI assistant deeply integrated with your Google Drive. Chat with AI that can read, search, and write your files. Build automated workflows with a visual editor. All your data stays in your own Google Drive — no external database required.
 
 [日本語版 README](./README_ja.md)
 
-![Gemini Hub](./docs/images/cap.png)
+![GemiHub](./docs/images/cap.png)
 
-## Why Gemini Hub?
+## Why GemiHub?
 
 ### AI That Knows Your Data
 
-Unlike generic AI chat, Gemini Hub connects directly to your Google Drive. The AI can read your files, search across them, create new documents, and update existing ones — all through natural conversation. Ask questions about your notes, generate summaries of your documents, or have the AI organize your files for you.
+Unlike generic AI chat, GemiHub connects directly to your Google Drive. The AI can read your files, search across them, create new documents, and update existing ones — all through natural conversation. Ask questions about your notes, generate summaries of your documents, or have the AI organize your files for you.
 
 ### Search by Meaning, Not Just Keywords (RAG)
 
@@ -20,7 +20,7 @@ With built-in RAG (Retrieval-Augmented Generation), you can sync your Drive file
 
 ### Connect Any External Tool (MCP & Plugins)
 
-Through the Model Context Protocol (MCP), Gemini Hub can talk to external services. Connect web search, databases, APIs, or any MCP-compatible server — and the AI automatically discovers and uses these tools during conversation. You can also extend Gemini Hub with **plugins** — install from GitHub or develop locally — to add custom sidebar views, slash commands, and settings panels.
+Through the Model Context Protocol (MCP), GemiHub can talk to external services. Connect web search, databases, APIs, or any MCP-compatible server — and the AI automatically discovers and uses these tools during conversation. You can also extend GemiHub with **plugins** — install from GitHub or develop locally — to add custom sidebar views, slash commands, and settings panels.
 
 ### No-Code Workflow Automation
 
@@ -30,7 +30,7 @@ Build complex automation pipelines with a visual drag-and-drop editor. Chain tog
 
 ### Your Data, Your Control
 
-All data — chat history, workflows, settings, edit history — is stored in your own Google Drive under a `gemini-hub/` folder. No proprietary database, no vendor lock-in. Optional hybrid encryption (RSA + AES) protects sensitive files. A Python decryption script is provided so you can always access your encrypted data independently.
+All data — chat history, workflows, settings, edit history — is stored in your own Google Drive under a `gemihub/` folder. No proprietary database, no vendor lock-in. Optional hybrid encryption (RSA + AES) protects sensitive files. A Python decryption script is provided so you can always access your encrypted data independently.
 
 ![Push/Pull Sync](./docs/images/push_pull.png)
 
@@ -112,18 +112,18 @@ Go to [Google Cloud Console](https://console.cloud.google.com/) and perform the 
 #### Configure OAuth consent screen
 1. Go to "APIs & Services" → "OAuth consent screen"
 2. User Type: **External**
-3. Fill in App name (e.g., Gemini Hub), support email, and developer contact
+3. Fill in App name (e.g., GemiHub), support email, and developer contact
 4. Add scope: `https://www.googleapis.com/auth/drive.file`
 5. Add your Gmail address as a test user (only your account can access before publishing)
 
 > **Important: Google Drive File Access**
 >
-> This app uses the `drive.file` scope, which means it can **only access files created by the app itself**. Files you upload directly to the `gemini-hub/` folder via the Google Drive web UI or other apps will **not** be visible to Gemini Hub. To add files, use the upload feature within the app or create them through AI chat.
+> This app uses the `drive.file` scope, which means it can **only access files created by the app itself**. Files you upload directly to the `gemihub/` folder via the Google Drive web UI or other apps will **not** be visible to GemiHub. To add files, use the upload feature within the app or create them through AI chat.
 
 #### Create OAuth credentials
 1. Go to "APIs & Services" → "Credentials" → "+ Create Credentials" → "OAuth client ID"
 2. Application type: **Web application**
-3. Name: anything (e.g., Gemini Hub Local)
+3. Name: anything (e.g., GemiHub Local)
 4. Add **Authorized redirect URI**: `http://localhost:5170/auth/google/callback`
 5. Copy the **Client ID** and **Client Secret**
 
@@ -137,7 +137,7 @@ Go to [Google Cloud Console](https://console.cloud.google.com/) and perform the 
 
 ```bash
 git clone <repository-url>
-cd gemini-hub
+cd gemihub
 npm install
 ```
 
@@ -191,13 +191,13 @@ npm run start
 ### Docker
 
 ```bash
-docker build -t gemini-hub .
+docker build -t gemihub .
 docker run -p 8080:8080 \
   -e GOOGLE_CLIENT_ID=... \
   -e GOOGLE_CLIENT_SECRET=... \
   -e GOOGLE_REDIRECT_URI=https://your-domain/auth/google/callback \
   -e SESSION_SECRET=... \
-  gemini-hub
+  gemihub
 ```
 
 ## Architecture

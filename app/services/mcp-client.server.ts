@@ -204,7 +204,7 @@ export class McpClient {
       protocolVersion: "2024-11-05",
       capabilities: {},
       clientInfo: {
-        name: "gemini-hub",
+        name: "gemihub",
         version: "1.0.0",
       },
     })) as McpInitializeResult;

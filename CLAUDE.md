@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Gemini Hub is a web application that integrates Google Gemini AI with Google Drive, with support for self-hosting. It provides visual workflow building, AI chat with streaming/function calling, Drive file management with a WYSIWYG editor, and offline-first caching with push/pull sync.
+GemiHub is a web application that integrates Google Gemini AI with Google Drive, with support for self-hosting. It provides visual workflow building, AI chat with streaming/function calling, Drive file management with a WYSIWYG editor, and offline-first caching with push/pull sync.
 
 ## Commands
 
@@ -46,7 +46,7 @@ Requires Node.js 22+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_I
 - **Cache-First Sync:** Files cached in IndexedDB. MD5 hash comparison detects changes. Manual push/pull with conflict resolution dialog.
 - **Encryption:** Optional hybrid RSA+AES encryption for chat history and workflow logs (`crypto.server.ts`).
 - **Auth Flow:** Google OAuth 2.0 → session cookies (httpOnly, 30-day). Tokens stored in session, refreshed automatically.
-- **Settings:** Stored as `settings.json` in the user's Drive (`gemini-hub/` folder). Six tab categories: General, MCP Servers, RAG, Plugins, Commands, Encryption.
+- **Settings:** Stored as `settings.json` in the user's Drive (`gemihub/` folder). Six tab categories: General, MCP Servers, RAG, Plugins, Commands, Encryption.
 
 ### Route Configuration
 
