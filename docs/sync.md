@@ -135,6 +135,8 @@ Downloads only remotely-changed files to local cache.
 5. **Download file contents** in parallel (max 5 concurrent)
 6. **Update IndexedDB cache** with downloaded files
 7. **Update local sync meta** with new checksums
+8. **Update remote sync meta** with pulled files, and **prune `localOnly` entries** from `_sync-meta.json`
+9. **Fire "sync-complete" event** and update localModifiedCount
 
 ### Decision Tables
 
@@ -424,7 +426,7 @@ Browser (IndexedDB)          Server                Google Drive
 | Action | Method | Description |
 |--------|--------|-------------|
 | `diff` | POST | Three-way diff comparison |
-| `pull` | POST | Download file contents for specified IDs |
+| `pull` | POST | Download file contents for specified IDs, update/prune sync meta |
 | `resolve` | POST | Resolve conflict (backup loser, update Drive file and meta) |
 | `fullPull` | POST | Download all remote files (skip matching) |
 | `fullPush` | POST | Merge all local meta into remote meta |
