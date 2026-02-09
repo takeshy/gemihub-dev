@@ -265,6 +265,26 @@ export interface TranslationStrings {
   "fileTree.create": string;
   "fileTree.cancel": string;
 
+  // Landing page
+  "lp.hero.tagline": string;
+  "lp.hero.description": string;
+  "lp.signIn": string;
+  "lp.features.aiChat.title": string;
+  "lp.features.aiChat.description": string;
+  "lp.features.rag.title": string;
+  "lp.features.rag.description": string;
+  "lp.features.mcp.title": string;
+  "lp.features.mcp.description": string;
+  "lp.features.workflow.title": string;
+  "lp.features.workflow.description": string;
+  "lp.features.yourData.title": string;
+  "lp.features.yourData.description": string;
+  "lp.screenshots.title": string;
+  "lp.screenshots.ide": string;
+  "lp.screenshots.workflow": string;
+  "lp.screenshots.execution": string;
+  "lp.cta.ready": string;
+
   // Trash & Conflicts
   "settings.sync.trashTitle": string;
   "settings.sync.trashDescription": string;
@@ -549,6 +569,26 @@ const en: TranslationStrings = {
   "fileTree.create": "Create",
   "fileTree.cancel": "Cancel",
 
+  // Landing page
+  "lp.hero.tagline": "Your AI secretary, powered by Gemini and your own Google Drive",
+  "lp.hero.description": "AI chat with streaming & function calling, visual workflow builder, Drive file management, and offline-first caching — all self-hostable.",
+  "lp.signIn": "Sign in with Google",
+  "lp.features.aiChat.title": "AI Chat",
+  "lp.features.aiChat.description": "Streaming responses with function calling, Google Search integration, and conversation history saved to Drive.",
+  "lp.features.rag.title": "RAG & File Search",
+  "lp.features.rag.description": "Retrieval-augmented generation powered by your own Google Drive files for contextual AI answers.",
+  "lp.features.mcp.title": "MCP & Plugins",
+  "lp.features.mcp.description": "Extend capabilities with Model Context Protocol servers and a plugin system installable from GitHub.",
+  "lp.features.workflow.title": "Workflow Automation",
+  "lp.features.workflow.description": "Build and execute AI-powered workflows visually with 20+ node types including Drive, HTTP, and MCP integrations.",
+  "lp.features.yourData.title": "Your Data, Your Control",
+  "lp.features.yourData.description": "All data stored in your Google Drive — no external database. Self-hostable with optional encryption.",
+  "lp.screenshots.title": "See It in Action",
+  "lp.screenshots.ide": "IDE with AI Chat & Drive File Management",
+  "lp.screenshots.workflow": "Visual Workflow Builder",
+  "lp.screenshots.execution": "Workflow Execution",
+  "lp.cta.ready": "Ready to get started?",
+
   // Trash & Manage Files
   "settings.sync.trashTitle": "Trash",
   "settings.sync.trashDescription": "Restore or permanently delete trashed files.",
@@ -832,6 +872,26 @@ const ja: TranslationStrings = {
   "fileTree.customExt": "カスタム",
   "fileTree.create": "作成",
   "fileTree.cancel": "キャンセル",
+
+  // Landing page
+  "lp.hero.tagline": "Geminiとあなた自身のGoogle Driveで動く、AIセクレタリー",
+  "lp.hero.description": "ストリーミング対応AIチャット、ビジュアルワークフロービルダー、Driveファイル管理、オフラインキャッシュ — すべてセルフホスト可能。",
+  "lp.signIn": "Googleでサインイン",
+  "lp.features.aiChat.title": "AIチャット",
+  "lp.features.aiChat.description": "ストリーミング応答、ファンクションコール、Google検索連携、会話履歴のDrive保存に対応。",
+  "lp.features.rag.title": "RAG・ファイル検索",
+  "lp.features.rag.description": "Google Driveのファイルを活用した検索拡張生成で、文脈に沿ったAI回答を取得。",
+  "lp.features.mcp.title": "MCP・プラグイン",
+  "lp.features.mcp.description": "Model Context Protocolサーバーと、GitHubからインストール可能なプラグインシステムで機能を拡張。",
+  "lp.features.workflow.title": "ワークフロー自動化",
+  "lp.features.workflow.description": "Drive、HTTP、MCP連携を含む20以上のノードタイプで、AIワークフローをビジュアルに構築・実行。",
+  "lp.features.yourData.title": "データは自分の手に",
+  "lp.features.yourData.description": "すべてのデータはGoogle Driveに保存 — 外部データベースは不要。暗号化オプション付きでセルフホスト可能。",
+  "lp.screenshots.title": "動作イメージ",
+  "lp.screenshots.ide": "AIチャット＆Driveファイル管理",
+  "lp.screenshots.workflow": "ビジュアルワークフロービルダー",
+  "lp.screenshots.execution": "ワークフロー実行",
+  "lp.cta.ready": "さあ、始めましょう",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "ゴミ箱",

@@ -1,12 +1,12 @@
 import { useState, useCallback, useEffect } from "react";
-import { data, useLoaderData, useSearchParams } from "react-router";
+import { data, redirect, useLoaderData, useSearchParams } from "react-router";
 import type { Route } from "./+types/_index";
 import { getTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import type { UserSettings } from "~/types/settings";
-import { LogIn, FolderOpen, FileText, MessageSquare, GitBranch } from "lucide-react";
+import { FolderOpen, FileText, MessageSquare, GitBranch } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
@@ -35,13 +35,7 @@ import { ICON } from "~/utils/icon-sizes";
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await getTokens(request);
   if (!tokens) {
-    return data({
-      authenticated: false as const,
-      settings: null,
-      hasGeminiApiKey: false,
-      hasEncryptedApiKey: false,
-      rootFolderId: "",
-    });
+    throw redirect("/lp");
   }
 
   try {
@@ -59,7 +53,6 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     return data(
       {
-        authenticated: true as const,
         settings,
         hasGeminiApiKey: !!validTokens.geminiApiKey,
         hasEncryptedApiKey: !!settings.encryptedApiKey,
@@ -67,14 +60,9 @@ export async function loader({ request }: Route.LoaderArgs) {
       },
       { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined }
     );
-  } catch {
-    return data({
-      authenticated: false as const,
-      settings: null,
-      hasGeminiApiKey: false,
-      hasEncryptedApiKey: false,
-      rootFolderId: "",
-    });
+  } catch (e) {
+    if (e instanceof Response) throw e;
+    throw redirect("/lp");
   }
 }
 
@@ -102,31 +90,9 @@ export function invalidateIndexCache() {
 export default function Index() {
   const data = useLoaderData<typeof loader>();
 
-  if (!data.authenticated) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="text-center">
-          <h1 className="mb-4 text-4xl font-bold text-gray-900 dark:text-gray-100">
-            Gemini Hub
-          </h1>
-          <p className="mb-8 text-gray-600 dark:text-gray-400">
-            Build and execute AI-powered workflows visually
-          </p>
-          <a
-            href="/auth/google"
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 transition-colors"
-          >
-            <LogIn size={20} />
-            Sign in with Google
-          </a>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <IDELayout
-      settings={data.settings!}
+      settings={data.settings}
       hasGeminiApiKey={data.hasGeminiApiKey}
       hasEncryptedApiKey={data.hasEncryptedApiKey}
       rootFolderId={data.rootFolderId}
