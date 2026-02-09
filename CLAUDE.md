@@ -9,7 +9,7 @@ GemiHub is a web application that integrates Google Gemini AI with Google Drive,
 ## Commands
 
 ```bash
-npm run dev          # Dev server on http://localhost:5170
+npm run dev          # Dev server on http://localhost:8132
 npm run build        # Production build (react-router build)
 npm run start        # Serve production build (port 8080)
 npm run typecheck    # Type generation + TypeScript check (react-router typegen && tsc)
@@ -17,11 +17,11 @@ npm run lint         # ESLint check (eslint app/)
 npm run lint:fix     # ESLint auto-fix
 ```
 
-No test framework is configured. There are no test files or test scripts.
+Tests use Node's built-in `node:test` runner via `tsx`. Run `npm run test:sync-diff` for sync diff unit tests.
 
 ## Environment
 
-Requires Node.js 22+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, and `SESSION_SECRET`. The dev server port (5170) is set in `vite.config.ts`.
+Requires Node.js 22+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, and `SESSION_SECRET`. The dev server port (8132) is set in `vite.config.ts`.
 
 ## Architecture
 

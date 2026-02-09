@@ -124,7 +124,7 @@ Go to [Google Cloud Console](https://console.cloud.google.com/) and perform the 
 1. Go to "APIs & Services" → "Credentials" → "+ Create Credentials" → "OAuth client ID"
 2. Application type: **Web application**
 3. Name: anything (e.g., GemiHub Local)
-4. Add **Authorized redirect URI**: `http://localhost:5170/auth/google/callback`
+4. Add **Authorized redirect URI**: `http://localhost:8132/auth/google/callback`
 5. Copy the **Client ID** and **Client Secret**
 
 ### 2. Get a Gemini API Key
@@ -152,7 +152,7 @@ Edit `.env`:
 ```env
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret
-GOOGLE_REDIRECT_URI=http://localhost:5170/auth/google/callback
+GOOGLE_REDIRECT_URI=http://localhost:8132/auth/google/callback
 SESSION_SECRET=<random string>
 ```
 
@@ -170,14 +170,14 @@ npm run dev
 
 ### 6. First-time setup
 
-1. Open `http://localhost:5170` in your browser
+1. Open `http://localhost:8132` in your browser
 2. Click "Sign in with Google" → authorize with your Google account
 3. Click the gear icon (Settings) in the top right
 4. In the **General** tab, enter your Gemini API Key and click Save
 
 Chat, workflows, and file editing are now ready to use.
 
-> **Note:** The dev server port is configured to `5170` in `vite.config.ts`. To change it, update both the config and the redirect URI in `.env` and Google Cloud Console.
+> **Note:** The dev server port is configured to `8132` in `vite.config.ts`. To change it, update both the config and the redirect URI in `.env` and Google Cloud Console.
 
 ## Production
 

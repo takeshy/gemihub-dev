@@ -124,7 +124,7 @@ Model Context Protocol（MCP）を通じて、GemiHub は外部サービスと�
 1. 「API とサービス」→「認証情報」→「＋認証情報を作成」→「OAuth クライアント ID」
 2. アプリケーションの種類: **ウェブアプリケーション**
 3. 名前: 任意（例: GemiHub Local）
-4. **承認済みリダイレクト URI** に追加: `http://localhost:5170/auth/google/callback`
+4. **承認済みリダイレクト URI** に追加: `http://localhost:8132/auth/google/callback`
 5. 作成後、**クライアント ID** と **クライアントシークレット** をメモ
 
 ### 2. Gemini API キーの取得
@@ -152,7 +152,7 @@ cp .env.example .env
 ```env
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret
-GOOGLE_REDIRECT_URI=http://localhost:5170/auth/google/callback
+GOOGLE_REDIRECT_URI=http://localhost:8132/auth/google/callback
 SESSION_SECRET=<ランダム文字列>
 ```
 
@@ -170,14 +170,14 @@ npm run dev
 
 ### 6. 初回セットアップ
 
-1. ブラウザで `http://localhost:5170` を開く
+1. ブラウザで `http://localhost:8132` を開く
 2. 「Sign in with Google」をクリック → Google アカウントで認証
 3. 右上の歯車アイコン（Settings）をクリック
 4. **General** タブで Gemini API Key を入力して Save
 
 チャット、ワークフロー作成、ファイル編集が使えるようになります。
 
-> **Note:** 開発サーバーのポートは `vite.config.ts` で `5170` に設定されています。変更する場合は、設定ファイルと `.env` のリダイレクト URI、Google Cloud Console の承認済みリダイレクト URI も合わせて更新してください。
+> **Note:** 開発サーバーのポートは `vite.config.ts` で `8132` に設定されています。変更する場合は、設定ファイルと `.env` のリダイレクト URI、Google Cloud Console の承認済みリダイレクト URI も合わせて更新してください。
 
 ## 本番環境
 
