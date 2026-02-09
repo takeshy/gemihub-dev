@@ -1,5 +1,5 @@
 resource "google_dns_managed_zone" "default" {
-  name        = "gemini-hub-online"
+  name        = "gemihub-online"
   dns_name    = "${var.domain}."
   description = "DNS zone for ${var.domain}"
 

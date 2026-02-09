@@ -37,10 +37,14 @@ resource "google_compute_url_map" "https" {
 
 # Google-managed SSL certificate
 resource "google_compute_managed_ssl_certificate" "default" {
-  name = "gemini-hub-cert"
+  name = "gemihub-cert"
 
   managed {
     domains = [var.domain]
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   depends_on = [google_project_service.apis]
