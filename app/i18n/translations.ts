@@ -61,8 +61,6 @@ export interface TranslationStrings {
   "settings.general.usePlanDefault": string;
   "settings.general.systemPrompt": string;
   "settings.general.systemPromptPlaceholder": string;
-  "settings.general.rootFolderName": string;
-  "settings.general.rootFolderDescription": string;
   "settings.general.language": string;
   "settings.general.fontSize": string;
   "settings.general.theme": string;
@@ -346,8 +344,6 @@ const en: TranslationStrings = {
   "settings.general.usePlanDefault": "Use plan default",
   "settings.general.systemPrompt": "System Prompt",
   "settings.general.systemPromptPlaceholder": "Optional system-level instructions for the AI...",
-  "settings.general.rootFolderName": "Drive Root Folder Name",
-  "settings.general.rootFolderDescription": "Name of the Google Drive folder used to store all app data.",
   "settings.general.language": "Language",
   "settings.general.fontSize": "Font Size",
   "settings.general.theme": "Theme",
@@ -631,8 +627,6 @@ const ja: TranslationStrings = {
   "settings.general.usePlanDefault": "プランのデフォルトを使用",
   "settings.general.systemPrompt": "システムプロンプト",
   "settings.general.systemPromptPlaceholder": "AIへのシステムレベルの指示（任意）...",
-  "settings.general.rootFolderName": "Driveルートフォルダ名",
-  "settings.general.rootFolderDescription": "アプリデータの保存に使用するGoogle Driveフォルダの名前。",
   "settings.general.language": "言語",
   "settings.general.fontSize": "フォントサイズ",
   "settings.general.theme": "テーマ",

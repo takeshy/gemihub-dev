@@ -64,10 +64,12 @@ export function Header({
     <>
     <header className="flex h-10 items-center justify-between border-b border-gray-200 bg-white px-3 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
-        <img src="/icons/icon-192x192.png" alt="" width={20} height={20} className="shrink-0 rounded" />
-        <span className="text-sm font-bold text-gray-900 dark:text-gray-100 shrink-0">
-          GemiHub
-        </span>
+        <a href="/lp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 shrink-0 hover:opacity-80">
+          <img src="/icons/icon-192x192.png" alt="" width={20} height={20} className="rounded" />
+          <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
+            GemiHub
+          </span>
+        </a>
         {activeFileName && (
           <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
             {activeFileName}

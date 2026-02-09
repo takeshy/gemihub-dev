@@ -29,7 +29,6 @@ import {
 } from "~/types/settings";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
-import { ensureRootFolder } from "~/services/google-drive.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import {
   encryptPrivateKey,
@@ -151,7 +150,6 @@ export async function action({ request }: Route.ActionArgs) {
         const selectedModel = (formData.get("selectedModel") as ModelType) || null;
         const systemPrompt = (formData.get("systemPrompt") as string) || "";
         const geminiApiKey = (formData.get("geminiApiKey") as string)?.trim() || "";
-        const rootFolderName = (formData.get("rootFolderName") as string)?.trim() || currentSettings.rootFolderName || "GeminiHub";
         const language = (formData.get("language") as Language) || currentSettings.language;
         const fontSize = Number(formData.get("fontSize")) as FontSize || currentSettings.fontSize;
         const theme = (formData.get("theme") as Theme) || currentSettings.theme || "system";
@@ -171,7 +169,6 @@ export async function action({ request }: Route.ActionArgs) {
             ? selectedModel
             : getDefaultModelForPlan(apiPlan),
           systemPrompt,
-          rootFolderName,
           language,
           fontSize,
           theme,
@@ -248,13 +245,7 @@ export async function action({ request }: Route.ActionArgs) {
           }
         }
 
-        // If root folder name changed, ensure the new folder exists and update session
-        let newRootFolderId = validTokens.rootFolderId;
-        if (rootFolderName !== currentSettings.rootFolderName) {
-          newRootFolderId = await ensureRootFolder(validTokens.accessToken, rootFolderName);
-        }
-
-        await saveSettings(validTokens.accessToken, newRootFolderId, updatedSettings);
+        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
 
         // Update session with API key and plan/model
         // Use baseSession which already has refreshed tokens if applicable
@@ -264,9 +255,6 @@ export async function action({ request }: Route.ActionArgs) {
         }
         baseSession.set("apiPlan", apiPlan);
         baseSession.set("selectedModel", updatedSettings.selectedModel);
-        if (rootFolderName !== currentSettings.rootFolderName) {
-          baseSession.set("rootFolderId", newRootFolderId);
-        }
 
         return jsonWithCookie(
           { success: true, message: "General settings saved." },
@@ -539,7 +527,6 @@ function GeneralTab({
     settings.selectedModel || ""
   );
   const [systemPrompt, setSystemPrompt] = useState(settings.systemPrompt);
-  const [rootFolderName, setRootFolderName] = useState(settings.rootFolderName || "GeminiHub");
   const [language, setLanguage] = useState<Language>(settings.language);
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
@@ -812,23 +799,6 @@ function GeneralTab({
         )}
 
         <hr className="my-6 border-gray-200 dark:border-gray-700" />
-
-        {/* Root Folder Name */}
-        <div className="mb-6">
-          <Label htmlFor="rootFolderName">{t("settings.general.rootFolderName")}</Label>
-          <input
-            type="text"
-            id="rootFolderName"
-            name="rootFolderName"
-            value={rootFolderName}
-            onChange={(e) => setRootFolderName(e.target.value)}
-            placeholder="GeminiHub"
-            className={inputClass + " max-w-[300px]"}
-          />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {t("settings.general.rootFolderDescription")}
-          </p>
-        </div>
 
         {/* Language */}
         <div className="mb-6">
