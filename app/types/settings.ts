@@ -405,7 +405,6 @@ export interface UserSettings {
   slashCommands: SlashCommand[];
   plugins: PluginConfig[];
   ragRegistrationOnPush: boolean;
-  syncExcludePatterns: string[];
   syncConflictFolder: string;
   encryptedApiKey: string;
   apiKeySalt: string;
@@ -431,7 +430,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   slashCommands: [],
   plugins: [],
   ragRegistrationOnPush: false,
-  syncExcludePatterns: [],
   syncConflictFolder: "sync_conflicts",
   encryptedApiKey: "",
   apiKeySalt: "",

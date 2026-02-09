@@ -6,6 +6,7 @@ import {
   setCachedFile,
   deleteCachedFile,
   getAllCachedFiles,
+  getAllCachedFileIds,
   clearAllEditHistory,
   getLocallyModifiedFileIds,
   getCachedRemoteMeta,
@@ -112,12 +113,14 @@ export function useSync() {
 
       // Check diff BEFORE writing anything to Drive
       if (localMeta) {
+        const modifiedIdsForDiff = await getLocallyModifiedFileIds();
         const diffRes = await fetch("/api/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "diff",
             localMeta: { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files },
+            locallyModifiedFileIds: [...modifiedIdsForDiff],
           }),
         });
 
@@ -215,8 +218,10 @@ export function useSync() {
         await saveRagUpdates(ragUpdates, ragStoreName);
       }
 
-      // All modified files were pushed to Drive, clear all edit history
-      await clearAllEditHistory();
+      // Clear edit history only for files that were actually pushed
+      for (const fid of modifiedIds) {
+        await deleteEditHistoryEntry(fid);
+      }
       const remainingModified = await getLocallyModifiedFileIds();
       setLocalModifiedCount(remainingModified.size);
       window.dispatchEvent(new Event("sync-complete"));
@@ -225,7 +230,7 @@ export function useSync() {
       const syncRes = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "diff", localMeta: null }),
+        body: JSON.stringify({ action: "diff", localMeta: null, locallyModifiedFileIds: [] }),
       });
       if (syncRes.ok) {
         const syncData = await syncRes.json();
@@ -264,6 +269,7 @@ export function useSync() {
       const localMeta = (await getLocalSyncMeta()) ?? null;
 
       // Compute diff
+      const modifiedIdsForDiff = await getLocallyModifiedFileIds();
       const diffRes = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -272,6 +278,7 @@ export function useSync() {
           localMeta: localMeta
             ? { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files }
             : null,
+          locallyModifiedFileIds: [...modifiedIdsForDiff],
         }),
       });
 
@@ -286,6 +293,7 @@ export function useSync() {
 
       // Clean up localOnly files (deleted on remote, e.g. moved to trash on another device)
       const localOnlyIds: string[] = diffData.diff.localOnly ?? [];
+      let baseMeta: LocalSyncMeta | null = localMeta;
       if (localOnlyIds.length > 0) {
         const updatedMetaForDelete: LocalSyncMeta = localMeta ?? {
           id: "current",
@@ -299,14 +307,28 @@ export function useSync() {
         }
         updatedMetaForDelete.lastUpdatedAt = new Date().toISOString();
         await setLocalSyncMeta(updatedMetaForDelete);
+        baseMeta = updatedMetaForDelete;
       }
 
       const filesToPull = [...diffData.diff.toPull, ...diffData.diff.remoteOnly];
       if (filesToPull.length === 0) {
         if (localOnlyIds.length > 0) {
+          // Inform server to prune deleted files from remote meta
+          const pruneRes = await fetch("/api/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "pull",
+              fileIds: [],
+              localOnlyIds,
+            }),
+          });
+          if (!pruneRes.ok) throw new Error("Failed to sync deletions");
           // Only local cleanups happened, trigger tree refresh
           window.dispatchEvent(new Event("sync-complete"));
           setLastSyncTime(new Date().toISOString());
+          const remainingModified = await getLocallyModifiedFileIds();
+          setLocalModifiedCount(remainingModified.size);
         }
         setSyncStatus("idle");
         return;
@@ -319,6 +341,7 @@ export function useSync() {
         body: JSON.stringify({
           action: "pull",
           fileIds: filesToPull,
+          localOnlyIds,
         }),
       });
 
@@ -326,7 +349,7 @@ export function useSync() {
       const pullData = await pullRes.json();
 
       // Update local cache and sync meta
-      const updatedMeta: LocalSyncMeta = localMeta ?? {
+      const updatedMeta: LocalSyncMeta = baseMeta ?? {
         id: "current",
         lastUpdatedAt: new Date().toISOString(),
         files: {},
@@ -353,6 +376,8 @@ export function useSync() {
 
       setLastSyncTime(new Date().toISOString());
       window.dispatchEvent(new Event("sync-complete"));
+      const remainingModified = await getLocallyModifiedFileIds();
+      setLocalModifiedCount(remainingModified.size);
       setSyncStatus("idle");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pull failed");
@@ -366,13 +391,13 @@ export function useSync() {
       try {
         const localMeta = (await getLocalSyncMeta()) ?? null;
 
-        // If remote wins, send local content for backup
+        // Send local content for both choices:
+        // - "local": server updates Drive with this content
+        // - "remote": server backs up this content
         let localContent: string | undefined;
-        if (choice === "remote") {
-          const cached = await getCachedFile(fileId);
-          if (cached) {
-            localContent = cached.content;
-          }
+        const cached = await getCachedFile(fileId);
+        if (cached) {
+          localContent = cached.content;
         }
 
         const res = await fetch("/api/sync", {
@@ -392,7 +417,7 @@ export function useSync() {
         if (!res.ok) throw new Error("Failed to resolve conflict");
         const data = await res.json();
 
-        // If remote wins, update local cache
+        // If remote wins, update local cache with remote content
         if (choice === "remote" && data.file) {
           await commitSnapshot(data.file.fileId, data.file.content);
           await setCachedFile({
@@ -404,6 +429,19 @@ export function useSync() {
             fileName: data.file.fileName,
           });
         }
+
+        // If local wins, update cache md5/modifiedTime from server response
+        if (choice === "local" && data.file && cached) {
+          await setCachedFile({
+            ...cached,
+            md5Checksum: data.file.md5Checksum,
+            modifiedTime: data.file.modifiedTime,
+            cachedAt: Date.now(),
+          });
+        }
+
+        // Clear edit history for the resolved file (conflict is resolved)
+        await deleteEditHistoryEntry(fileId);
 
         // Update local sync meta from remote meta
         if (data.remoteMeta && localMeta) {
@@ -425,6 +463,10 @@ export function useSync() {
           }
           return prev;
         });
+
+        // Update modified count after clearing edit history
+        const remainingModified = await getLocallyModifiedFileIds();
+        setLocalModifiedCount(remainingModified.size);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Resolve failed");
         setSyncStatus("error");
@@ -482,8 +524,23 @@ export function useSync() {
         });
       }
 
+      // Delete cached files that no longer exist on remote
+      const remoteFileIds = new Set(Object.keys(data.remoteMeta.files));
+      const allCachedIds = await getAllCachedFileIds();
+      for (const cachedId of allCachedIds) {
+        if (!remoteFileIds.has(cachedId)) {
+          await deleteCachedFile(cachedId);
+        }
+      }
+
+      // Full pull means remote is authoritative — clear all local edit history
+      await clearAllEditHistory();
+
       await setLocalSyncMeta(updatedMeta);
       setLastSyncTime(new Date().toISOString());
+      window.dispatchEvent(new Event("sync-complete"));
+      const remainingModified = await getLocallyModifiedFileIds();
+      setLocalModifiedCount(remainingModified.size);
       setSyncStatus("idle");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Full pull failed");

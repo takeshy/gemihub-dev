@@ -171,8 +171,6 @@ export interface TranslationStrings {
   "settings.sync.lastUpdatedAt": string;
   "settings.sync.notSynced": string;
   "settings.sync.dataManagement": string;
-  "settings.sync.excludePatterns": string;
-  "settings.sync.excludePatternsDescription": string;
   "settings.sync.conflictResolution": string;
   "settings.sync.conflictFolder": string;
   "settings.sync.clearConflicts": string;
@@ -458,8 +456,6 @@ const en: TranslationStrings = {
   "settings.sync.lastUpdatedAt": "Last updated at",
   "settings.sync.notSynced": "Not synced yet",
   "settings.sync.dataManagement": "Data Management",
-  "settings.sync.excludePatterns": "Exclude Patterns",
-  "settings.sync.excludePatternsDescription": "Files matching these regex patterns will be excluded from sync (one per line).",
   "settings.sync.conflictResolution": "Conflict Resolution",
   "settings.sync.conflictFolder": "Conflict Folder Name",
   "settings.sync.clearConflicts": "Clear Conflict Files",
@@ -745,8 +741,6 @@ const ja: TranslationStrings = {
   "settings.sync.lastUpdatedAt": "最終更新日時",
   "settings.sync.notSynced": "未同期",
   "settings.sync.dataManagement": "データ管理",
-  "settings.sync.excludePatterns": "除外パターン",
-  "settings.sync.excludePatternsDescription": "これらの正規表現パターンに一致するファイルは同期から除外されます（1行に1パターン）。",
   "settings.sync.conflictResolution": "コンフリクト解決",
   "settings.sync.conflictFolder": "コンフリクトフォルダ名",
   "settings.sync.clearConflicts": "コンフリクトファイルを削除",

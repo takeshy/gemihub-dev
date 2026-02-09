@@ -18,7 +18,7 @@ Manual push/pull synchronization between the browser (IndexedDB) and Google Driv
 |---------|-------------|
 | **Push** | Upload local changes (incremental) |
 | **Pull** | Download remote changes (incremental) |
-| **Full Push** | Upload all local files + merge metadata into remote |
+| **Full Push** | Upload all modified files + merge metadata into remote |
 | **Full Pull** | Download entire remote vault (skip matching hashes) |
 
 Header buttons: Push and Pull buttons are always visible. Badge shows count of pending changes (including locally modified files).
@@ -46,8 +46,8 @@ The diff algorithm compares three data sources:
 | Source | Description |
 |--------|-------------|
 | **Local Meta** | Client's last-synced snapshot (IndexedDB) |
-| **Remote Meta** | Server's last-synced snapshot (`_sync-meta.json`) |
-| **Current Remote** | Live Drive API file listing (rebuilt on every diff) |
+| **Remote Meta** | Server's last-synced snapshot (`_sync-meta.json`, read-only during diff) |
+| **Current Remote** | Live Drive API file listing (queried on every diff) |
 
 Detection logic per file:
 
@@ -61,8 +61,10 @@ Detection logic per file:
 | - | Remote only | **remoteOnly** |
 
 Where:
-- `localChanged = local.md5Checksum !== remoteSynced.md5Checksum`
+- `localChanged = local.md5Checksum !== remoteSynced.md5Checksum || locallyModifiedFileIds.has(fileId)`
 - `remoteChanged = currentRemote.md5Checksum !== remoteSynced.md5Checksum`
+
+`locallyModifiedFileIds` is the set of file IDs from the client's `editHistory` store, passed alongside `localMeta` in each diff request. This ensures local edits are detected even though the local meta's MD5 checksum is not updated on edit.
 
 ---
 
@@ -75,32 +77,32 @@ Uploads locally-changed files to remote.
 ```
 1. PRE-CHECK: Diff check before writing anything
    ├─ Read LocalSyncMeta from IndexedDB
-   ├─ POST /api/sync { action: "diff" }
-   │   └─ Server: compare with Drive's _sync-meta.json → return diff
+   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
+   │   └─ Server: read _sync-meta.json + list Drive files → compute diff
    ├─ Conflicts found → abort (show conflict dialog)
    └─ Remote is newer & has pending pulls → error "Pull first"
 
 2. UPLOAD: Update files directly on Drive
    ├─ Get modified file IDs from IndexedDB editHistory
+   ├─ Filter to only files tracked in remoteMeta
    ├─ For each modified file:
    │   ├─ Read content from IndexedDB cache
+   │   ├─ (Optional) RAG registration for eligible file types
    │   ├─ POST /api/drive/files { action: "update", fileId, content }
    │   │   └─ Server: update file on Drive, update _sync-meta.json
    │   │       → return new md5Checksum, modifiedTime
    │   ├─ Update LocalSyncMeta with new md5/modifiedTime
    │   └─ Update IndexedDB cache with new md5/modifiedTime
-   └─ Set lastUpdatedAt = now
 
 3. CLEANUP
-   ├─ Clear IndexedDB editHistory (changes are now on Drive)
-   ├─ localModifiedCount = 0
+   ├─ Clear IndexedDB editHistory for pushed files only
+   ├─ Update localModifiedCount
    └─ Fire "sync-complete" event (UI refresh)
 
 4. METADATA SYNC
-   ├─ Re-compute diff (post-upload state)
-   ├─ If toPush remains → POST /api/sync { action: "push" }
-   │   └─ Server: update _sync-meta.json
-   └─ Refresh diff to update status
+   ├─ POST /api/sync { action: "diff", localMeta: null }
+   │   └─ Server: return current remoteMeta
+   └─ Rebuild LocalSyncMeta from server's remoteMeta
 ```
 
 ### Preconditions
@@ -116,7 +118,7 @@ Uploads locally-changed files to remote.
 
 - Push checks for conflicts and remote-newer **before** writing any files to Drive. If the check fails, nothing is written.
 - Push does **NOT** delete remote files. Deletion is handled separately (see Soft Delete below).
-- After a successful push, local edit history in IndexedDB is cleared.
+- After a successful push, local edit history in IndexedDB is cleared for the pushed files only.
 
 ---
 
@@ -126,14 +128,13 @@ Downloads only remotely-changed files to local cache.
 
 ### Flow
 
-1. **Compute diff** using three-way comparison
+1. **Compute diff** using three-way comparison (with `locallyModifiedFileIds`)
 2. **Check conflicts** — if any, stop and show conflict UI
 3. **Clean up `localOnly` files** — files that exist locally but were deleted on remote (moved to trash on another device) are removed from IndexedDB cache, edit history, and local sync meta
 4. **Combine** `toPull` + `remoteOnly` arrays
 5. **Download file contents** in parallel (max 5 concurrent)
 6. **Update IndexedDB cache** with downloaded files
 7. **Update local sync meta** with new checksums
-8. **Refresh diff** to update status
 
 ### Decision Tables
 
@@ -171,8 +172,11 @@ Downloads all remote files, skipping those with matching hashes.
 3. **Filter out** system files (`_sync-meta.json`, `settings.json`)
 4. **Skip** files where `skipHashes[fileId] === remoteMeta.md5Checksum`
 5. **Download** all non-skipped files in parallel (max 5 concurrent)
-6. **Replace local sync meta** entirely with remote meta
-7. **Update IndexedDB cache** with downloaded files
+6. **Update IndexedDB cache** with downloaded files
+7. **Delete stale cache** — remove cached files that no longer exist on remote
+8. **Clear all local edit history** (remote is authoritative)
+9. **Replace local sync meta** entirely with remote meta
+10. **Fire "sync-complete" event** and update localModifiedCount
 
 ### When to Use
 
@@ -190,8 +194,9 @@ Uploads all locally modified files directly to Drive and merges metadata.
 
 1. **Upload modified files** — each modified file is updated directly on Drive via `/api/drive/files`
 2. **Update IndexedDB** — cache and LocalSyncMeta updated with new md5/modifiedTime
-3. **Merge** all local meta entries into remote `_sync-meta.json`
-4. **Clear edit history**
+3. **Merge** all local meta entries into remote `_sync-meta.json` via `fullPush` action
+4. **Clear all edit history**
+5. **Fire "sync-complete" event** and update localModifiedCount
 
 ### When to Use
 
@@ -206,8 +211,13 @@ Conflicts occur during Push or Pull when both local and remote versions of a fil
 
 | Choice | What Happens |
 |--------|--------------|
-| **Keep Local** | Back up remote to `sync_conflicts/`, update remote meta with local checksums |
+| **Keep Local** | Back up remote to `sync_conflicts/`, upload local content to Drive, update remote meta |
 | **Keep Remote** | Back up local to `sync_conflicts/`, download remote content to IndexedDB |
+
+After resolution:
+- The resolved file's edit history entry is cleared
+- Local sync meta is updated from the server's remote meta
+- localModifiedCount is updated
 
 The unselected version is always backed up for manual merging if needed.
 
@@ -284,7 +294,7 @@ Deleted files are moved to the `trash/` folder on Google Drive.
 
 If you accidentally changed or deleted files locally and want to restore from remote.
 
-**To recover:** Use **Full Pull** — this downloads all remote files, skipping only those with matching hashes. Your local cache is replaced entirely.
+**To recover:** Use **Full Pull** — this downloads all remote files, skipping only those with matching hashes. Your local cache is replaced entirely, stale cache files are deleted, and all local edit history is cleared.
 
 ---
 
@@ -312,7 +322,7 @@ Located in Settings → Sync tab, organized into sections:
 ### Danger Zone
 | Action | Description |
 |--------|-------------|
-| Full Push | Upload all local files and merge metadata (overwrites remote) |
+| Full Push | Upload all modified files and merge metadata (overwrites remote) |
 | Full Pull | Download all remote files (overwrites local cache) |
 
 ### System Files & Folders (Always Excluded from Sync)
@@ -335,7 +345,7 @@ Edit history is split into two layers:
 
 | Layer | Storage | Lifetime |
 |-------|---------|----------|
-| **Local** | IndexedDB `editHistory` store | Until next Push (then cleared) |
+| **Local** | IndexedDB `editHistory` store | Per-file: cleared on Push for that file; all cleared on Full Push / Full Pull |
 | **Remote** | Drive `.history.json` per file | Retained per edit history settings |
 
 ### Local Edit History (IndexedDB)
@@ -365,7 +375,7 @@ When Push updates a file on Drive, the server:
 2. Computes diff (old → new)
 3. Appends the diff entry to the file's `.history.json` on Drive
 
-After Push, IndexedDB edit history is cleared since diffs are now in Drive.
+After Push, IndexedDB edit history is cleared for the pushed files since diffs are now in Drive.
 
 ### Viewing History
 
@@ -383,9 +393,9 @@ The Edit History modal shows:
 Browser (IndexedDB)          Server                Google Drive
 ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
 │ files store   │      │ /api/sync    │      │ Root folder  │
-│ syncMeta      │◄────►│ (diff/push/  │◄────►│ _sync-meta   │
-│ fileTree      │      │  pull/resolve)│      │ User files   │
-│ editHistory   │      │              │      │ trash/       │
+│ syncMeta      │◄────►│ (diff/pull/  │◄────►│ _sync-meta   │
+│ fileTree      │      │  resolve/    │      │ User files   │
+│ editHistory   │      │  fullPush/…) │      │ trash/       │
 │               │      │ /api/drive/  │      │ sync_conflicts│
 │               │      │  files       │      │ .history.json│
 │               │      │              │      │ __TEMP__/    │
@@ -396,9 +406,9 @@ Browser (IndexedDB)          Server                Google Drive
 
 | File | Role |
 |------|------|
-| `app/hooks/useSync.ts` | Client-side sync hook (push, pull, conflict, fullPush, fullPull, localModifiedCount) |
+| `app/hooks/useSync.ts` | Client-side sync hook (push, pull, resolveConflict, fullPush, fullPull, localModifiedCount) |
 | `app/hooks/useFileWithCache.ts` | IndexedDB cache-first file reads, auto-save with edit history |
-| `app/routes/api.sync.tsx` | Server-side sync API (14 actions) |
+| `app/routes/api.sync.tsx` | Server-side sync API (17 POST actions) |
 | `app/routes/api.drive.files.tsx` | Drive file CRUD (used by push to update files directly; delete moves to trash/) |
 | `app/services/sync-meta.server.ts` | Sync metadata read/write/rebuild/diff |
 | `app/services/indexeddb-cache.ts` | IndexedDB cache (files, syncMeta, fileTree, editHistory) |
@@ -414,9 +424,8 @@ Browser (IndexedDB)          Server                Google Drive
 | Action | Method | Description |
 |--------|--------|-------------|
 | `diff` | POST | Three-way diff comparison |
-| `push` | POST | Update remote meta with local checksums |
 | `pull` | POST | Download file contents for specified IDs |
-| `resolve` | POST | Resolve conflict (backup loser, update meta) |
+| `resolve` | POST | Resolve conflict (backup loser, update Drive file and meta) |
 | `fullPull` | POST | Download all remote files (skip matching) |
 | `fullPush` | POST | Merge all local meta into remote meta |
 | `clearConflicts` | POST | Delete all files in conflict folder |
@@ -427,3 +436,7 @@ Browser (IndexedDB)          Server                Google Drive
 | `restoreTrash` | POST | Move files from `trash/` back to root, re-add to sync meta |
 | `listConflicts` | POST | List files in the `sync_conflicts/` folder |
 | `restoreConflict` | POST | Create new file from conflict backup, delete backup |
+| `ragRegister` | POST | Register a single file in the RAG store during push |
+| `ragSave` | POST | Batch save RAG tracking info after push completes |
+| `ragDeleteDoc` | POST | Delete a document from the RAG store |
+| `ragRetryPending` | POST | Retry previously failed RAG registrations |

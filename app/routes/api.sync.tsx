@@ -6,6 +6,7 @@ import {
   listUserFiles,
   readFile,
   createFile,
+  updateFile,
   getFileMetadata,
   deleteFile,
   moveFile,
@@ -35,8 +36,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     return Response.json(data, { ...init, headers });
   };
 
-  // Rebuild meta from Drive API to ensure accurate state for sync
-  const remoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+  // Read existing sync meta (snapshot of last sync), fallback to rebuild if missing
+  const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
+    ?? await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
 
   return jsonWithCookie({
     remoteMeta,
@@ -50,7 +52,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   });
 }
 
-// POST: diff / push / pull / resolve / fullPush / fullPull / clearConflicts / detectUntracked / deleteUntracked / restoreUntracked
+// POST: diff / pull / resolve / fullPush / fullPull / clearConflicts / detectUntracked / deleteUntracked / restoreUntracked
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
@@ -64,7 +66,7 @@ export async function action({ request }: Route.ActionArgs) {
   const { action: actionType } = body;
 
   const VALID_ACTIONS = new Set([
-    "diff", "push", "pull", "resolve", "fullPush", "fullPull",
+    "diff", "pull", "resolve", "fullPush", "fullPull",
     "clearConflicts", "detectUntracked", "deleteUntracked", "restoreUntracked",
     "listTrash", "restoreTrash", "listConflicts", "restoreConflict",
     "ragRegister", "ragSave", "ragDeleteDoc", "ragRetryPending",
@@ -76,55 +78,21 @@ export async function action({ request }: Route.ActionArgs) {
   switch (actionType) {
     case "diff": {
       const localMeta = body.localMeta as SyncMeta | null;
-      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-      // Rebuild meta from Drive API to get accurate current state
-      const remoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+      const locallyModifiedIds = new Set<string>(body.locallyModifiedFileIds ?? []);
+      // Read existing sync meta (snapshot of last sync), fallback to rebuild if missing
+      const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
+        ?? await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
       const files = await listUserFiles(validTokens.accessToken, validTokens.rootFolderId);
-      const diff = computeSyncDiff(localMeta, remoteMeta, files, settings.syncExcludePatterns);
+      const diff = computeSyncDiff(localMeta, remoteMeta, files, locallyModifiedIds);
       return jsonWithCookie({ diff, remoteMeta });
-    }
-
-    case "push": {
-      // Update remote meta with the provided local meta for specified file IDs
-      const fileIds = body.fileIds as string[];
-      const localMeta = body.localMeta as SyncMeta;
-
-      const remoteMeta =
-        (await readRemoteSyncMeta(
-          validTokens.accessToken,
-          validTokens.rootFolderId
-        )) ?? {
-          lastUpdatedAt: new Date().toISOString(),
-          files: {},
-        };
-
-      // Update remote meta entries for pushed files (merge to preserve name/mimeType)
-      for (const fileId of fileIds) {
-        if (localMeta.files[fileId]) {
-          const existing = remoteMeta.files[fileId];
-          remoteMeta.files[fileId] = {
-            ...existing,
-            ...localMeta.files[fileId],
-            // Ensure name/mimeType are preserved from existing if not in localMeta
-            name: localMeta.files[fileId].name || existing?.name || "",
-            mimeType: localMeta.files[fileId].mimeType || existing?.mimeType || "",
-          };
-        }
-      }
-      remoteMeta.lastUpdatedAt = new Date().toISOString();
-
-      await writeRemoteSyncMeta(
-        validTokens.accessToken,
-        validTokens.rootFolderId,
-        remoteMeta
-      );
-
-      return jsonWithCookie({ remoteMeta });
     }
 
     case "pull": {
       // Return file contents + metadata for specified file IDs (parallelized)
       const fileIds = body.fileIds as string[];
+      const localOnlyIds: string[] = Array.isArray(body.localOnlyIds)
+        ? (body.localOnlyIds as unknown[]).filter((v): v is string => typeof v === "string")
+        : [];
 
       const results = await parallelProcess(fileIds, async (fileId) => {
         const [content, meta] = await Promise.all([
@@ -137,8 +105,43 @@ export async function action({ request }: Route.ActionArgs) {
           md5Checksum: meta.md5Checksum ?? "",
           modifiedTime: meta.modifiedTime ?? "",
           fileName: meta.name,
+          mimeType: meta.mimeType,
+          createdTime: meta.createdTime,
+          webViewLink: meta.webViewLink,
         };
       }, 5);
+
+      if (results.length > 0 || localOnlyIds.length > 0) {
+        // Update remote sync meta for pulled files and prune deleted entries
+        const remoteMeta =
+          (await readRemoteSyncMeta(
+            validTokens.accessToken,
+            validTokens.rootFolderId
+          )) ?? await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+
+        for (const fileId of localOnlyIds) {
+          delete remoteMeta.files[fileId];
+        }
+
+        for (const file of results) {
+          const existing = remoteMeta.files[file.fileId];
+          remoteMeta.files[file.fileId] = {
+            ...existing,
+            name: file.fileName || existing?.name || "",
+            mimeType: file.mimeType || existing?.mimeType || "",
+            md5Checksum: file.md5Checksum,
+            modifiedTime: file.modifiedTime,
+            createdTime: file.createdTime ?? existing?.createdTime,
+            webViewLink: file.webViewLink ?? existing?.webViewLink,
+          };
+        }
+        remoteMeta.lastUpdatedAt = new Date().toISOString();
+        await writeRemoteSyncMeta(
+          validTokens.accessToken,
+          validTokens.rootFolderId,
+          remoteMeta
+        );
+      }
 
       return jsonWithCookie({ files: results });
     }
@@ -150,6 +153,10 @@ export async function action({ request }: Route.ActionArgs) {
         choice: "local" | "remote";
         localContent?: string;
       };
+
+      if (choice === "local" && localContent == null) {
+        return jsonWithCookie({ error: "Missing localContent" }, { status: 400 });
+      }
 
       const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
       const conflictFolder = settings.syncConflictFolder || "sync_conflicts";
@@ -165,7 +172,6 @@ export async function action({ request }: Route.ActionArgs) {
 
       if (choice === "local") {
         // Local wins — remote content is the loser, back it up
-        const localMeta = body.localMeta as SyncMeta;
         try {
           const remoteContent = await readFile(validTokens.accessToken, fileId);
           const fileName = remoteMeta.files[fileId]?.name || fileId;
@@ -179,8 +185,17 @@ export async function action({ request }: Route.ActionArgs) {
         } catch {
           // Backup failure shouldn't block conflict resolution
         }
-        if (localMeta?.files[fileId]) {
-          remoteMeta.files[fileId] = localMeta.files[fileId];
+        // Update the Drive file with local content
+        if (localContent != null) {
+          const existingMeta = remoteMeta.files[fileId];
+          const mimeType = existingMeta?.mimeType || "text/plain";
+          const updated = await updateFile(validTokens.accessToken, fileId, localContent, mimeType);
+          remoteMeta.files[fileId] = {
+            name: updated.name,
+            mimeType: updated.mimeType,
+            md5Checksum: updated.md5Checksum ?? "",
+            modifiedTime: updated.modifiedTime ?? "",
+          };
         }
       } else {
         // Remote wins — local content is the loser, back it up
@@ -218,7 +233,8 @@ export async function action({ request }: Route.ActionArgs) {
         remoteMeta
       );
 
-      // If remote wins, return the file content
+      // Return file metadata for both choices so client can update cache
+      const resolvedEntry = remoteMeta.files[fileId];
       if (choice === "remote") {
         const [content, meta] = await Promise.all([
           readFile(validTokens.accessToken, fileId),
@@ -236,7 +252,15 @@ export async function action({ request }: Route.ActionArgs) {
         });
       }
 
-      return jsonWithCookie({ remoteMeta });
+      return jsonWithCookie({
+        remoteMeta,
+        file: resolvedEntry ? {
+          fileId,
+          md5Checksum: resolvedEntry.md5Checksum,
+          modifiedTime: resolvedEntry.modifiedTime,
+          fileName: resolvedEntry.name,
+        } : undefined,
+      });
     }
 
     case "fullPull": {
