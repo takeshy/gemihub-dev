@@ -27,9 +27,9 @@ function LandingContent() {
   ];
 
   const screenshots = [
-    { src: "/docs/images/cap.png", altKey: "lp.screenshots.ide" as const },
-    { src: "/docs/images/visual_workflow.png", altKey: "lp.screenshots.workflow" as const },
-    { src: "/docs/images/workflow_execution.png", altKey: "lp.screenshots.execution" as const },
+    { src: "/images/cap.png", altKey: "lp.screenshots.ide" as const },
+    { src: "/images/visual_workflow.png", altKey: "lp.screenshots.workflow" as const },
+    { src: "/images/workflow_execution.png", altKey: "lp.screenshots.execution" as const },
   ];
 
   return (
@@ -116,6 +116,21 @@ function LandingContent() {
           {t("lp.signIn")}
         </a>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-200 bg-gray-50 px-4 py-8 dark:border-gray-800 dark:bg-gray-900">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+          <div className="flex gap-6">
+            <a href="/terms" className="hover:text-gray-700 hover:underline dark:hover:text-gray-200">
+              {t("lp.footer.terms")}
+            </a>
+            <a href="/policy" className="hover:text-gray-700 hover:underline dark:hover:text-gray-200">
+              {t("lp.footer.policy")}
+            </a>
+          </div>
+          <p>&copy; {new Date().getFullYear()} takeshy.work</p>
+        </div>
+      </footer>
     </div>
   );
 }

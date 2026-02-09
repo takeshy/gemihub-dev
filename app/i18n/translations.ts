@@ -284,6 +284,8 @@ export interface TranslationStrings {
   "lp.screenshots.workflow": string;
   "lp.screenshots.execution": string;
   "lp.cta.ready": string;
+  "lp.footer.terms": string;
+  "lp.footer.policy": string;
 
   // Trash & Conflicts
   "settings.sync.trashTitle": string;
@@ -588,6 +590,8 @@ const en: TranslationStrings = {
   "lp.screenshots.workflow": "Visual Workflow Builder",
   "lp.screenshots.execution": "Workflow Execution",
   "lp.cta.ready": "Ready to get started?",
+  "lp.footer.terms": "Terms of Service",
+  "lp.footer.policy": "Privacy Policy",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "Trash",
@@ -892,6 +896,8 @@ const ja: TranslationStrings = {
   "lp.screenshots.workflow": "ビジュアルワークフロービルダー",
   "lp.screenshots.execution": "ワークフロー実行",
   "lp.cta.ready": "さあ、始めましょう",
+  "lp.footer.terms": "利用規約",
+  "lp.footer.policy": "プライバシーポリシー",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "ゴミ箱",
