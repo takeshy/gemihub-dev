@@ -283,6 +283,17 @@ export interface TranslationStrings {
   "lp.screenshots.ide": string;
   "lp.screenshots.workflow": string;
   "lp.screenshots.execution": string;
+  "lp.dataUsage.title": string;
+  "lp.dataUsage.intro": string;
+  "lp.dataUsage.account.title": string;
+  "lp.dataUsage.account.description": string;
+  "lp.dataUsage.drive.title": string;
+  "lp.dataUsage.drive.description": string;
+  "lp.dataUsage.noSharing.title": string;
+  "lp.dataUsage.noSharing.description": string;
+  "lp.dataUsage.portability.title": string;
+  "lp.dataUsage.portability.description": string;
+  "lp.dataUsage.learnMore": string;
   "lp.cta.ready": string;
   "lp.footer.terms": string;
   "lp.footer.policy": string;
@@ -590,6 +601,17 @@ const en: TranslationStrings = {
   "lp.screenshots.ide": "IDE with AI Chat & Drive File Management",
   "lp.screenshots.workflow": "Visual Workflow Builder",
   "lp.screenshots.execution": "Workflow Execution",
+  "lp.dataUsage.title": "How We Use Your Data",
+  "lp.dataUsage.intro": "GemiHub uses Google OAuth to authenticate you. Here is exactly what we access and why:",
+  "lp.dataUsage.account.title": "Google Account Info",
+  "lp.dataUsage.account.description": "Your name and email address are used solely for sign-in and display within the app.",
+  "lp.dataUsage.drive.title": "Google Drive Access",
+  "lp.dataUsage.drive.description": "GemiHub reads and writes files in a dedicated \"GeminiHub\" folder in your Google Drive to store chat history, workflows, and settings. It does not access files outside this folder unless you explicitly select them.",
+  "lp.dataUsage.noSharing.title": "No Third-Party Sharing",
+  "lp.dataUsage.noSharing.description": "Your data is never sold, shared with, or transferred to any third party. All data remains in your own Google Drive.",
+  "lp.dataUsage.portability.title": "Full Portability",
+  "lp.dataUsage.portability.description": "GemiHub has no database — everything lives in your Google Drive. If this service ever shuts down, simply run your own instance locally or in the cloud and all your data, chat history, workflows, and settings are instantly available, exactly as you left them.",
+  "lp.dataUsage.learnMore": "Learn more in our",
   "lp.cta.ready": "Ready to get started?",
   "lp.footer.terms": "Terms of Service",
   "lp.footer.policy": "Privacy Policy",
@@ -897,6 +919,17 @@ const ja: TranslationStrings = {
   "lp.screenshots.ide": "AIチャット＆Driveファイル管理",
   "lp.screenshots.workflow": "ビジュアルワークフロービルダー",
   "lp.screenshots.execution": "ワークフロー実行",
+  "lp.dataUsage.title": "データの取り扱いについて",
+  "lp.dataUsage.intro": "GemiHubはGoogle OAuthで認証を行います。アクセスするデータとその目的は以下の通りです：",
+  "lp.dataUsage.account.title": "Googleアカウント情報",
+  "lp.dataUsage.account.description": "名前とメールアドレスは、ログインとアプリ内の表示にのみ使用します。",
+  "lp.dataUsage.drive.title": "Google Driveへのアクセス",
+  "lp.dataUsage.drive.description": "Google Drive内の専用フォルダ「GeminiHub」にチャット履歴、ワークフロー、設定を保存します。明示的に選択しない限り、このフォルダ外のファイルにはアクセスしません。",
+  "lp.dataUsage.noSharing.title": "第三者への共有なし",
+  "lp.dataUsage.noSharing.description": "データの販売や第三者への共有・転送は一切行いません。すべてのデータはご自身のGoogle Driveに保存されます。",
+  "lp.dataUsage.portability.title": "完全なポータビリティ",
+  "lp.dataUsage.portability.description": "GemiHubにデータベースはありません。すべてのデータはGoogle Driveに保存されます。万が一このサービスが停止しても、ローカルやクラウドで自分のインスタンスを立ち上げるだけで、チャット履歴・ワークフロー・設定がそのまま復元されます。",
+  "lp.dataUsage.learnMore": "詳しくは",
   "lp.cta.ready": "さあ、始めましょう",
   "lp.footer.terms": "利用規約",
   "lp.footer.policy": "プライバシーポリシー",

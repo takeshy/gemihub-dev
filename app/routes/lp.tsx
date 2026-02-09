@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, Search, Puzzle, GitBranch, Shield } from "lucide-react";
+import { LogIn, MessageSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog } from "lucide-react";
 import { useLocation } from "react-router";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import type { Language } from "~/types/settings";
@@ -108,6 +108,40 @@ function LandingContent({ lang }: { lang: Language }) {
             </figure>
           ))}
         </div>
+      </section>
+
+      {/* Data Usage */}
+      <section className="mx-auto max-w-4xl px-4 pb-20">
+        <h2 className="mb-4 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
+          {t("lp.dataUsage.title")}
+        </h2>
+        <p className="mb-8 text-center text-sm text-gray-600 dark:text-gray-400">
+          {t("lp.dataUsage.intro")}
+        </p>
+        <div className="grid gap-6 sm:grid-cols-2">
+          {([
+            { icon: User, titleKey: "lp.dataUsage.account.title" as const, descKey: "lp.dataUsage.account.description" as const },
+            { icon: HardDrive, titleKey: "lp.dataUsage.drive.title" as const, descKey: "lp.dataUsage.drive.description" as const },
+            { icon: Lock, titleKey: "lp.dataUsage.noSharing.title" as const, descKey: "lp.dataUsage.noSharing.description" as const },
+            { icon: ServerCog, titleKey: "lp.dataUsage.portability.title" as const, descKey: "lp.dataUsage.portability.description" as const },
+          ]).map(({ icon: Icon, titleKey, descKey }) => (
+            <div key={titleKey} className="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-800 dark:bg-gray-900">
+              <Icon size={24} className="mb-2 text-green-600 dark:text-green-400" />
+              <h3 className="mb-1.5 text-base font-semibold text-gray-900 dark:text-gray-100">
+                {t(titleKey)}
+              </h3>
+              <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                {t(descKey)}
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+          {t("lp.dataUsage.learnMore")}{" "}
+          <a href={`/policy${jaPrefix}`} className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400">
+            {t("lp.footer.policy")}
+          </a>
+        </p>
       </section>
 
       {/* Footer CTA */}
