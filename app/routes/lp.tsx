@@ -60,7 +60,7 @@ const en: LpStrings = {
   ],
   screenshotsTitle: "See It in Action",
   screenshots: [
-    { src: "/images/cap.png", alt: "AI Chat & File Management", description: "Chat with AI that reads, searches, and writes your Drive files. Upload images or documents to ask questions." },
+    { src: "/images/cap.png", alt: "AI Chat & File Management", description: "Write notes in a rich text editor. Have AI proofread or summarize them. Chat with web search, semantic file search, image generation, and external tool connections via MCP." },
     { src: "/images/visual_workflow.png", alt: "Workflow Builder", description: "Build automation pipelines with a visual node-based editor. Chain AI prompts, Drive operations, and HTTP requests." },
     { src: "/images/ai_generate_workflow.png", alt: "AI Workflow Generation", description: "Describe what you want in natural language and AI generates the workflow with streaming preview." },
     { src: "/images/rag_search.png", alt: "RAG Search", description: "Sync your Drive files to semantic search. Ask questions in natural language and get answers from your personal knowledge base." },
@@ -103,7 +103,7 @@ const ja: LpStrings = {
   ],
   screenshotsTitle: "動作イメージ",
   screenshots: [
-    { src: "/images/cap.png", alt: "AIチャット＆ファイル管理", description: "AIがDriveのファイルを読み取り・検索・作成。画像やドキュメントをアップロードして質問できます。" },
+    { src: "/images/cap.png", alt: "AIチャット＆ファイル管理", description: "リッチテキストエディターでメモが書け、AIに校正や要約を任せられます。チャットではWeb検索やファイルの意味検索、画像生成、外部ツール接続（MCP）も可能です。" },
     { src: "/images/visual_workflow.png", alt: "ワークフロービルダー", description: "ビジュアルなノードベースエディタで自動化パイプラインを構築。AIプロンプト、Drive操作、HTTPリクエストを連結。" },
     { src: "/images/ai_generate_workflow.png", alt: "AIワークフロー生成", description: "やりたいことを自然言語で伝えるだけでAIがワークフローを生成。ストリーミングプレビュー付き。" },
     { src: "/images/rag_search.png", alt: "RAG検索", description: "Driveのファイルをセマンティック検索に同期。自然な言葉で質問すれば、あなたのナレッジベースから回答。" },
