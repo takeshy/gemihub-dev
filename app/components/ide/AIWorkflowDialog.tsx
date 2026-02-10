@@ -63,6 +63,7 @@ export function AIWorkflowDialog({
   // Refs
   const thinkingRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
   const models = getAvailableModels(apiPlan).filter((m) => !m.isImageModel);
@@ -74,10 +75,14 @@ export function AIWorkflowDialog({
     }
   }, [thinking]);
 
-  // Focus description input on mount
+  // Focus name input (create) or description input (modify) on mount
   useEffect(() => {
-    descriptionRef.current?.focus();
-  }, []);
+    if (mode === "create") {
+      nameRef.current?.focus();
+    } else {
+      descriptionRef.current?.focus();
+    }
+  }, [mode]);
 
   const handleGenerate = useCallback(async () => {
     const desc = description.trim();
@@ -259,6 +264,7 @@ export function AIWorkflowDialog({
                 Workflow Name
               </label>
               <input
+                ref={nameRef}
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
