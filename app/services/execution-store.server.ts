@@ -58,7 +58,11 @@ export function setStatus(executionId: string, status: ExecutionState["status"])
   broadcast(executionId, "status", JSON.stringify({ status }));
 }
 
-export function setCompleted(executionId: string, record?: ExecutionRecord): void {
+export function setCompleted(
+  executionId: string,
+  record?: ExecutionRecord,
+  openFile?: { fileId: string; fileName: string; mimeType: string }
+): void {
   const state = executions.get(executionId);
   if (!state) return;
   state.status = "completed";
@@ -66,6 +70,7 @@ export function setCompleted(executionId: string, record?: ExecutionRecord): voi
   broadcast(executionId, "complete", JSON.stringify({
     status: "completed",
     record: record ? { id: record.id, steps: record.steps.length } : undefined,
+    openFile,
   }));
 }
 

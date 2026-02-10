@@ -32,7 +32,7 @@ const VALID_NODE_TYPES: Set<string> = new Set([
   "variable", "set", "if", "while", "command", "http", "json",
   "drive-file", "drive-read", "drive-search", "drive-list",
   "drive-folder-list", "drive-file-picker", "drive-save",
-  "preview", "dialog", "prompt-value", "prompt-file", "prompt-selection",
+  "dialog", "prompt-value", "prompt-file", "prompt-selection",
   "workflow", "mcp", "rag-sync", "sleep",
 ]);
 

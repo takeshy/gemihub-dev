@@ -74,6 +74,7 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
         { key: "mode", label: "Mode", required: false, options: ["create", "append", "overwrite"], defaultValue: "overwrite" },
         { key: "confirm", label: "Confirm", required: false, options: ["false", "true"], defaultValue: "false" },
         { key: "history", label: "History", required: false, options: ["false", "true"], defaultValue: "false" },
+        { key: "open", label: "Open after run", required: false, options: ["false", "true"], defaultValue: "false" },
       ];
     case "drive-read":
       return [
@@ -116,10 +117,6 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
         { key: "source", label: "Source", required: true, placeholder: "{{content}}" },
         { key: "path", label: "Path", required: true, placeholder: "output/result.md" },
         { key: "savePathTo", label: "Save Path To", required: false, placeholder: "savedPath" },
-      ];
-    case "preview":
-      return [
-        { key: "content", label: "Content", required: true, multiline: true, placeholder: "{{result}}" },
       ];
     case "dialog":
       return [

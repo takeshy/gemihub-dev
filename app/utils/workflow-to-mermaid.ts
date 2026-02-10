@@ -47,8 +47,6 @@ function getNodeLabel(node: WorkflowNode): string {
       return `**${id}**\nFile picker\n→ ${p.saveTo || ""}`;
     case "drive-save":
       return `**${id}**\nSave: ${p.source || ""}\n→ ${p.path || ""}`;
-    case "preview":
-      return `**${id}**\nPreview`;
     case "dialog": {
       const title = p.title || "";
       const msg = p.message || "";

@@ -14,7 +14,6 @@ export type WorkflowNodeType =
   | "drive-folder-list"// was: folder-list
   | "drive-file-picker"// was: file-explorer
   | "drive-save"       // was: file-save
-  | "preview"          // was: open
   | "dialog"
   | "prompt-value"
   | "prompt-file"

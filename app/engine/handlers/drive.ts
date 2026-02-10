@@ -116,24 +116,37 @@ export async function handleDriveFileNode(
   }
 
   let finalContent = content;
+  let resultFile: driveService.DriveFile | undefined;
   if (mode === "create") {
     if (existingFile) return; // File exists, skip
-    await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
+    resultFile = await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
   } else if (mode === "append") {
     if (existingFile) {
       const currentContent = await driveService.readFile(accessToken, existingFile.id);
       finalContent = currentContent + "\n" + content;
       await driveService.updateFile(accessToken, existingFile.id, finalContent, "text/markdown");
+      resultFile = existingFile;
     } else {
-      await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
+      resultFile = await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
     }
   } else {
     // overwrite
     if (existingFile) {
       await driveService.updateFile(accessToken, existingFile.id, content, "text/markdown");
+      resultFile = existingFile;
     } else {
-      await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
+      resultFile = await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
     }
+  }
+
+  // Set __openFile if open property is enabled
+  const open = node.properties["open"];
+  if (open === "true" && resultFile) {
+    context.variables.set("__openFile", JSON.stringify({
+      fileId: resultFile.id,
+      fileName: resultFile.name,
+      mimeType: resultFile.mimeType,
+    }));
   }
 
   // Record edit history if enabled

@@ -120,6 +120,7 @@ Write/create file on Drive.
 - **mode** (optional): "overwrite" (default), "append", "create"
 - **confirm** (optional): "true"/"false" — show confirmation dialog before write
 - **history** (optional): "true"/"false" — record edit in edit history
+- **open** (optional): "true"/"false" — open file in IDE after workflow completes
 
 #### drive-read
 Read file from Drive.
@@ -176,10 +177,6 @@ Save FileExplorerData (e.g., from HTTP download or image generation) to Drive.
 - **source** (required): Variable containing FileExplorerData JSON
 - **path** (required): Save path
 - **savePathTo** (optional): Variable for final saved path
-
-#### preview
-Generate preview link.
-- **path** (required): File path
 
 ### User Interaction
 

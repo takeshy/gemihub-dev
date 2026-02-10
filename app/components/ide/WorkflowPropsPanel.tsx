@@ -80,6 +80,7 @@ export function WorkflowPropsPanel({
         fileId={activeFileId}
         fileName={activeFileName!}
         onNewWorkflow={onNewWorkflow}
+        onSelectFile={onSelectFile}
         onWorkflowChanged={onWorkflowChanged}
         onModifyWithAI={onModifyWithAI}
         settings={settings}
@@ -123,6 +124,7 @@ function WorkflowNodeListView({
   fileId,
   fileName,
   onNewWorkflow,
+  onSelectFile,
   onWorkflowChanged,
   onModifyWithAI,
   settings,
@@ -131,6 +133,7 @@ function WorkflowNodeListView({
   fileId: string;
   fileName: string;
   onNewWorkflow: () => void;
+  onSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
   onWorkflowChanged?: () => void;
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
   settings?: import("~/types/settings").UserSettings;
@@ -364,10 +367,16 @@ function WorkflowNodeListView({
           setMcpAppModal(log.mcpApps);
         }
       });
-      es.addEventListener("complete", () => {
+      es.addEventListener("complete", (e) => {
         setExecutionStatus("completed");
         es.close();
         window.dispatchEvent(new Event("workflow-completed"));
+        try {
+          const data = JSON.parse((e as MessageEvent).data);
+          if (data.openFile) {
+            onSelectFile(data.openFile.fileId, data.openFile.fileName, data.openFile.mimeType);
+          }
+        } catch { /* ignore parse errors */ }
       });
       es.addEventListener("error", (e) => {
         if (e instanceof MessageEvent) {
@@ -403,7 +412,7 @@ function WorkflowNodeListView({
     } catch {
       setExecutionStatus("error");
     }
-  }, [fileId, eventSourceRef]);
+  }, [fileId, eventSourceRef, onSelectFile]);
 
   const stopExecution = useCallback(() => {
     eventSourceRef[0]?.close();

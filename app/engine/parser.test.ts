@@ -902,17 +902,19 @@ nodes:
   - id: finish
     type: command
     prompt: done
-    next: preview
-  - id: preview
-    type: preview
+    next: save-result
+  - id: save-result
+    type: drive-file
     path: result.md
+    content: '{{result}}'
+    open: 'true'
     next: end
 `;
   const wf1 = parseWorkflowYaml(yaml);
   assert.equal(wf1.nodes.size, 6);
 
-  // preview has next: end — no outgoing edge
-  assert.equal(wf1.edges.filter((e) => e.from === "preview").length, 0);
+  // save-result has next: end — no outgoing edge
+  assert.equal(wf1.edges.filter((e) => e.from === "save-result").length, 0);
 
   const serialized = serializeWorkflow(wf1, "batch");
   const wf2 = parseWorkflowYaml(serialized);
@@ -926,11 +928,11 @@ nodes:
   // inc → loop (explicit back-reference)
   assert.ok(wf2.edges.some((e) => e.from === "inc" && e.to === "loop"));
 
-  // finish → preview
-  assert.ok(wf2.edges.some((e) => e.from === "finish" && e.to === "preview"));
+  // finish → save-result
+  assert.ok(wf2.edges.some((e) => e.from === "finish" && e.to === "save-result"));
 
-  // preview has NO outgoing edge (next: end preserved)
-  assert.equal(wf2.edges.filter((e) => e.from === "preview").length, 0);
+  // save-result has NO outgoing edge (next: end preserved)
+  assert.equal(wf2.edges.filter((e) => e.from === "save-result").length, 0);
 });
 
 test("round-trip: user-reported tag-batch workflow preserves structure", () => {
@@ -985,35 +987,31 @@ nodes:
     type: drive-file
     path: reports/tag-suggestions.md
     content: '{{report}}'
-    next: preview
-  - id: preview
-    type: preview
-    path: reports/tag-suggestions.md
-    saveTo: previewPath
-    next: end
+    open: 'true'
 `;
   const wf1 = parseWorkflowYaml(yaml);
-  assert.equal(wf1.nodes.size, 12);
+  assert.equal(wf1.nodes.size, 11);
 
   // Key structural checks on original
   assert.ok(wf1.edges.some((e) => e.from === "loop" && e.to === "read" && e.label === "true"));
   assert.ok(wf1.edges.some((e) => e.from === "loop" && e.to === "finish" && e.label === "false"));
   assert.ok(wf1.edges.some((e) => e.from === "inc" && e.to === "loop"));
-  assert.ok(wf1.edges.some((e) => e.from === "finish" && e.to === "preview"));
-  assert.equal(wf1.edges.filter((e) => e.from === "preview").length, 0); // next: end
+  // finish is the last node — no outgoing edge
+  assert.equal(wf1.edges.filter((e) => e.from === "finish").length, 0);
+  // finish has open property
+  assert.equal(wf1.nodes.get("finish")!.properties.open, "true");
 
   // Round-trip
   const serialized = serializeWorkflow(wf1, "タグ提案バッチ");
   const wf2 = parseWorkflowYaml(serialized);
 
-  assert.equal(wf2.nodes.size, 12);
+  assert.equal(wf2.nodes.size, 11);
 
   // All edges must be preserved
   assert.ok(wf2.edges.some((e) => e.from === "loop" && e.to === "read" && e.label === "true"));
   assert.ok(wf2.edges.some((e) => e.from === "loop" && e.to === "finish" && e.label === "false"));
   assert.ok(wf2.edges.some((e) => e.from === "inc" && e.to === "loop"));
-  assert.ok(wf2.edges.some((e) => e.from === "finish" && e.to === "preview"));
-  assert.equal(wf2.edges.filter((e) => e.from === "preview").length, 0); // next: end preserved
+  assert.equal(wf2.edges.filter((e) => e.from === "finish").length, 0);
 
   // Sequential chain: read → tag → wait → append → inc
   assert.ok(wf2.edges.some((e) => e.from === "read" && e.to === "tag"));
@@ -1038,13 +1036,12 @@ nodes:
   const serialized2 = serializeWorkflow(wf3, "タグ提案バッチ");
   const wf4 = parseWorkflowYaml(serialized2);
 
-  assert.equal(wf4.nodes.size, 12);
+  assert.equal(wf4.nodes.size, 11);
   assert.equal(wf4.nodes.get("list")!.properties.folder, "corrected-folder");
 
   // Structure must still be intact
   assert.ok(wf4.edges.some((e) => e.from === "loop" && e.to === "read" && e.label === "true"));
   assert.ok(wf4.edges.some((e) => e.from === "loop" && e.to === "finish" && e.label === "false"));
   assert.ok(wf4.edges.some((e) => e.from === "inc" && e.to === "loop"));
-  assert.ok(wf4.edges.some((e) => e.from === "finish" && e.to === "preview"));
-  assert.equal(wf4.edges.filter((e) => e.from === "preview").length, 0);
+  assert.equal(wf4.edges.filter((e) => e.from === "finish").length, 0);
 });

@@ -17,7 +17,7 @@ import { handleDriveSearchNode } from "./handlers/driveSearch";
 import { handleDriveListNode, handleDriveFolderListNode } from "./handlers/driveListing";
 import { handleDriveSaveNode } from "./handlers/driveSave";
 import { handleCommandNode } from "./handlers/command";
-import { handlePromptValueNode, handlePromptFileNode, handlePromptSelectionNode, handleDialogNode, handlePreviewNode, handleDriveFilePickerNode } from "./handlers/prompt";
+import { handlePromptValueNode, handlePromptFileNode, handlePromptSelectionNode, handleDialogNode, handleDriveFilePickerNode } from "./handlers/prompt";
 import { handleWorkflowNode, handleJsonNode } from "./handlers/integration";
 import { handleMcpNode } from "./handlers/mcp";
 import { handleRagSyncNode } from "./handlers/ragSync";
@@ -326,17 +326,6 @@ export async function executeWorkflow(
           await handleDriveSaveNode(node, context, serviceContext);
           log(node.id, node.type, `File saved`, "success");
           addHistoryStep(node.id, node.type);
-          const next = getNextNodes(workflow, node.id);
-          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
-          break;
-        }
-
-        case "preview": {
-          const previewPath = replaceVariables(node.properties["path"] || "", context);
-          log(node.id, node.type, `Preview: ${previewPath}`, "info");
-          await handlePreviewNode(node, context, serviceContext);
-          log(node.id, node.type, `Preview generated`, "success", { path: previewPath }, previewPath);
-          addHistoryStep(node.id, node.type, { path: previewPath }, previewPath);
           const next = getNextNodes(workflow, node.id);
           for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
           break;

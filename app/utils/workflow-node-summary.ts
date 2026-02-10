@@ -31,8 +31,6 @@ export function getNodeSummary(node: WorkflowNode): string {
       return truncate(p.title || "", 60);
     case "drive-save":
       return p.path ? `${truncate(p.source || "", 20)} → ${p.path}` : "";
-    case "preview":
-      return truncate(p.content || "", 60);
     case "dialog":
       return truncate(p.title || p.message || "", 60);
     case "prompt-value":
@@ -75,7 +73,6 @@ export function getNodeTypeLabel(type: WorkflowNodeType): string {
     "drive-folder-list": "Folder List",
     "drive-file-picker": "File Picker",
     "drive-save": "Drive Save",
-    preview: "Preview",
     dialog: "Dialog",
     "prompt-value": "Prompt",
     "prompt-file": "File Prompt",
@@ -115,7 +112,6 @@ export function getNodeTypeColor(type: WorkflowNodeType): string {
     case "prompt-value":
     case "prompt-file":
     case "prompt-selection":
-    case "preview":
       return "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300";
     // External: cyan
     case "http":

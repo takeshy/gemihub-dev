@@ -155,22 +155,6 @@ export async function handleDialogNode(
   }
 }
 
-// Handle preview node (was: open) - returns Drive web link
-export async function handlePreviewNode(
-  node: WorkflowNode,
-  context: ExecutionContext,
-  _serviceContext: ServiceContext
-): Promise<void> {
-  const path = replaceVariables(node.properties["path"] || "", context);
-  if (!path) throw new Error("preview node missing 'path' property");
-
-  // For Drive, we just store the path - the client can open the Drive link
-  const saveTo = node.properties["saveTo"];
-  if (saveTo) {
-    context.variables.set(saveTo, path);
-  }
-}
-
 // Handle drive-file-picker node (was: file-explorer) - SSE-based file picker
 export async function handleDriveFilePickerNode(
   node: WorkflowNode,

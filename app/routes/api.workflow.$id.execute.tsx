@@ -119,7 +119,13 @@ export async function action({ request, params }: Route.ActionArgs) {
       } else if (record?.status === "cancelled") {
         setError(executionId, "Workflow execution was stopped");
       } else {
-        setCompleted(executionId, record);
+        // Check for __openFile from drive-file node with open: true
+        const openFileRaw = result.context.variables.get("__openFile");
+        let openFile: { fileId: string; fileName: string; mimeType: string } | undefined;
+        if (typeof openFileRaw === "string") {
+          try { openFile = JSON.parse(openFileRaw); } catch { /* ignore */ }
+        }
+        setCompleted(executionId, record, openFile);
       }
 
       if (record) {
