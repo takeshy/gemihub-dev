@@ -484,6 +484,34 @@ function IDEContent({
   type MobileView = "files" | "editor" | "chat" | "workflow";
   const [mobileView, setMobileView] = useState<MobileView>("editor");
 
+  // Mobile swipe navigation
+  const MOBILE_VIEW_ORDER: MobileView[] = ["files", "editor", "chat", "workflow"];
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+
+    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      const currentIndex = MOBILE_VIEW_ORDER.indexOf(mobileView);
+      const nextIndex = deltaX > 0 ? currentIndex - 1 : currentIndex + 1;
+      if (nextIndex >= 0 && nextIndex < MOBILE_VIEW_ORDER.length) {
+        const nextView = MOBILE_VIEW_ORDER[nextIndex];
+        setMobileView(nextView);
+        if (nextView === "chat") setRightPanel("chat");
+        if (nextView === "workflow") setRightPanel("workflow");
+      }
+    }
+  }, [mobileView, setRightPanel]);
+
   // Close file panel after selecting a file on mobile
   const handleSelectFileMobile = useCallback(
     (fileId: string, fileName: string, mimeType: string) => {
@@ -638,7 +666,7 @@ function IDEContent({
       {isMobile ? (
         /* ---- Mobile layout ---- */
         <>
-          <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex flex-1 flex-col overflow-hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
             {mobileView === "files" && (
               <div className="flex-1 overflow-hidden bg-white dark:bg-gray-900">
                 {leftSidebarContent}
