@@ -121,6 +121,7 @@ const lang = api.language;
 api.registerView({
   id: "my-view",
   name: "My View",
+  icon: "puzzle",       // optional icon identifier
   location: "sidebar", // or "main"
   component: MyReactComponent, // receives { api } as props
 });
@@ -136,7 +137,7 @@ api.registerSlashCommand({
 
 // Register a settings tab (shown in Settings > Plugins via gear icon)
 api.registerSettingsTab({
-  component: MySettingsComponent, // receives { api } as props
+  component: MySettingsComponent, // receives { api, onClose } as props
 });
 ```
 

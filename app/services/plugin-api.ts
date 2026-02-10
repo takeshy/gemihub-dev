@@ -131,6 +131,7 @@ export function createPluginAPI(
           body: JSON.stringify({ action: "update", fileId, content }),
         });
         if (!res.ok) throw new Error(`Drive update error: ${res.status}`);
+        window.dispatchEvent(new Event("sync-complete"));
       },
     },
 

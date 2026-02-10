@@ -599,7 +599,7 @@ const en: TranslationStrings = {
   "plugins.confirmUninstall": "Uninstall this plugin? This will remove all plugin data.",
   "plugins.invalidRepo": "Invalid repository format. Use owner/repo.",
   "plugins.settings": "Settings",
-  "plugins.reloadConfirm": "Plugin installed. Reload to activate?",
+  "plugins.reloadConfirm": "Reload to activate changes?",
 
   // Commands tab
   "settings.tab.commands": "Commands",
@@ -939,7 +939,7 @@ const ja: TranslationStrings = {
   "plugins.confirmUninstall": "このプラグインをアンインストールしますか？すべてのプラグインデータが削除されます。",
   "plugins.invalidRepo": "リポジトリの形式が無効です。owner/repo の形式で入力してください。",
   "plugins.settings": "設定",
-  "plugins.reloadConfirm": "プラグインをインストールしました。リロードして反映しますか？",
+  "plugins.reloadConfirm": "リロードして変更を反映しますか？",
 
   // Commands tab
   "settings.tab.commands": "コマンド",

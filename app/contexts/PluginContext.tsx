@@ -160,6 +160,13 @@ export function PluginProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pluginConfigs]);
 
+  // Propagate language changes to existing plugin APIs
+  useEffect(() => {
+    for (const api of apiMapRef.current.values()) {
+      api.language = language;
+    }
+  }, [language]);
+
   // Cleanup all plugins on unmount
   useEffect(() => {
     const loaded = loadedRef;

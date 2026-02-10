@@ -183,6 +183,12 @@ export async function action({ request, params }: Route.ActionArgs) {
           value: unknown;
           action: string;
         };
+        if (typeof key !== "string" || !key) {
+          return jsonWithCookie(
+            { error: "Missing or invalid key" },
+            { status: 400 }
+          );
+        }
         if (isLocalPlugin(pluginId)) {
           const localData = getLocalPluginData(pluginId);
           localData[key] = value;

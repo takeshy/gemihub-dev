@@ -162,6 +162,9 @@ export function PluginsTab({ settings }: PluginsTabProps) {
           );
           invalidateIndexCache();
           showStatus("success", t("plugins.updated"));
+          if (confirm(t("plugins.reloadConfirm"))) {
+            window.location.reload();
+          }
         } else {
           showStatus("error", data.error || "Update failed");
         }

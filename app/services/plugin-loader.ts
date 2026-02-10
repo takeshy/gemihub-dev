@@ -161,8 +161,6 @@ export async function loadPlugin(
     manifest,
     config,
     instance,
-    views: [],
-    slashCommands: [],
   };
 
   // Call onload with API — catch errors to prevent half-loaded state

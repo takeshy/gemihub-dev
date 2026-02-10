@@ -101,6 +101,4 @@ export interface PluginInstance {
   manifest: PluginManifest;
   config: PluginConfig;
   instance: { onload: (api: PluginAPI) => void; onunload?: () => void };
-  views: PluginView[];
-  slashCommands: PluginSlashCommand[];
 }
