@@ -380,6 +380,9 @@ function IDELayout({
 // IDE Content — separated to access PluginContext
 // ---------------------------------------------------------------------------
 
+type MobileView = "files" | "editor" | "chat" | "workflow";
+const MOBILE_VIEW_ORDER: MobileView[] = ["files", "editor", "chat", "workflow"];
+
 function IDEContent({
   settings,
   hasGeminiApiKey,
@@ -499,11 +502,7 @@ function IDEContent({
   }, []);
 
   // Mobile view state: which panel is shown full-screen
-  type MobileView = "files" | "editor" | "chat" | "workflow";
   const [mobileView, setMobileView] = useState<MobileView>("editor");
-
-  // Mobile swipe navigation
-  const MOBILE_VIEW_ORDER: MobileView[] = ["files", "editor", "chat", "workflow"];
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Mobile plugin menu state
