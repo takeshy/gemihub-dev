@@ -331,6 +331,7 @@ Located in Settings → Sync tab, organized into sections:
 
 - `_sync-meta.json` — Sync metadata
 - `settings.json` — User settings
+- `history/*/_meta.json` — History listing metadata (chat, execution, request folders)
 - `trash/` — Soft-deleted files (managed via Trash dialog)
 - `sync_conflicts/` — Conflict backup files (managed via Conflict Backups dialog)
 - `__TEMP__/` — Temporary sync files (managed via Temp Files dialog)
@@ -418,6 +419,7 @@ Browser (IndexedDB)          Server                Google Drive
 | `app/services/edit-history.server.ts` | Server-side edit history (Drive `.history.json` read/write) |
 | `app/components/settings/TrashDialog.tsx` | Trash file management dialog (restore/delete) |
 | `app/components/settings/ConflictsDialog.tsx` | Conflict backup management dialog (restore/rename/delete) |
+| `app/services/history-meta.server.ts` | History listing metadata (`_meta.json`) read/write/rebuild for chat, execution, and request history folders |
 | `app/services/google-drive.server.ts` | Google Drive API wrapper |
 | `app/utils/parallel.ts` | Parallel processing utility (concurrency limit) |
 

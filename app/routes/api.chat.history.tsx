@@ -65,7 +65,7 @@ export async function action({ request }: Route.ActionArgs) {
         );
       }
 
-      await deleteChat(validTokens.accessToken, fileId);
+      await deleteChat(validTokens.accessToken, validTokens.rootFolderId, fileId);
 
       return Response.json({ success: true }, { headers: responseHeaders });
     }

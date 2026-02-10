@@ -331,6 +331,7 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 - `_sync-meta.json` — 同期メタデータ
 - `settings.json` — ユーザー設定
+- `history/*/_meta.json` — 履歴一覧メタデータ（チャット・実行履歴・リクエスト履歴フォルダ）
 - `trash/` — ソフトデリートされたファイル（ゴミ箱ダイアログで管理）
 - `sync_conflicts/` — コンフリクトバックアップファイル（コンフリクトバックアップダイアログで管理）
 - `__TEMP__/` — 一時同期ファイル（一時ファイルダイアログで管理）
@@ -418,6 +419,7 @@ Push 後、diff は Drive に保存済みのため、Push されたファイル�
 | `app/services/edit-history.server.ts` | サーバー側の編集履歴（Drive `.history.json` の読取・書込） |
 | `app/components/settings/TrashDialog.tsx` | ゴミ箱管理ダイアログ（復元・削除） |
 | `app/components/settings/ConflictsDialog.tsx` | コンフリクトバックアップ管理ダイアログ（復元・リネーム・削除） |
+| `app/services/history-meta.server.ts` | 履歴一覧メタデータ（`_meta.json`）の読取・書込・再構築（チャット・実行履歴・リクエスト履歴フォルダ用） |
 | `app/services/google-drive.server.ts` | Google Drive API ラッパー |
 | `app/utils/parallel.ts` | 並列処理ユーティリティ（同時実行数制限） |
 

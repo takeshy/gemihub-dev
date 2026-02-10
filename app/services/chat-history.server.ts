@@ -9,6 +9,12 @@ import {
   getHistoryFolderId,
   ensureSubFolder,
 } from "./google-drive.server";
+import {
+  readHistoryMeta,
+  rebuildHistoryMeta,
+  upsertHistoryMetaEntry,
+  removeHistoryMetaEntry,
+} from "./history-meta.server";
 import type { ChatHistory, ChatHistoryItem } from "~/types/chat";
 
 const CHATS_FOLDER = "chats";
@@ -24,6 +30,23 @@ async function ensureChatsFolderId(
   return ensureSubFolder(accessToken, historyFolderId, CHATS_FOLDER);
 }
 
+/** Extract ChatHistoryItem metadata from a parsed chat file */
+function extractChatItem(
+  fileId: string,
+  content: unknown
+): ChatHistoryItem | null {
+  const chat = content as ChatHistory;
+  if (!chat.id) return null;
+  return {
+    id: chat.id,
+    fileId,
+    title: chat.title,
+    createdAt: chat.createdAt,
+    updatedAt: chat.updatedAt,
+    isEncrypted: chat.isEncrypted,
+  };
+}
+
 /**
  * List all chat histories (metadata only)
  */
@@ -32,38 +55,19 @@ export async function listChatHistories(
   rootFolderId: string
 ): Promise<ChatHistoryItem[]> {
   const chatsFolderId = await ensureChatsFolderId(accessToken, rootFolderId);
-  const files = await listFiles(accessToken, chatsFolderId);
 
-  const jsonFiles = files.filter((f) => f.name.endsWith(".json"));
-
-  // Read all chat files in parallel (batched to avoid rate limits)
-  const BATCH_SIZE = 10;
-  const items: ChatHistoryItem[] = [];
-
-  for (let i = 0; i < jsonFiles.length; i += BATCH_SIZE) {
-    const batch = jsonFiles.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(
-      batch.map(async (file) => {
-        const content = await readFile(accessToken, file.id);
-        const chat = JSON.parse(content) as ChatHistory;
-        return {
-          id: chat.id,
-          fileId: file.id,
-          title: chat.title,
-          createdAt: chat.createdAt,
-          updatedAt: chat.updatedAt,
-          isEncrypted: chat.isEncrypted,
-        } as ChatHistoryItem;
-      })
+  // Try reading from _meta.json first
+  let meta = await readHistoryMeta<ChatHistoryItem>(accessToken, chatsFolderId);
+  if (!meta) {
+    // Rebuild from individual files (first time or missing _meta.json)
+    meta = await rebuildHistoryMeta<ChatHistoryItem>(
+      accessToken,
+      chatsFolderId,
+      extractChatItem
     );
-    for (const r of results) {
-      if (r.status === "fulfilled") {
-        items.push(r.value);
-      } else {
-        console.error("[chat-history] Failed to load chat file:", r.reason);
-      }
-    }
   }
+
+  const items = Object.values(meta.items);
 
   // Sort by updatedAt descending
   items.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -97,13 +101,31 @@ export async function saveChat(
   const files = await listFiles(accessToken, chatsFolderId);
   const existing = files.find((f) => f.name === fileName);
 
+  let fileId: string;
   if (existing) {
     await updateFile(accessToken, existing.id, content, "application/json");
-    return existing.id;
+    fileId = existing.id;
   } else {
     const file = await createFile(accessToken, fileName, content, chatsFolderId, "application/json");
-    return file.id;
+    fileId = file.id;
   }
+
+  // Update _meta.json (best-effort)
+  try {
+    const item: ChatHistoryItem = {
+      id: chatHistory.id,
+      fileId,
+      title: chatHistory.title,
+      createdAt: chatHistory.createdAt,
+      updatedAt: chatHistory.updatedAt,
+      isEncrypted: chatHistory.isEncrypted,
+    };
+    await upsertHistoryMetaEntry(accessToken, chatsFolderId, fileId, item);
+  } catch (err) {
+    console.error("[chat-history] Failed to update _meta.json:", err);
+  }
+
+  return fileId;
 }
 
 /**
@@ -111,7 +133,16 @@ export async function saveChat(
  */
 export async function deleteChat(
   accessToken: string,
+  rootFolderId: string,
   chatFileId: string
 ): Promise<void> {
   await deleteFile(accessToken, chatFileId);
+
+  // Update _meta.json (best-effort)
+  try {
+    const chatsFolderId = await ensureChatsFolderId(accessToken, rootFolderId);
+    await removeHistoryMetaEntry(accessToken, chatsFolderId, chatFileId);
+  } catch (err) {
+    console.error("[chat-history] Failed to update _meta.json after delete:", err);
+  }
 }

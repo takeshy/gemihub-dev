@@ -1,11 +1,16 @@
 import {
   getHistoryFolderId,
   ensureSubFolder,
-  listFiles,
   readFile,
   createFile,
   deleteFile,
 } from "./google-drive.server";
+import {
+  readHistoryMeta,
+  rebuildHistoryMeta,
+  upsertHistoryMetaEntry,
+  removeHistoryMetaEntry,
+} from "./history-meta.server";
 import type {
   WorkflowRequestRecord,
   WorkflowRequestRecordItem,
@@ -19,6 +24,25 @@ async function ensureRequestHistoryFolderId(
 ): Promise<string> {
   const historyFolderId = await getHistoryFolderId(accessToken, rootFolderId);
   return ensureSubFolder(accessToken, historyFolderId, REQUEST_HISTORY_FOLDER);
+}
+
+/** Extract WorkflowRequestRecordItem metadata from a parsed request record */
+function extractRequestItem(
+  fileId: string,
+  content: unknown
+): WorkflowRequestRecordItem | null {
+  const record = content as WorkflowRequestRecord;
+  if (!record.id) return null;
+  return {
+    id: record.id,
+    fileId,
+    workflowId: record.workflowId,
+    workflowName: record.workflowName,
+    createdAt: record.createdAt,
+    description: record.description,
+    model: record.model,
+    mode: record.mode,
+  };
 }
 
 export async function saveRequestRecord(
@@ -37,6 +61,24 @@ export async function saveRequestRecord(
     folderId,
     "application/json"
   );
+
+  // Update _meta.json (best-effort)
+  try {
+    const item: WorkflowRequestRecordItem = {
+      id: record.id,
+      fileId: file.id,
+      workflowId: record.workflowId,
+      workflowName: record.workflowName,
+      createdAt: record.createdAt,
+      description: record.description,
+      model: record.model,
+      mode: record.mode,
+    };
+    await upsertHistoryMetaEntry(accessToken, folderId, file.id, item);
+  } catch (err) {
+    console.error("[workflow-request-history] Failed to update _meta.json:", err);
+  }
+
   return file.id;
 }
 
@@ -46,31 +88,22 @@ export async function listRequestRecords(
   workflowId?: string
 ): Promise<WorkflowRequestRecordItem[]> {
   const folderId = await ensureRequestHistoryFolderId(accessToken, rootFolderId);
-  const files = await listFiles(accessToken, folderId);
 
-  const items: WorkflowRequestRecordItem[] = [];
-  for (const file of files) {
-    if (!file.name.endsWith(".json")) continue;
+  // Try reading from _meta.json first
+  let meta = await readHistoryMeta<WorkflowRequestRecordItem>(accessToken, folderId);
+  if (!meta) {
+    // Rebuild from individual files (first time or missing _meta.json)
+    meta = await rebuildHistoryMeta<WorkflowRequestRecordItem>(
+      accessToken,
+      folderId,
+      extractRequestItem
+    );
+  }
 
-    try {
-      const content = await readFile(accessToken, file.id);
-      const record = JSON.parse(content) as WorkflowRequestRecord;
+  let items = Object.values(meta.items);
 
-      if (workflowId && record.workflowId !== workflowId) continue;
-
-      items.push({
-        id: record.id,
-        fileId: file.id,
-        workflowId: record.workflowId,
-        workflowName: record.workflowName,
-        createdAt: record.createdAt,
-        description: record.description,
-        model: record.model,
-        mode: record.mode,
-      });
-    } catch {
-      // Skip invalid files
-    }
+  if (workflowId) {
+    items = items.filter((item) => item.workflowId === workflowId);
   }
 
   items.sort(
@@ -89,7 +122,16 @@ export async function loadRequestRecord(
 
 export async function deleteRequestRecord(
   accessToken: string,
+  rootFolderId: string,
   fileId: string
 ): Promise<void> {
   await deleteFile(accessToken, fileId);
+
+  // Update _meta.json (best-effort)
+  try {
+    const folderId = await ensureRequestHistoryFolderId(accessToken, rootFolderId);
+    await removeHistoryMetaEntry(accessToken, folderId, fileId);
+  } catch (err) {
+    console.error("[workflow-request-history] Failed to update _meta.json after delete:", err);
+  }
 }

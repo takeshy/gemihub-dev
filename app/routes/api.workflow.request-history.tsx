@@ -48,7 +48,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   if (act === "delete" && fileId) {
-    await deleteRequestRecord(validTokens.accessToken, fileId);
+    await deleteRequestRecord(validTokens.accessToken, validTokens.rootFolderId, fileId);
     return Response.json({ success: true }, { headers: responseHeaders });
   }
 
