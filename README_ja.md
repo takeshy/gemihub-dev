@@ -84,8 +84,10 @@ Model Context Protocol（MCP）を通じて、GemiHub は外部サービスと�
 
 | トピック | English | 日本語 |
 |---------|---------|--------|
+| チャット & AI | [chat.md](./docs/chat.md) | [chat_ja.md](./docs/chat_ja.md) |
 | 同期 & オフラインキャッシュ | [sync.md](./docs/sync.md) | [sync_ja.md](./docs/sync_ja.md) |
 | ワークフローノードリファレンス | [workflow_nodes.md](./docs/workflow_nodes.md) | [workflow_nodes_ja.md](./docs/workflow_nodes_ja.md) |
+| RAG | [rag.md](./docs/rag.md) | [rag_ja.md](./docs/rag_ja.md) |
 | 暗号化 | [encryption.md](./docs/encryption.md) | [encryption_ja.md](./docs/encryption_ja.md) |
 | プラグイン | [plugins.md](./docs/plugins.md) | [plugins_ja.md](./docs/plugins_ja.md) |
 | インフラストラクチャ | [infrastructure.md](./docs/infrastructure.md) | [infrastructure_ja.md](./docs/infrastructure_ja.md) |

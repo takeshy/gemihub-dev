@@ -84,8 +84,10 @@ Detailed documentation is available in the [`docs/`](./docs/) directory:
 
 | Topic | English | 日本語 |
 |-------|---------|--------|
+| Chat & AI | [chat.md](./docs/chat.md) | [chat_ja.md](./docs/chat_ja.md) |
 | Sync & Offline Cache | [sync.md](./docs/sync.md) | [sync_ja.md](./docs/sync_ja.md) |
 | Workflow Node Reference | [workflow_nodes.md](./docs/workflow_nodes.md) | [workflow_nodes_ja.md](./docs/workflow_nodes_ja.md) |
+| RAG | [rag.md](./docs/rag.md) | [rag_ja.md](./docs/rag_ja.md) |
 | Encryption | [encryption.md](./docs/encryption.md) | [encryption_ja.md](./docs/encryption_ja.md) |
 | Plugins | [plugins.md](./docs/plugins.md) | [plugins_ja.md](./docs/plugins_ja.md) |
 | Infrastructure | [infrastructure.md](./docs/infrastructure.md) | [infrastructure_ja.md](./docs/infrastructure_ja.md) |
