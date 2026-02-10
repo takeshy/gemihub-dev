@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { data, redirect, useLoaderData, useSearchParams } from "react-router";
 import type { Route } from "./+types/_index";
 import { getTokens } from "~/services/session.server";
@@ -436,6 +436,22 @@ function IDEContent({
   // Quick open state
   const [showQuickOpen, setShowQuickOpen] = useState(false);
 
+  // Image picker state (for wysimark-lite file select)
+  const [showImagePicker, setShowImagePicker] = useState(false);
+  const imagePickerResolverRef = useRef<((url: string | null) => void) | null>(null);
+
+  const imageFileList = useMemo(() => {
+    const exts = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"];
+    return fileList.filter((f) => exts.some((ext) => f.name.toLowerCase().endsWith(ext)));
+  }, [fileList]);
+
+  const handleImageFileSelect = useCallback((): Promise<string | null> => {
+    return new Promise<string | null>((resolve) => {
+      imagePickerResolverRef.current = resolve;
+      setShowImagePicker(true);
+    });
+  }, []);
+
   const activeFilePath = useMemo(() => {
     if (!activeFileId) return null;
     return fileList.find((f) => f.id === activeFileId)?.path ?? null;
@@ -529,6 +545,7 @@ function IDEContent({
           fileMimeType={activeFileMimeType}
           settings={settings}
           refreshKey={workflowVersion}
+          onFileSelect={handleImageFileSelect}
         />
       )}
     </PanelErrorBoundary>
@@ -718,6 +735,23 @@ function IDEContent({
         onClose={() => setShowQuickOpen(false)}
         fileList={fileList}
         onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}
+      />
+
+      {/* Image picker for wysimark-lite file select */}
+      <QuickOpenDialog
+        open={showImagePicker}
+        onClose={() => {
+          setShowImagePicker(false);
+          imagePickerResolverRef.current?.(null);
+          imagePickerResolverRef.current = null;
+        }}
+        fileList={imageFileList}
+        onSelectFile={(id) => {
+          setShowImagePicker(false);
+          const url = `/api/drive/files?action=raw&fileId=${id}`;
+          imagePickerResolverRef.current?.(url);
+          imagePickerResolverRef.current = null;
+        }}
       />
 
       {/* Password prompt for API key unlock */}

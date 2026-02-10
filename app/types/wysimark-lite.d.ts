@@ -29,6 +29,7 @@ declare module "wysimark-lite" {
     className?: string;
     style?: CSSProperties;
     onImageChange?: (images: unknown[]) => void;
+    onFileSelect?: () => Promise<string | null>;
   }
 
   export const Editable: FC<EditableProps>;

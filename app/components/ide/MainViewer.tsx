@@ -54,6 +54,7 @@ interface MainViewerProps {
   fileMimeType: string | null;
   settings: UserSettings;
   refreshKey?: number;
+  onFileSelect?: () => Promise<string | null>;
 }
 
 const VIDEO_EXTS = [".mp4", ".webm", ".ogg", ".mov", ".avi", ".mkv"];
@@ -75,6 +76,7 @@ export function MainViewer({
   fileMimeType,
   settings,
   refreshKey,
+  onFileSelect,
 }: MainViewerProps) {
   const { t } = useI18n();
 
@@ -109,6 +111,7 @@ export function MainViewer({
       fileName={fileName}
       settings={settings}
       refreshKey={refreshKey}
+      onFileSelect={onFileSelect}
     />
   );
 }
@@ -157,11 +160,13 @@ function TextBasedViewer({
   fileName,
   settings,
   refreshKey,
+  onFileSelect,
 }: {
   fileId: string;
   fileName: string | null;
   settings: UserSettings;
   refreshKey?: number;
+  onFileSelect?: () => Promise<string | null>;
 }) {
   const { t } = useI18n();
   const { content, loading, error, saveToCache, refresh, forceRefresh } =
@@ -242,6 +247,7 @@ function TextBasedViewer({
         fileName={name}
         initialContent={content}
         saveToCache={saveToCache}
+        onFileSelect={onFileSelect}
       />
     );
   }
@@ -281,11 +287,13 @@ function MarkdownFileEditor({
   fileName,
   initialContent,
   saveToCache,
+  onFileSelect,
 }: {
   fileId: string;
   fileName: string;
   initialContent: string;
   saveToCache: (content: string) => Promise<void>;
+  onFileSelect?: () => Promise<string | null>;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -395,6 +403,7 @@ function MarkdownFileEditor({
       value: string;
       onChange: (md: string) => void;
       placeholder?: string;
+      onFileSelect?: () => Promise<string | null>;
     }> | null
   >(null);
 
@@ -486,6 +495,7 @@ function MarkdownFileEditor({
               value={content}
               onChange={updateContent}
               placeholder="Write your content here..."
+              onFileSelect={onFileSelect}
             />
           ) : (
             <Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />

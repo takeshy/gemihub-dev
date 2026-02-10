@@ -5,12 +5,14 @@ interface MarkdownEditorProps {
   value: string;
   onChange: (md: string) => void;
   placeholder?: string;
+  onFileSelect?: () => Promise<string | null>;
 }
 
 export function MarkdownEditor({
   value,
   onChange,
   placeholder = "Write your content here...",
+  onFileSelect,
 }: MarkdownEditorProps) {
   const editor = useEditor({});
 
@@ -21,6 +23,7 @@ export function MarkdownEditor({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
+        onFileSelect={onFileSelect}
       />
     </div>
   );
