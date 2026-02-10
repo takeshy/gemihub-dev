@@ -5,6 +5,7 @@ import {
   Settings,
   LogOut,
   Puzzle,
+  Search,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { SyncStatusBar } from "./SyncStatusBar";
@@ -17,7 +18,6 @@ export type RightPanelId = "chat" | "workflow" | `plugin:${string}` | `main-plug
 interface HeaderProps {
   rightPanel: RightPanelId;
   setRightPanel: (panel: RightPanelId) => void;
-  activeFileName: string | null;
   activeFileId: string | null;
   syncStatus: SyncStatus;
   lastSyncTime: string | null;
@@ -28,6 +28,8 @@ interface HeaderProps {
   onPull: () => void;
   onShowConflicts: () => void;
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
+  onQuickOpen?: () => void;
+  activeFilePath?: string | null;
   pluginSidebarViews?: PluginView[];
   pluginMainViews?: PluginView[];
   isMobile?: boolean;
@@ -36,7 +38,6 @@ interface HeaderProps {
 export function Header({
   rightPanel,
   setRightPanel,
-  activeFileName,
   activeFileId: _activeFileId,
   syncStatus,
   lastSyncTime,
@@ -47,6 +48,8 @@ export function Header({
   onPull,
   onShowConflicts,
   onSelectFile,
+  onQuickOpen,
+  activeFilePath,
   pluginSidebarViews = [],
   pluginMainViews = [],
   isMobile = false,
@@ -70,11 +73,6 @@ export function Header({
             GemiHub
           </span>
         </a>
-        {activeFileName && (
-          <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
-            {activeFileName}
-          </span>
-        )}
         <div className="hidden sm:block mx-1 h-4 w-px bg-gray-200 dark:bg-gray-700 shrink-0" />
         <SyncStatusBar
           syncStatus={syncStatus}
@@ -88,6 +86,18 @@ export function Header({
           conflicts={syncConflicts}
           compact={isMobile}
         />
+        {onQuickOpen && (
+          <button
+            onClick={onQuickOpen}
+            className="flex items-center gap-1 rounded px-1 py-0.5 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 min-w-0"
+            title={t("quickOpen.selectFile")}
+          >
+            <Search size={ICON.MD} className="shrink-0" />
+            {activeFilePath && (
+              <span className="hidden sm:inline text-xs truncate max-w-[200px]">{activeFilePath}</span>
+            )}
+          </button>
+        )}
       </div>
 
       <div className="flex items-center gap-1 shrink-0">

@@ -24,6 +24,7 @@ import { WorkflowPropsPanel } from "~/components/ide/WorkflowPropsPanel";
 import { ConflictDialog } from "~/components/ide/ConflictDialog";
 import { AIWorkflowDialog, type AIWorkflowMeta } from "~/components/ide/AIWorkflowDialog";
 import { SearchPanel } from "~/components/ide/SearchPanel";
+import { QuickOpenDialog } from "~/components/ide/QuickOpenDialog";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 import { useSync } from "~/hooks/useSync";
 import { useIsMobile } from "~/hooks/useIsMobile";
@@ -432,6 +433,14 @@ function IDEContent({
   // Search panel state
   const [showSearch, setShowSearch] = useState(false);
 
+  // Quick open state
+  const [showQuickOpen, setShowQuickOpen] = useState(false);
+
+  const activeFilePath = useMemo(() => {
+    if (!activeFileId) return null;
+    return fileList.find((f) => f.id === activeFileId)?.path ?? null;
+  }, [activeFileId, fileList]);
+
   const ragStoreIds = useMemo(() => {
     if (!settings.ragEnabled) return [];
     const rs = settings.ragSettings?.["gemihub"];
@@ -439,12 +448,16 @@ function IDEContent({
     return [rs.storeId];
   }, [settings.ragEnabled, settings.ragSettings]);
 
-  // Keyboard shortcut: Ctrl+Shift+F / Cmd+Shift+F to open search
+  // Keyboard shortcut: Ctrl+Shift+F / Cmd+Shift+F to open search, Ctrl+P / Cmd+P to quick open
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
         e.preventDefault();
         setShowSearch(true);
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "P" || e.key === "p")) {
+        e.preventDefault();
+        setShowQuickOpen(true);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -565,7 +578,6 @@ function IDEContent({
       <Header
         rightPanel={rightPanel}
         setRightPanel={setRightPanel}
-        activeFileName={activeFileName}
         activeFileId={activeFileId}
         syncStatus={syncStatus}
         lastSyncTime={lastSyncTime}
@@ -575,6 +587,8 @@ function IDEContent({
         onPush={push}
         onPull={pull}
         onShowConflicts={() => setShowConflictDialog(true)}
+        onQuickOpen={() => setShowQuickOpen(true)}
+        activeFilePath={activeFilePath}
         pluginSidebarViews={sidebarViews}
         pluginMainViews={mainViews}
         isMobile={isMobile}
@@ -697,6 +711,14 @@ function IDEContent({
           onClose={() => setAiDialog(null)}
         />
       )}
+
+      {/* Quick open file picker */}
+      <QuickOpenDialog
+        open={showQuickOpen}
+        onClose={() => setShowQuickOpen(false)}
+        fileList={fileList}
+        onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}
+      />
 
       {/* Password prompt for API key unlock */}
       {showPasswordPrompt && (

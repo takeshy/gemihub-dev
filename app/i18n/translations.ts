@@ -297,6 +297,11 @@ export interface TranslationStrings {
   "search.modelLabel": string;
   "settings.rag.searchTip": string;
 
+  // Quick Open
+  "quickOpen.placeholder": string;
+  "quickOpen.noResults": string;
+  "quickOpen.selectFile": string;
+
   // Trash & Conflicts
   "settings.sync.trashTitle": string;
   "settings.sync.trashDescription": string;
@@ -613,6 +618,11 @@ const en: TranslationStrings = {
   "search.modelLabel": "Model",
   "settings.rag.searchTip": "When RAG is configured, file search (magnifying glass / Ctrl+Shift+F) defaults to semantic RAG search. You can also switch to Drive or Local search.",
 
+  // Quick Open
+  "quickOpen.placeholder": "Search files...",
+  "quickOpen.noResults": "No matching files",
+  "quickOpen.selectFile": "Select a file...",
+
   // Trash & Manage Files
   "settings.sync.trashTitle": "Trash",
   "settings.sync.trashDescription": "Restore or permanently delete trashed files.",
@@ -928,6 +938,11 @@ const ja: TranslationStrings = {
   "search.localNote": "キャッシュ済みファイルのみが検索対象です。",
   "search.modelLabel": "モデル",
   "settings.rag.searchTip": "RAGが設定されている場合、ファイル検索（虫めがね / Ctrl+Shift+F）はデフォルトでセマンティックRAG検索を使用します。Drive検索やローカル検索に切り替えることもできます。",
+
+  // Quick Open
+  "quickOpen.placeholder": "ファイルを検索...",
+  "quickOpen.noResults": "一致するファイルがありません",
+  "quickOpen.selectFile": "ファイルを選択...",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "ゴミ箱",
