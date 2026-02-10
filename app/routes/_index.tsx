@@ -6,7 +6,7 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import type { UserSettings } from "~/types/settings";
-import { FolderOpen, FileText, MessageSquare, GitBranch } from "lucide-react";
+import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
@@ -488,6 +488,23 @@ function IDEContent({
   const MOBILE_VIEW_ORDER: MobileView[] = ["files", "editor", "chat", "workflow"];
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
+  // Mobile plugin menu state
+  const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
+  const pluginMenuRef = useRef<HTMLDivElement>(null);
+  const allPluginViews = [...sidebarViews, ...mainViews];
+
+  // Close plugin menu on click outside
+  useEffect(() => {
+    if (!pluginMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (pluginMenuRef.current && !pluginMenuRef.current.contains(e.target as Node)) {
+        setPluginMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [pluginMenuOpen]);
+
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
@@ -714,6 +731,59 @@ function IDEContent({
               <GitBranch size={ICON.LG} />
               {t("header.workflow")}
             </button>
+            {allPluginViews.length > 0 && (
+              <div className="relative flex flex-1" ref={pluginMenuRef}>
+                <button
+                  onClick={() => setPluginMenuOpen((v) => !v)}
+                  className={mobileTabClass(
+                    rightPanel.startsWith("plugin:") || rightPanel.startsWith("main-plugin:")
+                  )}
+                >
+                  <Puzzle size={ICON.LG} />
+                  {t("header.plugins")}
+                </button>
+                {pluginMenuOpen && (
+                  <div className="absolute bottom-full left-1/2 z-50 mb-2 min-w-[160px] -translate-x-1/2 rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    {sidebarViews.map((view) => (
+                      <button
+                        key={view.id}
+                        onClick={() => {
+                          setRightPanel(`plugin:${view.id}`);
+                          setMobileView("chat");
+                          setPluginMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                          rightPanel === `plugin:${view.id}`
+                            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        <Puzzle size={ICON.SM} className="shrink-0" />
+                        {view.name}
+                      </button>
+                    ))}
+                    {mainViews.map((view) => (
+                      <button
+                        key={view.id}
+                        onClick={() => {
+                          setRightPanel(`main-plugin:${view.id}`);
+                          setMobileView("editor");
+                          setPluginMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                          rightPanel === `main-plugin:${view.id}`
+                            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        <Puzzle size={ICON.SM} className="shrink-0" />
+                        {view.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </nav>
         </>
       ) : (

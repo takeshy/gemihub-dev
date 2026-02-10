@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router";
 import {
   MessageSquare,
@@ -55,6 +56,23 @@ export function Header({
   isMobile = false,
 }: HeaderProps) {
   const { t } = useI18n();
+  const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
+  const pluginMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close plugin menu on click outside
+  useEffect(() => {
+    if (!pluginMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (pluginMenuRef.current && !pluginMenuRef.current.contains(e.target as Node)) {
+        setPluginMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [pluginMenuOpen]);
+
+  const allPluginViews = [...pluginSidebarViews, ...pluginMainViews];
+  const hasActivePlugin = rightPanel.startsWith("plugin:") || rightPanel.startsWith("main-plugin:");
 
   const tabButtonClass = (isActive: boolean) =>
     `flex items-center gap-1 rounded px-2 py-1 text-sm transition-colors ${
@@ -119,31 +137,51 @@ export function Header({
               {t("header.workflow")}
             </button>
 
-            {/* Plugin sidebar view tabs */}
-            {pluginSidebarViews.map((view) => (
-              <button
-                key={view.id}
-                onClick={() => setRightPanel(`plugin:${view.id}`)}
-                className={tabButtonClass(rightPanel === `plugin:${view.id}`)}
-                title={view.name}
-              >
-                <Puzzle size={ICON.MD} />
-                {view.name}
-              </button>
-            ))}
-
-            {/* Plugin main view buttons */}
-            {pluginMainViews.map((view) => (
-              <button
-                key={view.id}
-                onClick={() => setRightPanel(`main-plugin:${view.id}`)}
-                className={tabButtonClass(rightPanel === `main-plugin:${view.id}`)}
-                title={view.name}
-              >
-                <Puzzle size={ICON.MD} />
-                {view.name}
-              </button>
-            ))}
+            {/* Plugin dropdown */}
+            {allPluginViews.length > 0 && (
+              <div className="relative" ref={pluginMenuRef}>
+                <button
+                  onClick={() => setPluginMenuOpen((v) => !v)}
+                  className={tabButtonClass(hasActivePlugin)}
+                  title={t("header.plugins")}
+                >
+                  <Puzzle size={ICON.MD} />
+                  {t("header.plugins")}
+                </button>
+                {pluginMenuOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-1 min-w-[160px] rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    {pluginSidebarViews.map((view) => (
+                      <button
+                        key={view.id}
+                        onClick={() => { setRightPanel(`plugin:${view.id}`); setPluginMenuOpen(false); }}
+                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
+                          rightPanel === `plugin:${view.id}`
+                            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        <Puzzle size={ICON.SM} className="shrink-0" />
+                        {view.name}
+                      </button>
+                    ))}
+                    {pluginMainViews.map((view) => (
+                      <button
+                        key={view.id}
+                        onClick={() => { setRightPanel(`main-plugin:${view.id}`); setPluginMenuOpen(false); }}
+                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
+                          rightPanel === `main-plugin:${view.id}`
+                            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        <Puzzle size={ICON.SM} className="shrink-0" />
+                        {view.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="mx-2 h-4 w-px bg-gray-200 dark:bg-gray-700" />
           </>
