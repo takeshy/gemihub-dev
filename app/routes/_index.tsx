@@ -622,6 +622,7 @@ function IDEContent({
           onWorkflowChanged={handleWorkflowChanged}
           onModifyWithAI={handleModifyWithAI}
           settings={settings}
+          refreshKey={workflowVersion}
         />
       )}
     </PanelErrorBoundary>

@@ -53,6 +53,7 @@ interface WorkflowPropsPanelProps {
   onWorkflowChanged?: () => void;
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
   settings?: import("~/types/settings").UserSettings;
+  refreshKey?: number;
 }
 
 function isWorkflowFile(name: string | null): boolean {
@@ -68,6 +69,7 @@ export function WorkflowPropsPanel({
   onWorkflowChanged,
   onModifyWithAI,
   settings,
+  refreshKey,
 }: WorkflowPropsPanelProps) {
   if (isWorkflowFile(activeFileName) && activeFileId) {
     return (
@@ -78,6 +80,7 @@ export function WorkflowPropsPanel({
         onWorkflowChanged={onWorkflowChanged}
         onModifyWithAI={onModifyWithAI}
         settings={settings}
+        refreshKey={refreshKey}
       />
     );
   }
@@ -120,6 +123,7 @@ function WorkflowNodeListView({
   onWorkflowChanged,
   onModifyWithAI,
   settings,
+  refreshKey,
 }: {
   fileId: string;
   fileName: string;
@@ -127,8 +131,9 @@ function WorkflowNodeListView({
   onWorkflowChanged?: () => void;
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
   settings?: import("~/types/settings").UserSettings;
+  refreshKey?: number;
 }) {
-  const { content: rawContent, error: fileError, saveToCache, refresh } = useFileWithCache(fileId);
+  const { content: rawContent, error: fileError, saveToCache, refresh } = useFileWithCache(fileId, refreshKey);
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [workflowName, setWorkflowName] = useState("");
