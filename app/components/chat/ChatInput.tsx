@@ -289,6 +289,14 @@ export function ChatInput({
     const effectiveMode = pendingOverrides?.driveToolMode ?? driveToolMode;
     resolved = await resolveFileReferences(resolved, editorCtx.fileList, effectiveMode === "none");
 
+    // If no explicit file context was provided, append active file info so LLM can use drive-read
+    const hasContentRef = trimmed.includes("{content}");
+    const hasSelectionRef = trimmed.includes("{selection}");
+    const hasFileRef = editorCtx.fileList.some(f => trimmed.includes(`@${f.name}`));
+    if (!hasContentRef && !hasSelectionRef && !hasFileRef && editorCtx.activeFileId && editorCtx.activeFileName) {
+      resolved += `\n[Currently open file: ${editorCtx.activeFileName}, fileId: ${editorCtx.activeFileId}]`;
+    }
+
     onSend(
       resolved,
       attachments.length > 0 ? attachments : undefined,
