@@ -104,6 +104,8 @@ export interface TranslationStrings {
   "settings.rag.filterAll": string;
   "settings.rag.filterRegistered": string;
   "settings.rag.filterPending": string;
+  "settings.rag.excludePatternHint": string;
+  "settings.rag.applyAndSync": string;
   "settings.rag.noFiles": string;
 
   // Encryption (integrated into General tab)
@@ -282,6 +284,7 @@ export interface TranslationStrings {
   // Search
   "search.title": string;
   "search.placeholder": string;
+  "search.ragPlaceholder": string;
   "search.searching": string;
   "search.noResults": string;
   "search.resultCount": string;
@@ -417,6 +420,8 @@ const en: TranslationStrings = {
   "settings.rag.filterAll": "All",
   "settings.rag.filterRegistered": "Registered",
   "settings.rag.filterPending": "Pending",
+  "settings.rag.excludePatternHint": "Regex supported. e.g. \\.copy\\., _backup, ^temp/",
+  "settings.rag.applyAndSync": "Apply & Sync",
   "settings.rag.noFiles": "No files found.",
 
   // Encryption (integrated into General tab)
@@ -595,6 +600,7 @@ const en: TranslationStrings = {
   // Search
   "search.title": "Search",
   "search.placeholder": "Enter search query...",
+  "search.ragPlaceholder": "e.g. Which files describe the authentication flow?",
   "search.searching": "Searching...",
   "search.noResults": "No results found.",
   "search.resultCount": "{count} results found",
@@ -730,6 +736,8 @@ const ja: TranslationStrings = {
   "settings.rag.filterAll": "すべて",
   "settings.rag.filterRegistered": "登録済",
   "settings.rag.filterPending": "未登録",
+  "settings.rag.excludePatternHint": "正規表現が使えます。例: \\.copy\\., _backup, ^temp/",
+  "settings.rag.applyAndSync": "適用 & 同期",
   "settings.rag.noFiles": "ファイルが見つかりません。",
 
   // Encryption (integrated into General tab)
@@ -908,6 +916,7 @@ const ja: TranslationStrings = {
   // Search
   "search.title": "検索",
   "search.placeholder": "検索キーワードを入力...",
+  "search.ragPlaceholder": "例: 認証フローについて書かれたファイルはどれ？",
   "search.searching": "検索中...",
   "search.noResults": "結果が見つかりませんでした。",
   "search.resultCount": "{count}件の結果",

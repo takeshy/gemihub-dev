@@ -2440,6 +2440,11 @@ function RagTab({ settings }: { settings: UserSettings }) {
                           value={s.targetFolders.join("\n")}
                           onChange={(e) =>
                             updateCurrentSettingByKey(name, {
+                              targetFolders: e.target.value.split("\n"),
+                            })
+                          }
+                          onBlur={(e) =>
+                            updateCurrentSettingByKey(name, {
                               targetFolders: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
                             })
                           }
@@ -2450,19 +2455,38 @@ function RagTab({ settings }: { settings: UserSettings }) {
                         </p>
                       </div>
                       <div>
-                        <Label htmlFor={`rag-excludePatterns-${name}`}>Exclude Patterns (one per line)</Label>
+                        <Label htmlFor={`rag-excludePatterns-${name}`}>Exclude Patterns (one per line, regex)</Label>
                         <textarea
                           id={`rag-excludePatterns-${name}`}
                           rows={2}
                           value={s.excludePatterns.join("\n")}
                           onChange={(e) =>
                             updateCurrentSettingByKey(name, {
+                              excludePatterns: e.target.value.split("\n"),
+                            })
+                          }
+                          onBlur={(e) =>
+                            updateCurrentSettingByKey(name, {
                               excludePatterns: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
                             })
                           }
                           className={inputClass + " font-mono resize-y"}
                         />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {t("settings.rag.excludePatternHint")}
+                        </p>
                       </div>
+
+                      {/* Apply & Sync */}
+                      <button
+                        type="button"
+                        disabled={syncing}
+                        onClick={() => handleSyncByKey(name)}
+                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium disabled:opacity-50"
+                      >
+                        <RefreshCw size={12} className={syncing && syncingKey === name ? "animate-spin" : ""} />
+                        {t("settings.rag.applyAndSync")}
+                      </button>
 
                       {/* Sync message */}
                       {syncMsg && syncingKey === name && (

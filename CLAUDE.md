@@ -17,7 +17,7 @@ npm run lint         # ESLint check (eslint app/)
 npm run lint:fix     # ESLint auto-fix
 ```
 
-Tests use Node's built-in `node:test` runner via `tsx`. Run `npm run test:sync-diff` for sync diff unit tests.
+Tests use Node's built-in `node:test` runner via `tsx`. Run `npm run test:sync-diff` for sync diff unit tests. To run a single test file: `npx tsx --test path/to/file.test.ts`.
 
 ## Environment
 
@@ -33,11 +33,11 @@ Requires Node.js 22+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_I
 
 1. **Routes** (`app/routes/`) — React Router pages and API endpoints. Page routes use loaders for server data; API routes handle POST/GET via `action`/`loader` exports.
 2. **Services** (`app/services/`) — Server-side business logic. Files ending in `.server.ts` are server-only (never bundled to client). Key services: `gemini-chat.server.ts` (streaming AI), `google-drive.server.ts` (Drive API), `google-auth.server.ts` (OAuth), `mcp-client.server.ts` (MCP JSON-RPC).
-3. **Components** (`app/components/`) — React UI organized by feature: `chat/` (chat panel), `flow/` (React Flow workflow editor), `execution/` (workflow execution), `editor/` (markdown editor), `ide/` (main layout and panels).
-4. **Engine** (`app/engine/`) — Workflow execution engine. `parser.ts` converts YAML to AST, `executor.ts` runs it via a handler-per-node-type pattern in `handlers/`. Supports 22 node types (variable, set, if, while, command, http, json, drive-file, drive-read, drive-search, drive-list, drive-folder-list, drive-file-picker, drive-save, preview, dialog, prompt-value, workflow, mcp, sleep).
+3. **Components** (`app/components/`) — React UI organized by feature: `chat/` (chat panel), `flow/` (Mermaid-based workflow diagram), `execution/` (workflow execution), `editor/` (markdown editor), `ide/` (main layout and panels).
+4. **Engine** (`app/engine/`) — Workflow execution engine. `parser.ts` converts YAML to AST, `executor.ts` runs it via a handler-per-node-type pattern in `handlers/`. Supports 23 node types (variable, set, if, while, command, http, json, drive-file, drive-read, drive-search, drive-list, drive-folder-list, drive-file-picker, drive-save, preview, dialog, prompt-value, prompt-file, prompt-selection, workflow, mcp, rag-sync, sleep).
 5. **Hooks** (`app/hooks/`) — `useSync.ts` (push/pull with conflict resolution), `useFileWithCache.ts` (IndexedDB cache-first reads), `useWorkflowExecution.ts` (execution state via SSE), `useAutocomplete.ts` (slash command and @file autocomplete).
 6. **Contexts** (`app/contexts/`) — `EditorContext.tsx` (shared file content, selection, file list for template resolution), `PluginContext.tsx` (plugin lifecycle and API management).
-7. **Utils** (`app/utils/`) — Bidirectional conversion between React Flow graph and YAML workflow, plus Mermaid diagram generation.
+7. **Utils** (`app/utils/`) — Workflow-to-Mermaid diagram conversion (`workflow-to-mermaid.ts`), node property definitions, and connection helpers.
 
 ### Key Patterns
 
@@ -54,7 +54,7 @@ Routes are explicitly defined in `app/routes.ts` (not file-based). Page routes: 
 
 ### Main IDE Layout
 
-The index route (`_index.tsx`) renders the IDE with: Header (sync controls), LeftSidebar (Drive file tree), MainViewer (workflow canvas or markdown editor based on file type), RightSidebar (chat panel, workflow properties panel, or plugin sidebar views).
+The index route (`_index.tsx`) renders the IDE with: Header (sync controls), LeftSidebar (Drive file tree), MainViewer (Mermaid workflow diagram or markdown editor based on file type), RightSidebar (chat panel, workflow properties panel, or plugin sidebar views). Workflow diagrams are rendered via the Mermaid library (no React Flow).
 
 ### Plugin System
 
@@ -80,7 +80,14 @@ Slash commands (`/command`) support template variables: `{content}` (active file
 1. Add to `UserSettings` interface in `app/types/settings.ts`
 2. Add default value to `DEFAULT_USER_SETTINGS`
 
+### Adding a Workflow Node Type
+
+1. Add the type to `WorkflowNodeType` union and properties to `WorkflowNode` in `app/engine/types.ts`
+2. Add a `case` in `app/engine/executor.ts` (handler logic lives in `app/engine/handlers/`)
+3. Add node label in `app/utils/workflow-to-mermaid.ts`
+4. Add property definitions in `app/utils/workflow-node-properties.ts`
+
 ### Adding i18n Strings
 
 1. Add key to `TranslationStrings` interface in `app/i18n/translations.ts`
-2. Add the key to BOTH `en` and `ja` objects — they must stay in sync
+2. Add the key to BOTH `en` and `ja` objects — they must stay in sync (only `en` and `ja` are supported)

@@ -69,11 +69,7 @@ export async function action({ request }: Route.ActionArgs) {
         model,
         contents: [{ role: "user", parts: [{ text: query }] }],
         config: {
-          systemInstruction: `Use the file search tool to find files relevant to the user's query.
-Only return files whose content clearly matches the query. If no files are relevant, say "No results."
-For each matching file, respond in this exact format (one per line):
-[filename] brief reason why this file matches (in the query's language, up to 60 chars)
-Do not add any other text or explanation.`,
+          systemInstruction: "Search files and answer the query concisely in the query's language.",
           tools,
         },
       });
@@ -90,7 +86,6 @@ Do not add any other text or explanation.`,
         }
       }
 
-      const results: Array<{ title: string; uri?: string; snippet?: string }> = [];
       const resp = response as {
         candidates?: Array<{
           content?: { parts?: Array<{ text?: string }> };
@@ -102,21 +97,20 @@ Do not add any other text or explanation.`,
         }>;
       };
 
-      const candidates = resp.candidates;
-      // Extract AI summary text as fallback snippet
-      const aiText = candidates?.[0]?.content?.parts?.map((p) => p.text).filter(Boolean).join("") ?? "";
+      const aiText = resp.candidates?.[0]?.content?.parts?.map((p) => p.text).filter(Boolean).join("") ?? "";
 
-      if (candidates && candidates.length > 0) {
-        const gm = candidates[0]?.groundingMetadata;
-        if (gm?.groundingChunks) {
-          for (const gc of gm.groundingChunks) {
-            const title = gc.retrievedContext?.title;
-            const uri = gc.retrievedContext?.uri;
-            const chunkText = gc.retrievedContext?.text;
-            if (title && !results.some((r) => r.title === title && r.uri === uri)) {
-              results.push({ title, uri, snippet: chunkText || undefined });
-            }
-          }
+      // Build file list from grounding chunks (deduplicated)
+      const binaryExts = /\.(mp4|mp3|wav|ogg|webm|avi|mov|mkv|zip|tar|gz|7z|rar|exe|dll|bin|so|woff2?|ttf|otf|eot)$/i;
+      const seenTitles = new Set<string>();
+      const results: Array<{ title: string; uri?: string }> = [];
+      const chunks = resp.candidates?.[0]?.groundingMetadata?.groundingChunks;
+      if (chunks) {
+        for (const gc of chunks) {
+          const ctx = gc.retrievedContext;
+          const title = ctx?.title;
+          if (!title || seenTitles.has(title) || binaryExts.test(title)) continue;
+          seenTitles.add(title);
+          results.push({ title, uri: ctx?.uri });
         }
       }
 

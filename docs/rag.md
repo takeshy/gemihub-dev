@@ -6,8 +6,9 @@ Gemini File Search を利用したナレッジベース機能。Google Drive 上
 
 - **Internal RAG**: Drive 上のファイルを自動的に File Search Store へ同期
 - **External RAG**: 外部で作成済みの Store ID を手動で指定
-- **Push 連動登録**: Push 時に対象ファイルを自動で RAG に登録（オプション）
+- **Push 連動登録**: Push 時に対象ファイルを自動で RAG に登録（`"gemihub"` 設定が存在する場合に自動有効）
 - **ワークフロー対応**: `rag-sync` / `command` ノードから RAG を利用可能
+- **検索パネル**: RAG / Drive / Local の3モードで横断検索
 
 ---
 
@@ -43,11 +44,11 @@ interface RagFileInfo {
 | `ragTopK` | `number` | `5` | 検索結果の上位件数 (1–20) |
 | `ragSettings` | `Record<string, RagSetting>` | `{}` | 名前付き RAG 設定の辞書 |
 | `selectedRagSetting` | `string \| null` | `null` | チャットで使用する RAG 設定名 |
-| `ragRegistrationOnPush` | `boolean` | `false` | Push 時の自動 RAG 登録 |
+| `ragRegistrationOnPush` | `boolean` | `false` | Push 時の自動 RAG 登録。`"gemihub"` 設定が存在すると自動で `true` になる |
 
 ### デフォルト Store キー
 
-`DEFAULT_RAG_STORE_KEY = "gemihub"` — Push 連動登録で自動作成される RAG 設定の名前。
+`DEFAULT_RAG_STORE_KEY = "gemihub"` — Push 連動登録で使用される RAG 設定の名前。この設定が存在する場合、`ragRegistrationOnPush` は自動的に有効になる。
 
 ---
 
@@ -128,7 +129,7 @@ Drive ファイルを GemiHub が管理する File Search Store へ同期する�
 | イベント | データ |
 |---------|-------|
 | `progress` | `{ current, total, fileName, action, message }` |
-| `complete` | `{ uploaded, skipped, deleted, errors, errorDetails, message }` |
+| `complete` | `{ uploaded, skipped, deleted, errors, errorDetails, ragSetting, message }` |
 | `error` | `{ message }` |
 
 **処理フロー**:
@@ -145,13 +146,34 @@ Push/Pull の sync API 内に RAG 関連の4アクションがある:
 | `ragRegister` | Push 時に単一ファイルを RAG 登録。チェックサム一致ならスキップ |
 | `ragSave` | Push 完了後に登録結果を一括保存。registered なファイルがあれば `ragEnabled` を自動有効化 |
 | `ragDeleteDoc` | ドキュメント削除 (ロールバック用、ベストエフォート) |
-| `ragRetryPending` | `status: "pending"` のファイルを再登録。sync meta から Drive ファイル ID を解決 |
+| `ragRetryPending` | `status: "pending"` のファイルを再登録。`rebuildSyncMeta()` で Drive ファイル ID を解決 |
+
+### POST /api/search (`app/routes/api.search.tsx`)
+
+検索パネルから呼ばれる統合検索エンドポイント。
+
+**リクエスト**: `{ query, mode, ragStoreIds?, topK?, model? }`
+
+| モード | 説明 |
+|--------|------|
+| `"rag"` | Gemini File Search で意味検索。`ragStoreIds`, `topK`, `model` が必要 |
+| `"drive"` | Google Drive API でフルテキスト検索 |
+
+**RAG モードの詳細**:
+- API プランに応じたモデル選択: paid → `gemini-3-flash-preview` / `gemini-3-pro-preview`, free → `gemini-2.5-flash-lite` / `gemini-2.5-flash`
+- 指定モデルで `fileSearch` ツールが非対応の場合、同プラン内の別モデルにフォールバック
+- レスポンスの `groundingMetadata.groundingChunks.retrievedContext` からファイル名・URI・スニペットを抽出
+- AI のテキスト応答 (`aiText`) から `[filename] excerpt...` 形式のスニペットも解析
+
+**レスポンス**:
+- RAG: `{ mode: "rag", results: [{ title, uri?, snippet? }], aiText? }`
+- Drive: `{ mode: "drive", results: [{ id, name, mimeType }] }`
 
 ---
 
 ## Push 連動 RAG 登録
 
-`ragRegistrationOnPush: true` の場合、Push 時に対象ファイルを自動で RAG に登録する。
+`"gemihub"` RAG 設定が存在する場合、`ragRegistrationOnPush` は自動的に `true` に設定され、Push 時に対象ファイルを自動で RAG に登録する。
 
 **注意**: Push 連動登録は `DEFAULT_RAG_STORE_KEY = "gemihub"` の RAG 設定のみが対象。ユーザーが複数の Internal RAG 設定を作成していても、自動登録されるのは `"gemihub"` 設定だけ。他の Internal RAG 設定は設定画面の Sync ボタン (`/api/settings/rag-sync`) から手動でフル同期する必要がある。
 
@@ -184,7 +206,7 @@ Push 開始
 ### ragRetryPending の詳細
 
 1. `status: "pending"` のファイルを抽出
-2. sync meta から最新の Drive ファイル ID を解決
+2. `rebuildSyncMeta()` で最新の Drive ファイル ID を解決
 3. Drive に存在しないファイルは tracking から削除
 4. 再登録を試行、成功したら `status: "registered"` に更新
 
@@ -215,6 +237,8 @@ selectedRagSetting の値:
     └─ Internal → [storeId]
 ```
 
+`selectedRagSetting` は `localStorage` に永続化される (`gemihub:selectedRagSetting`)。スラッシュコマンドの `searchSetting` でオーバーライド可能。
+
 ### Gemini API への渡し方 (`app/services/gemini-chat.server.ts`)
 
 ```typescript
@@ -229,13 +253,13 @@ geminiTools.push({
 
 ### モデル制約 (`app/types/settings.ts: getDriveToolModeConstraint`)
 
-| 条件 | Drive ツール | RAG | 備考 |
-|------|:-----------:|:---:|------|
-| Gemma モデル | 不可 | 不可 | ツール非対応 |
-| Web Search モード | 不可 | 不可 | `googleSearch` のみ使用 |
-| Flash Lite + RAG | 不可 | 可 | Drive ツールと RAG の併用不可 |
-| Flash/Pro + RAG | 検索以外 | 可 | `defaultMode: "noSearch"` |
-| RAG なし | 全機能 | - | 制約なし |
+| 条件 | Drive ツール | RAG | locked | 備考 |
+|------|:-----------:|:---:|:------:|------|
+| Gemma モデル | 不可 | 不可 | Yes | ツール非対応。MCP も無効化 |
+| Web Search モード | 不可 | 不可 | Yes | `googleSearch` のみ使用。MCP も無効化 |
+| Flash Lite + RAG | 不可 | 可 | Yes | Drive ツールと RAG の併用不可 |
+| Flash/Pro + RAG | 検索以外 | 可 | No | `defaultMode: "noSearch"` (ユーザー変更可) |
+| RAG なし | 全機能 | - | No | 制約なし |
 
 ### グラウンディングメタデータ
 
@@ -245,6 +269,35 @@ Gemini の応答に含まれる `groundingMetadata.groundingChunks` から RAG �
 - `web` → Web 検索ソース (`web_search_used` イベント)
 
 チャット UI でソース一覧として表示される。
+
+---
+
+## 検索パネル (`app/components/ide/SearchPanel.tsx`)
+
+左サイドバーから開く統合検索パネル。3つのモードを切り替えて検索できる。
+
+### 検索モード
+
+| モード | 表示条件 | 検索先 | 説明 |
+|--------|---------|--------|------|
+| RAG | `ragStoreIds` が存在 | Gemini File Search API | 意味検索。モデル選択可能 |
+| Drive | 常時 | Google Drive API | フルテキスト検索 |
+| Local | 常時 | IndexedDB (クライアント) | キャッシュ済みファイルの名前・内容を部分一致検索 |
+
+### RAG モードの詳細
+
+- API プランに応じたモデル選択ボタンが表示される
+  - paid: `gemini-3-flash-preview`, `gemini-3-pro-preview`
+  - free: `gemini-2.5-flash-lite`, `gemini-2.5-flash`
+- `groundingChunks` の `retrievedContext` からファイル名・スニペットを取得
+- AI テキスト応答から `[filename] excerpt...` 形式でスニペットを追加解析
+- 結果クリックでファイルを開く（`fileList` から ID を解決）
+
+### Local モードの詳細
+
+- `getAllCachedFiles()` で IndexedDB からキャッシュ済みファイルを取得
+- ファイル名とコンテンツを大文字小文字無視で部分一致検索
+- コンテンツマッチ時はキーワード前後40文字をスニペットとして表示
 
 ---
 
@@ -260,7 +313,7 @@ Drive ファイルを RAG Store に登録するワークフローノード。
 | `ragSetting` | Yes | RAG 設定名 |
 | `saveTo` | No | 結果を保存する変数名 |
 
-**処理**: Drive でファイル検索 → Store を `getOrCreateStore()` で取得/作成 → アップロード → `serviceContext.settings` をインメモリ更新（後続ノードが参照可能に）
+**処理**: Drive でファイル検索 (正確名 → `.md` 付き名のフォールバック) → Store を `getOrCreateStore()` で取得/作成 → アップロード → `serviceContext.settings` をインメモリ更新（後続ノードが参照可能に）
 
 **saveTo の値**: `{ path, ragSetting, fileId, storeName, mode, syncedAt }`
 
@@ -274,7 +327,7 @@ Drive ファイルを RAG Store に登録するワークフローノード。
 | `"__none__"` | RAG なし |
 | RAG設定名 | 該当設定の storeId(s) を使用 |
 
-storeId が未設定の場合は `getOrCreateStore()` でフォールバック作成する。
+storeId が未設定の場合は `getOrCreateStore()` でフォールバック作成し、設定をインメモリでキャッシュする。
 
 ---
 
@@ -284,20 +337,23 @@ storeId が未設定の場合は `getOrCreateStore()` でフォールバック�
 
 | 項目 | 説明 |
 |------|------|
-| RAG TopK | 検索結果の上位件数スライダー (1–20) |
-| RAG Registration on Push | Push 時の自動登録トグル |
-| Pending files | `status: "pending"` のファイル数を表示 |
+| Search tip | RAG を検索パネルで利用できる旨のバナー |
+| Auto RAG ボタン | `"gemihub"` 設定が未作成の場合に表示。モーダルで「All Files」(即座に同期開始) または「Customize」(編集モードで開く) を選択 |
+| RAG TopK | 検索結果の上位件数 (1–20)。インライン編集 |
+
+**注意**: `ragRegistrationOnPush` は UI にトグルとして表示されず、`"gemihub"` RAG 設定が存在する場合に自動的に `true` に設定される。
 
 ### RAG 設定リスト
 
 各設定に対して以下の操作が可能:
 
-- **追加**: 新しい RAG 設定を作成 (自動命名 `setting-N`)
+- **追加**: 新しい RAG 設定を作成 (自動命名 `setting-N`、即座にリネームモードに入る)
 - **リネーム**: ダブルクリックで名前変更
-- **選択**: チャットで使用する設定を選択
+- **選択**: クリックでチャットで使用する設定を選択
 - **Sync**: Store とのフル同期を実行 (SSE プログレス表示)
 - **編集**: Internal/External 切り替え、targetFolders、excludePatterns、storeIds
-- **削除**: RAG 設定を削除
+- **削除**: RAG 設定を削除 (選択中の場合は次の設定に自動移動)
+- **ファイル数表示**: total / registered / pending の件数表示。クリックで `RagFilesDialog` を開く
 
 ### Internal 設定の編集
 
@@ -312,6 +368,16 @@ storeId が未設定の場合は `getOrCreateStore()` でフォールバック�
 
 同期済みの設定 (`storeId` が存在) には Store ID がモノスペースで表示され、コピーボタンでクリップボードにコピー可能。
 
+### Register & Sync ボタン
+
+選択中の Internal 設定で `storeId` が未設定の場合に表示。クリックでフル同期を開始。
+
+### RagFilesDialog
+
+- 検索可能なファイル一覧ダイアログ
+- フィルタ: All / Registered / Pending
+- 各ファイルのアップロード日時を表示
+
 ---
 
 ## アーキテクチャ
@@ -324,6 +390,10 @@ Browser                    Server                  Google (Gemini API / Drive)
 │ ChatPanel    │    │ /api/chat        │    │ Gemini Chat API      │
 │ (ragStoreIds)│───►│ (fileSearch tool)│───►│ (fileSearch grounding│
 │              │    │                  │    │  + groundingMetadata) │
+├──────────────┤    ├──────────────────┤    ├──────────────────────┤
+│ SearchPanel  │    │ /api/search      │    │ File Search Store    │
+│ (RAG/Drive/  │───►│ (rag/drive mode) │───►│ (意味検索)            │
+│  Local)      │    │                  │    │                      │
 ├──────────────┤    ├──────────────────┤    ├──────────────────────┤
 │ useSync      │    │ /api/sync        │    │ File Search Store    │
 │ (ragRegister │───►│ (ragRegister/    │───►│ (documents)          │
@@ -343,10 +413,12 @@ Browser                    Server                  Google (Gemini API / Drive)
 | `app/services/file-search.server.ts` | Store CRUD, ファイルアップロード, smartSync, 単一ファイル登録/削除 |
 | `app/routes/api.settings.rag-sync.tsx` | フル同期 API (SSE) |
 | `app/routes/api.sync.tsx` | Push 連動 RAG アクション (ragRegister/ragSave/ragDeleteDoc/ragRetryPending) |
+| `app/routes/api.search.tsx` | 検索パネル API (RAG / Drive モード) |
 | `app/routes/api.drive.files.tsx` | ファイルリネーム/削除時の RAG tracking 連携 |
 | `app/hooks/useSync.ts` | クライアント側 Push 連動 RAG 登録ロジック |
 | `app/services/gemini-chat.server.ts` | チャットでの fileSearch ツール統合, グラウンディングメタデータ処理 |
 | `app/components/ide/ChatPanel.tsx` | RAG 設定選択, ragStoreIds 解決, ソース表示 |
+| `app/components/ide/SearchPanel.tsx` | 検索パネル UI (RAG / Drive / Local モード) |
 | `app/engine/handlers/ragSync.ts` | ワークフロー `rag-sync` ノードハンドラ |
 | `app/engine/handlers/command.ts` | ワークフロー `command` ノードの RAG 設定解決 |
 | `app/routes/settings.tsx` | RAG 設定 UI (RagTab コンポーネント) |

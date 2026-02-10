@@ -4,6 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { readFile } from "./google-drive.server";
 import { getFileListFromMeta } from "./sync-meta.server";
 import type { RagSetting, RagFileInfo } from "~/types/settings";
+import { isRagEligible } from "~/constants/rag";
 export { RAG_ELIGIBLE_EXTENSIONS, isRagEligible } from "~/constants/rag";
 
 export interface SyncResult {
@@ -142,6 +143,7 @@ export async function smartSync(
     // Apply exclude patterns
     let excluded = false;
     for (const pattern of excludePatterns) {
+      if (!pattern) continue;
       try {
         if (new RegExp(pattern).test(f.name)) {
           excluded = true;
@@ -151,7 +153,7 @@ export async function smartSync(
         // Invalid regex
       }
     }
-    if (!excluded) {
+    if (!excluded && isRagEligible(f.name)) {
       allDriveFiles.push(f);
     }
   }
@@ -160,9 +162,19 @@ export async function smartSync(
   const totalOperations = allDriveFiles.length;
   let currentOperation = 0;
 
-  // Delete orphaned entries from sync state
-  for (const path of Object.keys(result.newFiles)) {
+  // Delete orphaned entries from sync state and from Gemini store
+  for (const [path, info] of Object.entries(result.newFiles)) {
     if (!currentFilePaths.has(path)) {
+      if (info.fileId) {
+        try {
+          await ai.fileSearchStores.documents.delete({
+            name: info.fileId,
+            config: { force: true },
+          });
+        } catch {
+          // best-effort
+        }
+      }
       delete result.newFiles[path];
       result.deleted.push(path);
     }
