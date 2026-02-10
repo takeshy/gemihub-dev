@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { X, AlertTriangle } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { ConflictInfo } from "~/hooks/useSync";
@@ -16,6 +16,8 @@ export function ConflictDialog({
 }: ConflictDialogProps) {
   const [resolving, setResolving] = useState<string | null>(null);
   const [choices, setChoices] = useState<Record<string, "local" | "remote">>({});
+  const choicesRef = useRef(choices);
+  useEffect(() => { choicesRef.current = choices; }, [choices]);
 
   const handleResolve = async (fileId: string, choice: "local" | "remote") => {
     setResolving(fileId);
@@ -26,16 +28,20 @@ export function ConflictDialog({
     }
   };
 
+  const resolvedIds = useRef(new Set<string>());
   const handleResolveAll = async () => {
-    for (const conflict of conflicts) {
-      const choice = choices[conflict.fileId];
-      if (choice) {
-        setResolving(conflict.fileId);
-        try {
-          await onResolve(conflict.fileId, choice);
-        } finally {
-          setResolving(null);
-        }
+    // Snapshot the list to resolve; use ref for latest choices
+    const toResolve = conflicts
+      .filter((c) => choicesRef.current[c.fileId])
+      .map((c) => ({ fileId: c.fileId, choice: choicesRef.current[c.fileId] }));
+    for (const { fileId, choice } of toResolve) {
+      if (resolvedIds.current.has(fileId)) continue;
+      setResolving(fileId);
+      try {
+        await onResolve(fileId, choice);
+        resolvedIds.current.add(fileId);
+      } finally {
+        setResolving(null);
       }
     }
   };

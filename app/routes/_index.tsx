@@ -184,6 +184,13 @@ function IDELayout({
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
 
+  // Auto-open conflict dialog when conflicts are detected
+  useEffect(() => {
+    if (syncStatus === "conflict" && conflicts.length > 0) {
+      setShowConflictDialog(true);
+    }
+  }, [syncStatus, conflicts.length]);
+
   // AI Workflow dialog state
   const [aiDialog, setAiDialog] = useState<AIDialogState | null>(null);
 

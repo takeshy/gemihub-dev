@@ -102,6 +102,13 @@ export function useSync() {
     return () => window.removeEventListener("file-modified", handler);
   }, [refreshLocalModifiedCount]);
 
+  // When all conflicts are resolved, return to idle
+  useEffect(() => {
+    if (syncStatus === "conflict" && conflicts.length === 0) {
+      setSyncStatus("idle");
+    }
+  }, [syncStatus, conflicts.length]);
+
   const push = useCallback(async () => {
     setSyncStatus("pushing");
     setError(null);
@@ -444,25 +451,25 @@ export function useSync() {
         await deleteEditHistoryEntry(fileId);
 
         // Update local sync meta from remote meta
-        if (data.remoteMeta && localMeta) {
+        if (data.remoteMeta) {
+          const metaToUpdate = localMeta ?? {
+            id: "current" as const,
+            lastUpdatedAt: new Date().toISOString(),
+            files: {} as Record<string, { md5Checksum: string; modifiedTime: string }>,
+          };
           const fileEntry = data.remoteMeta.files[fileId];
           if (fileEntry) {
-            localMeta.files[fileId] = fileEntry;
-            localMeta.lastUpdatedAt = new Date().toISOString();
-            await setLocalSyncMeta(localMeta);
+            metaToUpdate.files[fileId] = fileEntry;
+            metaToUpdate.lastUpdatedAt = new Date().toISOString();
+            await setLocalSyncMeta(metaToUpdate);
           }
         }
 
-        // Remove resolved conflict
+        // Remove resolved conflict (idle transition handled by useEffect)
         setConflicts((prev) => prev.filter((c) => c.fileId !== fileId));
 
-        // If no more conflicts, go back to idle
-        setConflicts((prev) => {
-          if (prev.length === 0) {
-            setSyncStatus("idle");
-          }
-          return prev;
-        });
+        // Notify file tree to refresh
+        window.dispatchEvent(new Event("sync-complete"));
 
         // Update modified count after clearing edit history
         const remainingModified = await getLocallyModifiedFileIds();
