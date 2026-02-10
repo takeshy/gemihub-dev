@@ -13,6 +13,7 @@ interface Feature {
 interface Screenshot {
   src: string;
   alt: string;
+  description: string;
 }
 
 interface DataCard {
@@ -59,13 +60,12 @@ const en: LpStrings = {
   ],
   screenshotsTitle: "See It in Action",
   screenshots: [
-    { src: "/images/cap.png", alt: "AI Chat & File Management" },
-    { src: "/images/visual_workflow.png", alt: "Workflow Builder" },
-    { src: "/images/workflow_execution.png", alt: "Workflow Execution" },
-    { src: "/images/ai_generate_workflow.png", alt: "AI Workflow Generation" },
-    { src: "/images/edit_workflow.png", alt: "Workflow Node Editing" },
-    { src: "/images/push_pull.png", alt: "Push/Pull Sync" },
-    { src: "/images/pubish_web.png", alt: "One-Click Publishing" },
+    { src: "/images/cap.png", alt: "AI Chat & File Management", description: "Chat with AI that reads, searches, and writes your Drive files. Upload images or documents to ask questions." },
+    { src: "/images/visual_workflow.png", alt: "Workflow Builder", description: "Build automation pipelines with a visual node-based editor. Chain AI prompts, Drive operations, and HTTP requests." },
+    { src: "/images/ai_generate_workflow.png", alt: "AI Workflow Generation", description: "Describe what you want in natural language and AI generates the workflow with streaming preview." },
+    { src: "/images/rag_search.png", alt: "RAG Search", description: "Sync your Drive files to semantic search. Ask questions in natural language and get answers from your personal knowledge base." },
+    { src: "/images/push_pull.png", alt: "Push/Pull Sync", description: "All data lives in your Google Drive. Push and pull changes with conflict resolution." },
+    { src: "/images/pubish_web.png", alt: "One-Click Publishing", description: "Turn any Drive file into a public web page. Share via URL with no hosting required." },
   ],
   dataUsageTitle: "How We Handle Your Data",
   dataUsageIntro: "GemiHub uses your Google account to sign in. Here's what we access and why:",
@@ -103,13 +103,12 @@ const ja: LpStrings = {
   ],
   screenshotsTitle: "動作イメージ",
   screenshots: [
-    { src: "/images/cap.png", alt: "AIチャット＆ファイル管理" },
-    { src: "/images/visual_workflow.png", alt: "ワークフロービルダー" },
-    { src: "/images/workflow_execution.png", alt: "ワークフロー実行" },
-    { src: "/images/ai_generate_workflow.png", alt: "AIワークフロー生成" },
-    { src: "/images/edit_workflow.png", alt: "ワークフローノード編集" },
-    { src: "/images/push_pull.png", alt: "Push/Pull同期" },
-    { src: "/images/pubish_web.png", alt: "ワンクリック公開" },
+    { src: "/images/cap.png", alt: "AIチャット＆ファイル管理", description: "AIがDriveのファイルを読み取り・検索・作成。画像やドキュメントをアップロードして質問できます。" },
+    { src: "/images/visual_workflow.png", alt: "ワークフロービルダー", description: "ビジュアルなノードベースエディタで自動化パイプラインを構築。AIプロンプト、Drive操作、HTTPリクエストを連結。" },
+    { src: "/images/ai_generate_workflow.png", alt: "AIワークフロー生成", description: "やりたいことを自然言語で伝えるだけでAIがワークフローを生成。ストリーミングプレビュー付き。" },
+    { src: "/images/rag_search.png", alt: "RAG検索", description: "Driveのファイルをセマンティック検索に同期。自然な言葉で質問すれば、あなたのナレッジベースから回答。" },
+    { src: "/images/push_pull.png", alt: "Push/Pull同期", description: "すべてのデータはGoogle Driveに保存。変更をPush/Pullし、コンフリクトも解決。" },
+    { src: "/images/pubish_web.png", alt: "ワンクリック公開", description: "DriveのファイルをそのままWebページに。ホスティング不要でURLを共有。" },
   ],
   dataUsageTitle: "データの取り扱いについて",
   dataUsageIntro: "GemiHubはGoogleアカウントでサインインします。アクセスするデータとその理由は以下のとおりです：",
@@ -191,29 +190,70 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Screenshots */}
+      <section className="mx-auto max-w-5xl px-4 pb-20">
+        <h2 className="mb-10 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
+          {s.screenshotsTitle}
+        </h2>
+        {/* Hero screenshot */}
+        {s.screenshots.length > 0 && (
+          <figure className="mb-6 overflow-hidden rounded-xl border border-gray-200 shadow-lg dark:border-gray-800">
+            <img
+              src={s.screenshots[0].src}
+              alt={s.screenshots[0].alt}
+              className="w-full"
+              loading="lazy"
+            />
+            <figcaption className="bg-gray-50 px-4 py-3 dark:bg-gray-900">
+              <p className="text-center text-sm font-semibold text-gray-900 dark:text-gray-100">{s.screenshots[0].alt}</p>
+              <p className="mt-1 text-center text-sm leading-relaxed text-gray-600 dark:text-gray-400">{s.screenshots[0].description}</p>
+            </figcaption>
+          </figure>
+        )}
+        {/* Rest in grid */}
+        <div className="grid gap-6 sm:grid-cols-2">
+          {s.screenshots.slice(1).map(({ src, alt, description }) => (
+            <figure key={src} className="overflow-hidden rounded-xl border border-gray-200 shadow-lg dark:border-gray-800">
+              <img
+                src={src}
+                alt={alt}
+                className="w-full"
+                loading="lazy"
+              />
+              <figcaption className="bg-gray-50 px-4 py-3 dark:bg-gray-900">
+                <p className="text-center text-xs font-semibold text-gray-900 dark:text-gray-100">{alt}</p>
+                <p className="mt-1 text-center text-xs leading-relaxed text-gray-600 dark:text-gray-400">{description}</p>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
+
       {/* Plugin Showcase */}
-      <section className="mx-auto max-w-4xl px-4 pb-20">
+      <section className="mx-auto max-w-3xl px-4 pb-20">
         <h2 className="mb-8 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
           {s.pluginShowcaseTitle}
         </h2>
-        <div className="mx-auto max-w-2xl overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
-          <img
-            src="/images/ronginus.png"
-            alt="Ronginus"
-            className="w-full"
-            loading="lazy"
-          />
-          <div className="bg-gray-50 p-6 dark:bg-gray-900 sm:flex sm:items-center sm:gap-6">
-            <div className="mb-4 flex shrink-0 items-center justify-center sm:mb-0">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-100 dark:bg-purple-900/40">
-                <MessagesSquare size={32} className="text-purple-600 dark:text-purple-400" />
+        <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800 sm:flex">
+          <div className="shrink-0 sm:w-64">
+            <img
+              src="/images/ronginus.png"
+              alt="Ronginus"
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          </div>
+          <div className="flex flex-1 items-center gap-4 bg-gray-50 p-6 dark:bg-gray-900">
+            <div className="hidden shrink-0 sm:block">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-100 dark:bg-purple-900/40">
+                <MessagesSquare size={28} className="text-purple-600 dark:text-purple-400" />
               </div>
             </div>
             <div className="flex-1">
               <h3 className="mb-1.5 text-lg font-semibold text-gray-900 dark:text-gray-100">
                 Ronginus
               </h3>
-              <p className="mb-3 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+              <p className="mb-2 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
                 {s.pluginShowcaseDescription}
               </p>
               <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
@@ -233,28 +273,6 @@ export default function LandingPage() {
               </a>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Screenshots */}
-      <section className="mx-auto max-w-5xl px-4 pb-20">
-        <h2 className="mb-10 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
-          {s.screenshotsTitle}
-        </h2>
-        <div className="space-y-10">
-          {s.screenshots.map(({ src, alt }) => (
-            <figure key={src} className="overflow-hidden rounded-xl border border-gray-200 shadow-lg dark:border-gray-800">
-              <img
-                src={src}
-                alt={alt}
-                className="w-full"
-                loading="lazy"
-              />
-              <figcaption className="bg-gray-50 px-4 py-2.5 text-center text-sm text-gray-600 dark:bg-gray-900 dark:text-gray-400">
-                {alt}
-              </figcaption>
-            </figure>
-          ))}
         </div>
       </section>
 
