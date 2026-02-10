@@ -54,6 +54,10 @@ function getNodeLabel(node: WorkflowNode): string {
     }
     case "prompt-value":
       return `**${id}**\nInput: ${p.title || ""}\n→ ${p.saveTo || ""}`;
+    case "prompt-file":
+      return `**${id}**\nFile: ${p.title || ""}\n→ ${p.saveTo || ""}`;
+    case "prompt-selection":
+      return `**${id}**\nSelection: ${p.title || ""}\n→ ${p.saveTo || ""}`;
     case "workflow":
       return `**${id}**\nSub-workflow: ${p.path || ""}`;
     case "http":
@@ -62,6 +66,8 @@ function getNodeLabel(node: WorkflowNode): string {
       return `**${id}**\nJSON: ${p.source || ""}\n→ ${p.saveTo || ""}`;
     case "mcp":
       return `**${id}**\nMCP: ${p.tool || ""}\nURL: ${p.url || ""}`;
+    case "rag-sync":
+      return `**${id}**\nRAG: ${p.path || ""}\n→ ${p.ragSetting || ""}`;
     case "sleep":
       return `**${id}**\nSleep ${p.duration || ""}ms`;
     default:
@@ -88,6 +94,8 @@ function getMermaidShape(node: WorkflowNode, label: string): string {
       return `${safeId}[["${safeLabel}"]]`;
     case "dialog":
     case "prompt-value":
+    case "prompt-file":
+    case "prompt-selection":
     case "drive-file-picker":
       return `${safeId}(["${safeLabel}"])`;
     default:

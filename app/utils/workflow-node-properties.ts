@@ -64,8 +64,7 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
     case "json":
       return [
         { key: "source", label: "Source", required: true, placeholder: "{{data}}" },
-        { key: "path", label: "JSON Path", required: true, placeholder: "$.items[0].name" },
-        { key: "saveTo", label: "Save To", required: false, placeholder: "extracted" },
+        { key: "saveTo", label: "Save To", required: true, placeholder: "extracted" },
       ];
     case "drive-file":
       return [

@@ -11,10 +11,10 @@ This document provides detailed specifications for all workflow node types.
 | LLM | `command` | Execute prompts via Gemini API |
 | Data | `http`, `json` | HTTP requests and JSON parsing |
 | Drive | `drive-file`, `drive-read`, `drive-search`, `drive-list`, `drive-folder-list`, `drive-save` | Google Drive file operations |
-| Prompts | `prompt-value`, `dialog`, `drive-file-picker` | User input dialogs |
-| Preview | `preview` | Open file for preview |
+| Prompts | `prompt-value`, `prompt-file`, `prompt-selection`, `dialog`, `drive-file-picker` | User input dialogs |
 | Composition | `workflow` | Execute another workflow as a sub-workflow |
 | External | `mcp` | Call remote MCP servers |
+| RAG | `rag-sync` | Sync files to RAG stores |
 
 ---
 
@@ -133,14 +133,26 @@ Execute an LLM prompt via Gemini API.
   type: command
   prompt: "Summarize: {{content}}"
   model: gemini-2.5-flash
+  ragSetting: __websearch__
+  driveToolMode: all
+  mcpServers: "server1,server2"
+  attachments: "imageVar"
   saveTo: summary
+  saveImageTo: generatedImage
+  systemPrompt: "You are a helpful assistant."
 ```
 
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
 | `prompt` | Yes | Yes | Prompt text to send to the LLM |
-| `model` | No | No | Model name (default: `gemini-2.5-flash`) |
+| `model` | No | No | Model name (default: user's selected model) |
+| `ragSetting` | No | No | RAG setting name, `__websearch__` for web search, or `__none__` (default) |
+| `driveToolMode` | No | No | `none` (default), `all`, `noSearch` — enables Drive tool calling |
+| `mcpServers` | No | No | Comma-separated MCP server names to enable |
+| `attachments` | No | No | Comma-separated variable names containing FileExplorerData |
 | `saveTo` | No | No | Variable to store text response |
+| `saveImageTo` | No | No | Variable to store generated image (FileExplorerData JSON) |
+| `systemPrompt` | No | Yes | System prompt for the LLM |
 
 ---
 
@@ -165,7 +177,7 @@ Make HTTP requests.
 |----------|:--------:|:--------:|-------------|
 | `url` | Yes | Yes | Request URL |
 | `method` | No | No | `GET` (default), `POST`, `PUT`, `PATCH`, `DELETE` |
-| `contentType` | No | No | `json` (default), `form-data`, `text` |
+| `contentType` | No | No | `json` (default), `form-data`, `text`, `binary` |
 | `headers` | No | Yes | JSON object or `Key: Value` format (one per line) |
 | `body` | No | Yes | Request body (for POST/PUT/PATCH) |
 | `saveTo` | No | No | Variable for response body |
@@ -173,6 +185,8 @@ Make HTTP requests.
 | `throwOnError` | No | No | `"true"` to throw error on 4xx/5xx responses |
 
 **Binary responses** are automatically detected and stored as FileExplorerData JSON (Base64 encoded).
+
+**binary contentType:** Sends FileExplorerData as raw binary with its original mimeType. Use with `drive-file-picker` or image generation results.
 
 **form-data example:**
 ```yaml
@@ -225,6 +239,9 @@ Write content to a Google Drive file.
   path: "output/{{filename}}.md"
   content: "{{result}}"
   mode: overwrite
+  confirm: "true"
+  history: "true"
+  open: "true"
 ```
 
 | Property | Required | Template | Description |
@@ -232,8 +249,9 @@ Write content to a Google Drive file.
 | `path` | Yes | Yes | File path (`.md` extension auto-appended if missing) |
 | `content` | Yes | Yes | Content to write |
 | `mode` | No | No | `overwrite` (default), `append`, `create` (skip if exists) |
-
-Edit history is automatically saved if configured in settings.
+| `confirm` | No | No | `"true"` to show confirmation dialog before writing |
+| `history` | No | No | `"true"` to save edit history |
+| `open` | No | No | `"true"` to open the file in the editor after workflow completes |
 
 ---
 
@@ -268,6 +286,7 @@ Search for files on Google Drive.
   type: drive-search
   query: "{{searchTerm}}"
   searchContent: "true"
+  limit: "10"
   saveTo: results
 ```
 
@@ -275,6 +294,7 @@ Search for files on Google Drive.
 |----------|:--------:|:--------:|-------------|
 | `query` | Yes | Yes | Search query string |
 | `searchContent` | No | No | `"true"` to search file contents (default: name only) |
+| `limit` | No | No | Maximum results (default: 10) |
 | `saveTo` | Yes | No | Variable for results |
 
 **Output format:**
@@ -295,6 +315,9 @@ List files with filtering.
   type: drive-list
   folder: "Projects"
   limit: "20"
+  sortBy: modified
+  sortOrder: desc
+  modifiedWithin: "7d"
   saveTo: fileList
 ```
 
@@ -302,6 +325,10 @@ List files with filtering.
 |----------|:--------:|:--------:|-------------|
 | `folder` | No | Yes | Virtual folder prefix (e.g., `"Projects"`) |
 | `limit` | No | No | Maximum results (default: 50) |
+| `sortBy` | No | No | `modified` (default), `created`, `name` |
+| `sortOrder` | No | No | `desc` (default), `asc` |
+| `modifiedWithin` | No | Yes | Time filter (e.g., `"7d"`, `"24h"`, `"30m"`) |
+| `createdWithin` | No | Yes | Time filter (e.g., `"30d"`) |
 | `saveTo` | Yes | No | Variable for results |
 
 **Output format:**
@@ -392,6 +419,52 @@ Throws error if user cancels.
 
 ---
 
+### prompt-file
+
+Show a file picker and read the selected file's content.
+
+```yaml
+- id: pickFile
+  type: prompt-file
+  title: "Select a file"
+  default: "notes/readme.md"
+  saveTo: fileContent
+  saveFileTo: fileInfo
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `title` | No | No | Picker dialog title (default: `"Select a file"`) |
+| `default` | No | Yes | Default file path |
+| `saveTo` | No | No | Variable to store file content (text) |
+| `saveFileTo` | No | No | Variable to store file info JSON (`{path, basename, name, extension}`) |
+
+At least one of `saveTo` or `saveFileTo` is required. Unlike `drive-file-picker`, this node reads the file content automatically.
+
+Throws error if user cancels.
+
+---
+
+### prompt-selection
+
+Show a multiline text input dialog.
+
+```yaml
+- id: getText
+  type: prompt-selection
+  title: "Enter your text"
+  saveTo: selection
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `title` | No | Yes | Prompt label (default: `"Enter text"`) |
+| `saveTo` | Yes | No | Variable to store user input |
+
+Always shows a multiline textarea. Throws error if user cancels.
+
+---
+
 ### dialog
 
 Display a dialog with options, buttons, and/or text input.
@@ -449,6 +522,7 @@ Show a file picker dialog to select a Drive file.
 - id: selectFile
   type: drive-file-picker
   title: "Select a file"
+  mode: select
   extensions: "pdf,doc,md"
   saveTo: fileData
   savePathTo: filePath
@@ -457,6 +531,8 @@ Show a file picker dialog to select a Drive file.
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
 | `title` | No | Yes | Picker dialog title (default: `"Select a file"`) |
+| `mode` | No | No | `select` (default) to pick existing file, `create` to enter a new path |
+| `default` | No | Yes | Default file path (used as initial value in `create` mode) |
 | `extensions` | No | No | Comma-separated allowed extensions |
 | `path` | No | Yes | Direct file path (bypasses picker when set) |
 | `saveTo` | No | No | Variable for FileExplorerData JSON |
@@ -479,24 +555,6 @@ At least one of `saveTo` or `savePathTo` is required.
 ```
 
 > **Note:** The picker returns metadata only. The `data` field is empty. Use `drive-read` to fetch file content.
-
----
-
-### preview
-
-Store a file path for client-side preview.
-
-```yaml
-- id: show
-  type: preview
-  path: "{{outputPath}}"
-  saveTo: previewPath
-```
-
-| Property | Required | Template | Description |
-|----------|:--------:|:--------:|-------------|
-| `path` | Yes | Yes | File path to preview |
-| `saveTo` | No | No | Variable to store the path |
 
 ---
 
@@ -542,6 +600,7 @@ Call a remote MCP (Model Context Protocol) server tool via HTTP.
   args: '{"query": "{{searchTerm:json}}"}'
   headers: '{"Authorization": "Bearer {{apiKey}}"}'
   saveTo: searchResults
+  saveUiTo: uiData
 ```
 
 | Property | Required | Template | Description |
@@ -551,8 +610,33 @@ Call a remote MCP (Model Context Protocol) server tool via HTTP.
 | `args` | No | Yes | JSON object with tool arguments |
 | `headers` | No | Yes | JSON object with HTTP headers |
 | `saveTo` | No | No | Variable for result |
+| `saveUiTo` | No | No | Variable for UI resource data (when server returns `_meta.ui.resourceUri`) |
 
 Uses JSON-RPC 2.0 protocol (`tools/call` method). Text content parts from the response are joined with newlines.
+
+---
+
+### rag-sync
+
+Sync a Drive file to a Gemini RAG store (File Search).
+
+```yaml
+- id: sync
+  type: rag-sync
+  path: "notes/knowledge-base.md"
+  ragSetting: "myRagStore"
+  saveTo: syncResult
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `path` | Yes | Yes | File path on Drive |
+| `ragSetting` | Yes | Yes | RAG setting name (from Settings > RAG) |
+| `saveTo` | No | No | Variable for sync result |
+
+Uploads the specified Drive file to the RAG store. Creates the store if it doesn't already exist. The result contains `{path, ragSetting, fileId, storeName, mode, syncedAt}`.
+
+Use this to prepare files for RAG-powered `command` nodes (set `ragSetting` on the command node to the same setting name).
 
 ---
 

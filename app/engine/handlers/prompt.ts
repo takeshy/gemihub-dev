@@ -39,9 +39,9 @@ export async function handlePromptFileNode(
   serviceContext: ServiceContext,
   promptCallbacks?: PromptCallbacks
 ): Promise<void> {
-  const defaultPath = node.properties["default"]
-    ? replaceVariables(node.properties["default"], context)
-    : undefined;
+  const title = node.properties["title"]
+    ? replaceVariables(node.properties["title"], context)
+    : "Select a file";
   const saveTo = node.properties["saveTo"];
   const saveFileTo = node.properties["saveFileTo"];
 
@@ -51,9 +51,7 @@ export async function handlePromptFileNode(
     throw new Error("Drive file picker callback not available");
   }
 
-  const result = await promptCallbacks.promptForDriveFile(
-    defaultPath || "Select a file"
-  );
+  const result = await promptCallbacks.promptForDriveFile(title);
   if (result === null) throw new Error("File selection cancelled by user");
 
   // Read the file content
