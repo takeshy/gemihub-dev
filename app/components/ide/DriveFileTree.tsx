@@ -204,6 +204,13 @@ export function DriveFileTree({
     isBinary: boolean;
   } | null>(null);
   const [remoteMeta, setRemoteMeta] = useState<CachedRemoteMeta["files"]>({});
+  const [busyFileIds, setBusyFileIds] = useState<Set<string>>(new Set());
+  const setBusy = useCallback((ids: string[]) => {
+    setBusyFileIds((prev) => { const next = new Set(prev); for (const id of ids) next.add(id); return next; });
+  }, []);
+  const clearBusy = useCallback((ids: string[]) => {
+    setBusyFileIds((prev) => { const next = new Set(prev); for (const id of ids) next.delete(id); return next; });
+  }, []);
   const { t } = useI18n();
   const dragCounterRef = useRef(0);
   const folderDragCounterRef = useRef<Map<string, number>>(new Map());
@@ -530,6 +537,7 @@ export function DriveFileTree({
       // Don't rename to same name
       if (newFullName === currentName) return;
 
+      setBusy([itemId]);
       try {
         const res = await fetch("/api/drive/files", {
           method: "POST",
@@ -553,9 +561,11 @@ export function DriveFileTree({
         }
       } catch {
         // ignore
+      } finally {
+        clearBusy([itemId]);
       }
     },
-    [treeItems, rootFolderId, fetchAndCacheTree, updateTreeFromMeta, findFullFileName, getFolderPath]
+    [treeItems, rootFolderId, fetchAndCacheTree, updateTreeFromMeta, findFullFileName, getFolderPath, setBusy, clearBusy]
   );
 
   const handleDrop = useCallback(
@@ -692,6 +702,7 @@ export function DriveFileTree({
         const newPrefix = parts.join("/");
 
         const fileIds = collectFileIds(item);
+        setBusy(fileIds);
         try {
           let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
           for (const fid of fileIds) {
@@ -720,6 +731,8 @@ export function DriveFileTree({
           }
         } catch {
           // ignore
+        } finally {
+          clearBusy(fileIds);
         }
         return;
       }
@@ -738,6 +751,7 @@ export function DriveFileTree({
         newFullName = newBaseName.trim();
       }
 
+      setBusy([item.id]);
       try {
         const res = await fetch("/api/drive/files", {
           method: "POST",
@@ -758,9 +772,11 @@ export function DriveFileTree({
         }
       } catch {
         // ignore
+      } finally {
+        clearBusy([item.id]);
       }
     },
-    [fetchAndCacheTree, updateTreeFromMeta, t, collectFileIds, findFullFileName, treeItems]
+    [fetchAndCacheTree, updateTreeFromMeta, t, collectFileIds, findFullFileName, treeItems, setBusy, clearBusy]
   );
 
   const handleDelete = useCallback(
@@ -771,6 +787,7 @@ export function DriveFileTree({
         if (fileIds.length === 0) return;
         if (!confirm(t("trash.softDeleteFolderConfirm").replace("{count}", String(fileIds.length)).replace("{name}", item.name))) return;
 
+        setBusy(fileIds);
         try {
           let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
           for (const fid of fileIds) {
@@ -793,10 +810,13 @@ export function DriveFileTree({
           }
         } catch {
           // ignore
+        } finally {
+          clearBusy(fileIds);
         }
       } else {
         if (!confirm(t("trash.softDeleteConfirm").replace("{name}", item.name))) return;
 
+        setBusy([item.id]);
         try {
           const res = await fetch("/api/drive/files", {
             method: "POST",
@@ -822,10 +842,12 @@ export function DriveFileTree({
           }
         } catch {
           // ignore
+        } finally {
+          clearBusy([item.id]);
         }
       }
     },
-    [treeItems, rootFolderId, collectFileIds, fetchAndCacheTree, updateTreeFromMeta, t]
+    [treeItems, rootFolderId, collectFileIds, fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy]
   );
 
   const handleEncrypt = useCallback(
@@ -836,6 +858,7 @@ export function DriveFileTree({
         return;
       }
 
+      setBusy([item.id]);
       try {
         const res = await fetch("/api/drive/files", {
           method: "POST",
@@ -858,9 +881,11 @@ export function DriveFileTree({
         }
       } catch {
         alert("Encryption failed");
+      } finally {
+        clearBusy([item.id]);
       }
     },
-    [fetchAndCacheTree, updateTreeFromMeta, encryptionEnabled]
+    [fetchAndCacheTree, updateTreeFromMeta, encryptionEnabled, setBusy, clearBusy]
   );
 
   const handleDecrypt = useCallback(
@@ -991,6 +1016,7 @@ export function DriveFileTree({
 
   const handlePublish = useCallback(
     async (item: CachedTreeNode) => {
+      setBusy([item.id]);
       try {
         const res = await fetch("/api/drive/files", {
           method: "POST",
@@ -1010,13 +1036,16 @@ export function DriveFileTree({
         }
       } catch {
         alert(t("contextMenu.publishFailed"));
+      } finally {
+        clearBusy([item.id]);
       }
     },
-    [updateTreeFromMeta, t]
+    [updateTreeFromMeta, t, setBusy, clearBusy]
   );
 
   const handleUnpublish = useCallback(
     async (item: CachedTreeNode) => {
+      setBusy([item.id]);
       try {
         const res = await fetch("/api/drive/files", {
           method: "POST",
@@ -1032,9 +1061,11 @@ export function DriveFileTree({
         }
       } catch {
         alert(t("contextMenu.unpublishFailed"));
+      } finally {
+        clearBusy([item.id]);
       }
     },
-    [updateTreeFromMeta, t]
+    [updateTreeFromMeta, t, setBusy, clearBusy]
   );
 
   const handleCopyLink = useCallback(
@@ -1203,7 +1234,9 @@ export function DriveFileTree({
             ) : (
               <ChevronRight size={ICON.SM} className="text-gray-400 flex-shrink-0" />
             )}
-            {expanded ? (
+            {busyFileIds.size > 0 && item.children?.some((c) => busyFileIds.has(c.id)) ? (
+              <Loader2 size={ICON.MD} className="animate-spin text-blue-500 flex-shrink-0" />
+            ) : expanded ? (
               <FolderOpen size={ICON.MD} className="text-yellow-500 flex-shrink-0" />
             ) : (
               <Folder size={ICON.MD} className="text-yellow-500 flex-shrink-0" />
@@ -1240,7 +1273,9 @@ export function DriveFileTree({
         } ${isDragging ? "opacity-50" : ""}`}
         style={{ paddingLeft: `${depth * 12 + 20}px` }}
       >
-        {getFileIcon(item.name, item.mimeType)}
+        {busyFileIds.has(item.id)
+          ? <Loader2 size={ICON.MD} className="animate-spin text-blue-500 flex-shrink-0" />
+          : getFileIcon(item.name, item.mimeType)}
         <span className="truncate">{item.name}</span>
         {remoteMeta[item.id]?.shared && (
           <span
