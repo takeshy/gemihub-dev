@@ -86,8 +86,29 @@ export async function ensureRootFolder(accessToken: string, folderName?: string)
   return folder.id;
 }
 
+// In-flight deduplication for ensureSubFolder to prevent race-condition duplicates
+const subFolderInflight = new Map<string, Promise<string>>();
+
 // Ensure a subfolder exists
 export async function ensureSubFolder(
+  accessToken: string,
+  parentId: string,
+  folderName: string
+): Promise<string> {
+  const cacheKey = `${parentId}:${folderName}`;
+  const inflight = subFolderInflight.get(cacheKey);
+  if (inflight) {
+    return inflight;
+  }
+
+  const promise = ensureSubFolderImpl(accessToken, parentId, folderName).finally(() => {
+    subFolderInflight.delete(cacheKey);
+  });
+  subFolderInflight.set(cacheKey, promise);
+  return promise;
+}
+
+async function ensureSubFolderImpl(
   accessToken: string,
   parentId: string,
   folderName: string
