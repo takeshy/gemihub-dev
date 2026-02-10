@@ -264,7 +264,7 @@ export async function executeWorkflow(
         case "drive-read": {
           const readPath = node.properties["path"] || "";
           log(node.id, node.type, `Reading file: ${readPath}`, "info");
-          await handleDriveReadNode(node, context, serviceContext);
+          await handleDriveReadNode(node, context, serviceContext, promptCallbacks);
           const readSaveTo = node.properties["saveTo"] || "";
           const readContent = context.variables.get(readSaveTo);
           log(node.id, node.type, `File read`, "success", { path: readPath }, readContent);

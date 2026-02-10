@@ -2,6 +2,7 @@ import type { WorkflowNode, ExecutionContext, ServiceContext, FileExplorerData, 
 import { replaceVariables } from "./utils";
 import * as driveService from "~/services/google-drive.server";
 import { saveEdit } from "~/services/edit-history.server";
+import { isEncryptedFile, decryptFileContent } from "~/services/crypto-core";
 
 const BINARY_MIME_PREFIXES = ["image/", "audio/", "video/"];
 const BINARY_MIME_TYPES = new Set([
@@ -41,6 +42,28 @@ async function readFileAsExplorerData(
     data: base64,
   };
   return JSON.stringify(fileData);
+}
+
+async function decryptIfEncrypted(
+  content: string,
+  path: string,
+  promptCallbacks?: PromptCallbacks
+): Promise<string> {
+  if (!isEncryptedFile(content)) return content;
+  if (!promptCallbacks?.promptForPassword) {
+    throw new Error(`Cannot read encrypted file without password: ${path}`);
+  }
+  const password = await promptCallbacks.promptForPassword(
+    `Enter password for: ${path}`
+  );
+  if (!password) {
+    throw new Error(`Cannot read encrypted file without password: ${path}`);
+  }
+  try {
+    return await decryptFileContent(content, password);
+  } catch {
+    throw new Error(`Failed to decrypt file (wrong password?): ${path}`);
+  }
 }
 
 // Handle drive-file node (was: note) - write content to a Drive file
@@ -166,7 +189,8 @@ export async function handleDriveFileNode(
 export async function handleDriveReadNode(
   node: WorkflowNode,
   context: ExecutionContext,
-  serviceContext: ServiceContext
+  serviceContext: ServiceContext,
+  promptCallbacks?: PromptCallbacks
 ): Promise<void> {
   const pathRaw = node.properties["path"] || "";
   const saveTo = node.properties["saveTo"];
@@ -184,7 +208,7 @@ export async function handleDriveReadNode(
       context.variables.set(saveTo, await readFileAsExplorerData(accessToken, path, meta.name, meta.mimeType));
     } else {
       const content = await driveService.readFile(accessToken, path);
-      context.variables.set(saveTo, content);
+      context.variables.set(saveTo, await decryptIfEncrypted(content, meta.name, promptCallbacks));
     }
     return;
   }
@@ -199,7 +223,7 @@ export async function handleDriveReadNode(
         context.variables.set(saveTo, await readFileAsExplorerData(accessToken, fileId, meta.name, meta.mimeType));
       } else {
         const content = await driveService.readFile(accessToken, fileId);
-        context.variables.set(saveTo, content);
+        context.variables.set(saveTo, await decryptIfEncrypted(content, meta.name, promptCallbacks));
       }
       return;
     }
@@ -224,6 +248,6 @@ export async function handleDriveReadNode(
     context.variables.set(saveTo, await readFileAsExplorerData(accessToken, file.id, file.name, file.mimeType));
   } else {
     const content = await driveService.readFile(accessToken, file.id);
-    context.variables.set(saveTo, content);
+    context.variables.set(saveTo, await decryptIfEncrypted(content, file.name, promptCallbacks));
   }
 }

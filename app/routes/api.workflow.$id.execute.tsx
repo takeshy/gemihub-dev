@@ -62,6 +62,8 @@ export async function action({ request, params }: Route.ActionArgs) {
         settings,
       };
 
+      let cachedEncryptionPassword: string | null = null;
+
       const promptCallbacks: PromptCallbacks = {
         promptForValue: async (title, defaultValue, multiline) => {
           const result = await requestPrompt(executionId, "value", {
@@ -97,6 +99,14 @@ export async function action({ request, params }: Route.ActionArgs) {
           } catch {
             return { id: result, name: result };
           }
+        },
+        promptForPassword: async (title) => {
+          if (cachedEncryptionPassword) return cachedEncryptionPassword;
+          const result = await requestPrompt(executionId, "password", {
+            title: title || "Enter password",
+          });
+          if (result) cachedEncryptionPassword = result;
+          return result;
         },
       };
 

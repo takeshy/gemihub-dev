@@ -196,6 +196,7 @@ export interface PromptCallbacks {
     title: string,
     extensions?: string[]
   ) => Promise<{ id: string; name: string } | null>;
+  promptForPassword?: (title?: string) => Promise<string | null>;
   executeSubWorkflow?: (
     workflowPath: string,
     workflowName: string | undefined,
