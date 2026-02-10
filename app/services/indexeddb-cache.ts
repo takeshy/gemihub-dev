@@ -369,6 +369,16 @@ export async function setEditHistorySnapshot(
   }
 }
 
+export async function deleteEditHistorySnapshot(fileId: string): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    const db = await getDB();
+    await txDelete(db, "editHistorySnapshot", fileId);
+  } catch {
+    // ignore
+  }
+}
+
 // --- fileTree store ---
 
 export async function getCachedFileTree(): Promise<CachedFileTree | undefined> {

@@ -180,6 +180,8 @@ export function useFileWithCache(
   const saveToCache = useCallback(
     async (newContent: string) => {
       if (!fileId) return;
+      // Immediately reflect in React state so the UI never lags behind the cache
+      setContent(newContent);
       try {
         const cached = await getCachedFile(fileId);
         const fileName = cached?.fileName ?? fileId;

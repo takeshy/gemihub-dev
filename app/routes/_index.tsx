@@ -240,6 +240,7 @@ function IDELayout({
         if (dialogState?.mode === "modify" && dialogState.currentFileId) {
           // Update existing workflow
           workflowId = dialogState.currentFileId;
+          console.log("[AI Accept] Updating existing file:", dialogState.currentFileId);
           const res = await fetch("/api/drive/files", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -251,6 +252,7 @@ function IDELayout({
           });
           if (res.ok) {
             const resData = await res.json();
+            console.log("[AI Accept] Drive update OK, md5:", resData.md5Checksum);
             // Update IndexedDB cache so the viewer picks up the new content
             await setCachedFile({
               fileId: dialogState.currentFileId,
@@ -260,9 +262,18 @@ function IDELayout({
               cachedAt: Date.now(),
               fileName: resData.file?.name,
             });
+            // Notify all useFileWithCache hooks so they pick up the new content
+            window.dispatchEvent(
+              new CustomEvent("file-restored", {
+                detail: { fileId: dialogState.currentFileId, content: yamlContent },
+              })
+            );
             handleWorkflowChanged();
+          } else {
+            console.error("[AI Accept] Drive update failed:", res.status, await res.text().catch(() => ""));
           }
         } else {
+          console.log("[AI Accept] Creating new file. dialogState:", dialogState?.mode, "fileId:", dialogState?.currentFileId);
           // Create new workflow file under workflows/ folder
           const baseName = workflowName.endsWith(".yaml")
             ? workflowName
@@ -309,8 +320,8 @@ function IDELayout({
             }),
           }).catch(() => {});
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error("[AI Accept] Error:", err);
       }
     },
     [aiDialog, handleSelectFile, handleWorkflowChanged]
