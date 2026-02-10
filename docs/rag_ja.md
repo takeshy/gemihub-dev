@@ -430,7 +430,7 @@ Browser                    Server                  Google (Gemini API / Drive)
 | `app/hooks/useSync.ts` | クライアント側 Push 連動 RAG 登録ロジック |
 | `app/services/gemini-chat.server.ts` | チャットでの fileSearch ツール統合, グラウンディングメタデータ処理 |
 | `app/components/ide/ChatPanel.tsx` | RAG 設定選択, ragStoreIds 解決, ソース表示 |
-| `app/components/ide/SearchPanel.tsx` | 検索パネル UI (RAG / Drive / Local モード) |
+| `app/components/ide/SearchPanel.tsx` | 検索パネル UI (Local / Drive / RAG モード) |
 | `app/engine/handlers/ragSync.ts` | ワークフロー `rag-sync` ノードハンドラ |
 | `app/engine/handlers/command.ts` | ワークフロー `command` ノードの RAG 設定解決 |
 | `app/routes/settings.tsx` | RAG 設定 UI (RagTab コンポーネント) |
