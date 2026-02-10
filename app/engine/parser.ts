@@ -161,10 +161,14 @@ export function parseWorkflowData(data: Record<string, unknown>): Workflow {
         throw new Error(`Node ${id} (${typeRaw}) missing trueNext`);
       }
 
-      if (!isTerminator(trueNext)) addEdge(id, trueNext, "true");
+      if (!isTerminator(trueNext)) {
+        addEdge(id, trueNext, "true");
+      }
 
       if (falseNext) {
-        if (!isTerminator(falseNext)) addEdge(id, falseNext, "false");
+        if (!isTerminator(falseNext)) {
+          addEdge(id, falseNext, "false");
+        }
       } else if (i < nodesList.length - 1) {
         const fallbackId = normalizeValue(nodesList[i + 1]?.id) || `node-${i + 2}`;
         if (fallbackId !== id && nodeIds.has(fallbackId)) {

@@ -9,7 +9,7 @@ import type {
   ServiceContext,
 } from "./types";
 import { getNextNodes } from "./parser";
-import { replaceVariables } from "./handlers/utils";
+import { replaceVariables, parseCondition } from "./handlers/utils";
 import { handleVariableNode, handleSetNode, handleIfNode, handleWhileNode, handleSleepNode } from "./handlers/controlFlow";
 import { handleHttpNode } from "./handlers/http";
 import { handleDriveFileNode, handleDriveReadNode } from "./handlers/drive";
@@ -77,6 +77,21 @@ export async function executeWorkflow(
     onLog?.(logEntry);
   };
 
+  const buildConditionInput = (conditionRaw?: string) => {
+    if (!conditionRaw) return undefined;
+    const parsed = parseCondition(conditionRaw);
+    if (!parsed) return { condition: conditionRaw };
+    const left = replaceVariables(parsed.left, context);
+    const right = replaceVariables(parsed.right, context);
+    return {
+      condition: conditionRaw,
+      resolved: `${left} ${parsed.operator} ${right}`,
+      left,
+      operator: parsed.operator,
+      right,
+    };
+  };
+
   const addHistoryStep = (
     nodeId: string,
     nodeType: WorkflowNode["type"],
@@ -139,8 +154,9 @@ export async function executeWorkflow(
 
         case "if": {
           const ifResult = handleIfNode(node, context);
+          const conditionInput = buildConditionInput(node.properties["condition"]);
           log(node.id, node.type, `Condition: ${ifResult}`, "success",
-            { condition: node.properties["condition"] }, ifResult);
+            conditionInput, ifResult);
           addHistoryStep(node.id, node.type, { condition: node.properties["condition"] }, ifResult);
           const next = getNextNodes(workflow, node.id, ifResult);
           for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
@@ -149,6 +165,7 @@ export async function executeWorkflow(
 
         case "while": {
           const whileResult = handleWhileNode(node, context);
+          const conditionInput = buildConditionInput(node.properties["condition"]);
           const state = whileLoopStates.get(node.id) || { iterationCount: 0 };
 
           if (whileResult) {
@@ -157,13 +174,16 @@ export async function executeWorkflow(
               throw new Error(`While loop exceeded maximum iterations (${MAX_ITERATIONS})`);
             }
             whileLoopStates.set(node.id, state);
+            const input = conditionInput
+              ? { ...conditionInput, iteration: state.iterationCount }
+              : { iteration: state.iterationCount };
             log(node.id, node.type, `Loop iteration ${state.iterationCount}`, "info",
-              { condition: node.properties["condition"], iteration: state.iterationCount }, whileResult);
+              input, whileResult);
             addHistoryStep(node.id, node.type, { iteration: state.iterationCount }, whileResult);
             const next = getNextNodes(workflow, node.id, true);
             for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
           } else {
-            log(node.id, node.type, `Loop condition false, exiting`, "success");
+            log(node.id, node.type, `Loop condition false, exiting`, "success", conditionInput);
             addHistoryStep(node.id, node.type, { condition: node.properties["condition"] }, false);
             whileLoopStates.delete(node.id);
             const next = getNextNodes(workflow, node.id, false);
