@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen } from "lucide-react";
+import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen } from "lucide-react";
 import type { ComponentType } from "react";
 import { useLocation } from "react-router";
 import type { Language } from "~/types/settings";
@@ -31,6 +31,9 @@ interface LpStrings {
   dataUsageTitle: string;
   dataUsageIntro: string;
   dataCards: DataCard[];
+  pluginShowcaseTitle: string;
+  pluginShowcaseDescription: string;
+  pluginShowcaseLink: string;
   dataUsageLearnMore: string;
   privacyPolicy: string;
   ctaReady: string;
@@ -67,6 +70,9 @@ const en: LpStrings = {
     { icon: Lock, title: "No Third-Party Sharing", description: "Your data is never sold or shared. Everything stays in your own Google Drive." },
     { icon: ServerCog, title: "Fully Portable", description: "No database — all data lives in your Drive. If this service shuts down, just run your own instance and everything is right where you left it." },
   ],
+  pluginShowcaseTitle: "Plugin Showcase",
+  pluginShowcaseDescription: "A debate plugin where multiple AIs discuss a topic from different perspectives. You can jump in and join the conversation too.",
+  pluginShowcaseLink: "View on GitHub",
   dataUsageLearnMore: "Learn more in our",
   privacyPolicy: "Privacy Policy",
   ctaReady: "Ready to get started?",
@@ -103,6 +109,9 @@ const ja: LpStrings = {
     { icon: Lock, title: "第三者への共有なし", description: "データの販売や第三者への共有は一切ありません。すべてご自身のDriveに保存されます。" },
     { icon: ServerCog, title: "完全なポータビリティ", description: "データベースなし。すべてDriveに保存されているので、サービスが停止しても自分でインスタンスを立ち上げればそのまま使えます。" },
   ],
+  pluginShowcaseTitle: "プラグイン紹介",
+  pluginShowcaseDescription: "複数のAIがテーマについてそれぞれの視点で議論するディベートプラグイン。あなたも途中から参加できます。",
+  pluginShowcaseLink: "GitHubで見る",
   dataUsageLearnMore: "詳しくは",
   privacyPolicy: "プライバシーポリシー",
   ctaReady: "さあ、始めましょう",
@@ -168,6 +177,37 @@ export default function LandingPage() {
               </p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Plugin Showcase */}
+      <section className="mx-auto max-w-4xl px-4 pb-20">
+        <h2 className="mb-8 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
+          {s.pluginShowcaseTitle}
+        </h2>
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-900 sm:flex sm:items-center sm:gap-6">
+          <div className="mb-4 flex shrink-0 items-center justify-center sm:mb-0">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-100 dark:bg-purple-900/40">
+              <MessagesSquare size={32} className="text-purple-600 dark:text-purple-400" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h3 className="mb-1.5 text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Ronginus
+            </h3>
+            <p className="mb-3 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+              {s.pluginShowcaseDescription}
+            </p>
+            <a
+              href="https://github.com/takeshy/hub-ronginus"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+            >
+              <Github size={16} />
+              {s.pluginShowcaseLink}
+            </a>
+          </div>
         </div>
       </section>
 
