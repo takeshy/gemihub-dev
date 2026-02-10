@@ -571,9 +571,6 @@ export async function action({ request }: Route.ActionArgs) {
       if (!ragSetting.storeName) {
         const storeName = await getOrCreateStore(apiKey, storeKey);
         ragSetting.storeName = storeName;
-        if (!ragSetting.storeIds.includes(storeName)) {
-          ragSetting.storeIds.push(storeName);
-        }
         ragSetting.storeId = storeName;
         // Save settings to persist store name (one-time)
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, settings);

@@ -18,9 +18,9 @@ Gemini File Search を利用したナレッジベース機能。Google Drive 上
 
 ```typescript
 interface RagSetting {
-  storeId: string | null;           // Internal用 Store name (Gemini APIリソース名)
+  storeId: string | null;           // Internal用 Gemini API リソース名 (チャットで ragStoreIds に使用)
   storeIds: string[];               // External用 Store name の配列
-  storeName: string | null;         // Store の Gemini API リソース名
+  storeName: string | null;         // Gemini API リソース名 (API コール時に使用、storeId と同値)
   isExternal: boolean;              // External モードフラグ
   targetFolders: string[];          // Internal: 対象フォルダの仮想パスプレフィクス
   excludePatterns: string[];        // Internal: 除外パターン (正規表現)
@@ -234,13 +234,15 @@ Push 開始
 ```
 selectedRagSetting の値:
 ├─ "__websearch__" → Web Search モード (googleSearch tool)
-├─ "__none__" → RAG なし
+├─ null → RAG なし (localStorage に空文字保存 → 読み込み時 null に変換)
 └─ RAG設定名 → ragStoreIds を解決:
     ├─ isExternal → storeIds[]
     └─ Internal → [storeId]
 ```
 
 `selectedRagSetting` は `localStorage` に永続化される (`gemihub:selectedRagSetting`)。スラッシュコマンドの `searchSetting` でオーバーライド可能。
+
+**注意**: ワークフローの command ノードでは `"__none__"` を「RAG なし」として使用するが、ChatPanel では `null` がその役割を持つ。
 
 ### Gemini API への渡し方 (`app/services/gemini-chat.server.ts`)
 
@@ -260,9 +262,9 @@ geminiTools.push({
 |------|:-----------:|:---:|:------:|------|
 | Gemma モデル | 不可 | 不可 | Yes | ツール非対応。MCP も無効化 |
 | Web Search モード | 不可 | 不可 | Yes | `googleSearch` のみ使用。MCP も無効化 |
-| Flash Lite + RAG | 不可 | 可 | Yes | Drive ツールと RAG の併用不可 |
-| Flash/Pro + RAG | 検索以外 | 可 | No | `defaultMode: "noSearch"` (ユーザー変更可) |
-| RAG なし | 全機能 | - | No | 制約なし |
+| Flash Lite + RAG設定選択中 | 不可 | 可 | Yes | Drive ツールと RAG の併用不可 |
+| Flash/Pro + RAG設定選択中 | 検索以外 | 可 | No | `defaultMode: "noSearch"` (ユーザー変更可) |
+| RAG設定未選択 (`null`) | 全機能 | - | No | 制約なし |
 
 ### グラウンディングメタデータ
 

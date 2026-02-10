@@ -159,25 +159,27 @@ export async function smartSync(
   }
 
   const currentFilePaths = new Set(allDriveFiles.map((f) => f.name));
-  const totalOperations = allDriveFiles.length;
-  let currentOperation = 0;
 
   // Delete orphaned entries from sync state and from Gemini store
-  for (const [path, info] of Object.entries(result.newFiles)) {
-    if (!currentFilePaths.has(path)) {
-      if (info.fileId) {
-        try {
-          await ai.fileSearchStores.documents.delete({
-            name: info.fileId,
-            config: { force: true },
-          });
-        } catch {
-          // best-effort
-        }
+  const orphanEntries = Object.entries(result.newFiles).filter(([path]) => !currentFilePaths.has(path));
+  const totalOperations = allDriveFiles.length + orphanEntries.length;
+  let currentOperation = 0;
+
+  for (const [path, info] of orphanEntries) {
+    currentOperation++;
+    onProgress?.(currentOperation, totalOperations, path, "delete");
+    if (info.fileId) {
+      try {
+        await ai.fileSearchStores.documents.delete({
+          name: info.fileId,
+          config: { force: true },
+        });
+      } catch {
+        // best-effort
       }
-      delete result.newFiles[path];
-      result.deleted.push(path);
     }
+    delete result.newFiles[path];
+    result.deleted.push(path);
   }
 
   // Process files
@@ -199,31 +201,19 @@ export async function smartSync(
 
       onProgress?.(currentOperation, totalOperations, file.name, "upload");
 
-      // Delete existing document if re-uploading
-      if (existing?.fileId) {
-        try {
-          await ai.fileSearchStores.documents.delete({
-            name: existing.fileId,
-            config: { force: true },
-          });
-        } catch {
-          // Ignore
-        }
-      }
-
-      const fileSearchId = await uploadDriveFile(
+      const registered = await registerSingleFile(
         apiKey,
-        accessToken,
-        file.id,
+        ragSetting.storeName!,
         file.name,
-        ragSetting.storeName!
+        content,
+        existing?.fileId ?? null
       );
 
       result.uploaded.push(file.name);
       result.newFiles[file.name] = {
-        checksum,
+        checksum: registered.checksum,
         uploadedAt: Date.now(),
-        fileId: fileSearchId,
+        fileId: registered.fileId,
         status: "registered",
       };
     } catch (error) {
