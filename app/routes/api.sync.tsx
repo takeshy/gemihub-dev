@@ -66,7 +66,7 @@ export async function action({ request }: Route.ActionArgs) {
   const { action: actionType } = body;
 
   const VALID_ACTIONS = new Set([
-    "diff", "pull", "resolve", "fullPush", "fullPull",
+    "diff", "pull", "resolve", "fullPush", "fullPull", "pushFiles",
     "clearConflicts", "detectUntracked", "deleteUntracked", "restoreUntracked",
     "listTrash", "restoreTrash", "listConflicts", "restoreConflict",
     "ragRegister", "ragSave", "ragDeleteDoc", "ragRetryPending",
@@ -260,6 +260,82 @@ export async function action({ request }: Route.ActionArgs) {
           modifiedTime: resolvedEntry.modifiedTime,
           fileName: resolvedEntry.name,
         } : undefined,
+      });
+    }
+
+    case "pushFiles": {
+      // Batch push: update multiple files in parallel, sync meta read/write ONCE
+      const pushFileList = body.files as Array<{ fileId: string; content: string }>;
+      if (!Array.isArray(pushFileList) || pushFileList.length === 0) {
+        return jsonWithCookie({ error: "Missing files" }, { status: 400 });
+      }
+
+      // Read sync meta ONCE
+      const pushRemoteMeta =
+        (await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId))
+          ?? { lastUpdatedAt: new Date().toISOString(), files: {} as Record<string, import("~/services/sync-meta.server").FileSyncMeta> };
+
+      // Update all files in parallel (concurrency 5)
+      const pushResults = await parallelProcess(pushFileList, async ({ fileId, content }) => {
+        const existingMeta = pushRemoteMeta.files[fileId];
+        const mimeType = existingMeta?.mimeType || "text/plain";
+        const file = await updateFile(validTokens.accessToken, fileId, content, mimeType);
+        return { fileId, file };
+      }, 5);
+
+      // Update sync meta entries from results
+      for (const { fileId, file } of pushResults) {
+        const existing = pushRemoteMeta.files[fileId];
+        pushRemoteMeta.files[fileId] = {
+          ...existing,
+          name: file.name,
+          mimeType: file.mimeType,
+          md5Checksum: file.md5Checksum ?? "",
+          modifiedTime: file.modifiedTime ?? "",
+        };
+      }
+      pushRemoteMeta.lastUpdatedAt = new Date().toISOString();
+
+      // Write sync meta ONCE
+      await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, pushRemoteMeta);
+
+      // Save edit history in background (best-effort, non-blocking)
+      // Edit history is also tracked locally in IndexedDB, so this is supplementary
+      (async () => {
+        try {
+          const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+          const { saveEdit } = await import("~/services/edit-history.server");
+          await parallelProcess(pushFileList, async ({ fileId, content }) => {
+            const fileMeta = pushRemoteMeta.files[fileId];
+            if (!fileMeta) return;
+            try {
+              const oldContent = await readFile(validTokens.accessToken, fileId);
+              if (oldContent !== content) {
+                await saveEdit(validTokens.accessToken, validTokens.rootFolderId, settings.editHistory, {
+                  path: fileMeta.name,
+                  oldContent,
+                  newContent: content,
+                  source: "manual",
+                });
+              }
+            } catch {
+              // best-effort
+            }
+          }, 3);
+        } catch {
+          // best-effort
+        }
+      })();
+
+      return jsonWithCookie({
+        results: pushResults.map(({ fileId, file }) => ({
+          fileId,
+          md5Checksum: file.md5Checksum ?? "",
+          modifiedTime: file.modifiedTime ?? "",
+          name: file.name,
+          mimeType: file.mimeType,
+        })),
+        remoteMeta: pushRemoteMeta,
       });
     }
 
