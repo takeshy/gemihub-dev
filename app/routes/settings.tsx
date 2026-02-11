@@ -6,6 +6,10 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { rebuildSyncMeta } from "~/services/sync-meta.server";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
+import {
+  isSyncExcludedPath,
+  getSyncCompletionStatus,
+} from "~/services/sync-client-utils";
 import type {
   UserSettings,
   McpServerConfig,
@@ -83,21 +87,6 @@ import { PluginProvider } from "~/contexts/PluginContext";
 function maskApiKey(key: string): string {
   if (key.length <= 8) return "***";
   return key.slice(0, 4) + "***" + key.slice(-4);
-}
-
-const SYNC_EXCLUDED_FILE_NAMES = new Set(["_sync-meta.json", "settings.json"]);
-const SYNC_EXCLUDED_PREFIXES = [
-  "history/",
-  "trash/",
-  "sync_conflicts/",
-  "__TEMP__/",
-  "plugins/",
-];
-
-function isSyncExcludedPath(fileName: string): boolean {
-  const normalized = fileName.replace(/^\/+/, "");
-  if (SYNC_EXCLUDED_FILE_NAMES.has(normalized)) return true;
-  return SYNC_EXCLUDED_PREFIXES.some((prefix) => normalized.startsWith(prefix));
 }
 
 type TabId = "general" | "mcp" | "rag" | "commands" | "plugins" | "sync";
@@ -1046,11 +1035,8 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         }
         const successfulFiles = pushedFiles.filter((f) => pushedResultIds.has(f.fileId));
         ragRegisterInBackground(successfulFiles);
-        setActionMsg(
-          skippedCount > 0
-            ? `Full push completed with warning: skipped ${skippedCount} file(s).`
-            : "Full push completed."
-        );
+        const fullPushCompletion = getSyncCompletionStatus(skippedCount, "Full push");
+        setActionMsg(fullPushCompletion.error ?? "Full push completed.");
       } else if (allModifiedIds.size === 0) {
         await clearAllEditHistory();
         setActionMsg("No modified files to push.");

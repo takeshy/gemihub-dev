@@ -15,6 +15,10 @@ import {
 } from "~/services/indexeddb-cache";
 import { commitSnapshot } from "~/services/edit-history-local";
 import { ragRegisterInBackground } from "~/services/rag-sync";
+import {
+  isSyncExcludedPath,
+  getSyncCompletionStatus,
+} from "~/services/sync-client-utils";
 
 export interface ConflictInfo {
   fileId: string;
@@ -26,21 +30,6 @@ export interface ConflictInfo {
 }
 
 export type SyncStatus = "idle" | "pushing" | "pulling" | "conflict" | "warning" | "error";
-
-const SYNC_EXCLUDED_FILE_NAMES = new Set(["_sync-meta.json", "settings.json"]);
-const SYNC_EXCLUDED_PREFIXES = [
-  "history/",
-  "trash/",
-  "sync_conflicts/",
-  "__TEMP__/",
-  "plugins/",
-];
-
-function isSyncExcludedPath(fileName: string): boolean {
-  const normalized = fileName.replace(/^\/+/, "");
-  if (SYNC_EXCLUDED_FILE_NAMES.has(normalized)) return true;
-  return SYNC_EXCLUDED_PREFIXES.some((prefix) => normalized.startsWith(prefix));
-}
 
 function toLocalSyncMeta(remoteMeta: {
   lastUpdatedAt: string;
@@ -221,12 +210,9 @@ export function useSync() {
       window.dispatchEvent(new Event("sync-complete"));
 
       setLastSyncTime(new Date().toISOString());
-      if (skippedCount > 0) {
-        setError(`Push completed with warning: skipped ${skippedCount} file(s).`);
-        setSyncStatus("warning");
-      } else {
-        setSyncStatus("idle");
-      }
+      const pushCompletion = getSyncCompletionStatus(skippedCount, "Push");
+      setError(pushCompletion.error);
+      setSyncStatus(pushCompletion.status);
 
       // RAG registration + retry in background (non-blocking)
       const successfulFiles = filesToPush.filter((f) => pushedResultIds.has(f.fileId));
@@ -604,12 +590,9 @@ export function useSync() {
       window.dispatchEvent(new Event("sync-complete"));
 
       setLastSyncTime(new Date().toISOString());
-      if (skippedCount > 0) {
-        setError(`Full push completed with warning: skipped ${skippedCount} file(s).`);
-        setSyncStatus("warning");
-      } else {
-        setSyncStatus("idle");
-      }
+      const fullPushCompletion = getSyncCompletionStatus(skippedCount, "Full push");
+      setError(fullPushCompletion.error);
+      setSyncStatus(fullPushCompletion.status);
 
       // RAG registration + retry in background (non-blocking)
       const successfulFiles = filesToPush.filter((f) => pushedResultIds.has(f.fileId));
