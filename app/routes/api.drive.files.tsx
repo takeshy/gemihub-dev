@@ -10,6 +10,7 @@ import {
   moveFile,
   renameFile,
   searchFiles,
+  listFiles,
   getFileMetadata,
   publishFile,
   unpublishFile,
@@ -44,9 +45,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   const action = url.searchParams.get("action");
   const fileId = url.searchParams.get("fileId");
   const query = url.searchParams.get("query");
+  const folderId = url.searchParams.get("folderId");
 
   switch (action) {
     case "list": {
+      if (folderId) {
+        const files = await listFiles(validTokens.accessToken, folderId);
+        return jsonWithCookie({ files });
+      }
       const { files, meta } = await getFileListFromMeta(validTokens.accessToken, validTokens.rootFolderId);
       return jsonWithCookie({ files, meta: { lastUpdatedAt: meta.lastUpdatedAt, files: meta.files } });
     }

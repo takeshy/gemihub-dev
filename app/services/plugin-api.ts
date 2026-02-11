@@ -113,10 +113,22 @@ export function createPluginAPI(
       },
 
       async createFile(name: string, content: string) {
+        const ext = name.split(".").pop()?.toLowerCase();
+        const mimeMap: Record<string, string> = {
+          md: "text/markdown",
+          txt: "text/plain",
+          json: "application/json",
+          yaml: "text/yaml",
+          yml: "text/yaml",
+          js: "application/javascript",
+          css: "text/css",
+          html: "text/html",
+        };
+        const mimeType = (ext && mimeMap[ext]) || "text/plain";
         const res = await fetch("/api/drive/files", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "create", name, content }),
+          body: JSON.stringify({ action: "create", name, content, mimeType }),
         });
         if (!res.ok) throw new Error(`Drive create error: ${res.status}`);
         const data = await res.json();
