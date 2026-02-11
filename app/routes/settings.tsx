@@ -927,47 +927,98 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
     setActionLoading("fullPush");
     setActionMsg(null);
     try {
-      const { getLocalSyncMeta, setLocalSyncMeta, getLocallyModifiedFileIds, getCachedFile, setCachedFile, clearAllEditHistory } = await import("~/services/indexeddb-cache");
+      const {
+        getLocalSyncMeta,
+        setLocalSyncMeta,
+        getLocallyModifiedFileIds,
+        getCachedFile,
+        setCachedFile,
+        getCachedRemoteMeta,
+        clearAllEditHistory,
+        deleteEditHistoryEntry,
+      } = await import("~/services/indexeddb-cache");
       const { ragRegisterInBackground } = await import("~/services/rag-sync");
-      const modifiedIds = await getLocallyModifiedFileIds();
-      const localMeta = (await getLocalSyncMeta()) ?? {
-        id: "current" as const,
-        lastUpdatedAt: new Date().toISOString(),
-        files: {} as Record<string, { md5Checksum: string; modifiedTime: string }>,
-      };
+      const localMeta = (await getLocalSyncMeta()) ?? null;
+      const allModifiedIds = await getLocallyModifiedFileIds();
+      const cachedRemote = await getCachedRemoteMeta();
+
+      const trackedIds = new Set<string>([
+        ...Object.keys(cachedRemote?.files ?? {}),
+        ...Object.keys(localMeta?.files ?? {}),
+      ]);
+      const modifiedIds = trackedIds.size > 0
+        ? new Set([...allModifiedIds].filter((id) => trackedIds.has(id)))
+        : allModifiedIds;
 
       const pushedFiles: Array<{ fileId: string; content: string; fileName: string }> = [];
       for (const fid of modifiedIds) {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
-        const res = await fetch("/api/drive/files", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "update", fileId: fid, content: cached.content }),
+        pushedFiles.push({
+          fileId: fid,
+          content: cached.content,
+          fileName: cached.fileName ?? fid,
         });
-        if (!res.ok) throw new Error(`Failed to update file ${cached.fileName ?? fid}`);
-        const data = await res.json();
-        localMeta.files[fid] = { md5Checksum: data.md5Checksum, modifiedTime: data.file.modifiedTime };
-        await setCachedFile({ ...cached, md5Checksum: data.md5Checksum, modifiedTime: data.file.modifiedTime, cachedAt: Date.now() });
-        pushedFiles.push({ fileId: fid, content: cached.content, fileName: cached.fileName ?? fid });
       }
 
-      localMeta.lastUpdatedAt = new Date().toISOString();
-      await setLocalSyncMeta(localMeta);
+      if (pushedFiles.length > 0) {
+        const res = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "pushFiles",
+            files: pushedFiles.map(({ fileId, content }) => ({ fileId, content })),
+          }),
+        });
+        if (!res.ok) throw new Error("Full push failed");
+        const data = await res.json();
 
-      const res = await fetch("/api/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "fullPush",
-          localMeta: { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files },
-        }),
-      });
-      if (!res.ok) throw new Error("Full push failed");
+        for (const r of data.results as Array<{ fileId: string; md5Checksum: string; modifiedTime: string }>) {
+          const cached = await getCachedFile(r.fileId);
+          if (cached) {
+            await setCachedFile({
+              ...cached,
+              md5Checksum: r.md5Checksum,
+              modifiedTime: r.modifiedTime,
+              cachedAt: Date.now(),
+            });
+          }
+        }
 
-      await clearAllEditHistory();
+        if (data.remoteMeta) {
+          const files: Record<string, { md5Checksum: string; modifiedTime: string }> = {};
+          for (const [id, f] of Object.entries(
+            data.remoteMeta.files as Record<string, { md5Checksum?: string; modifiedTime?: string }>
+          )) {
+            files[id] = {
+              md5Checksum: f.md5Checksum ?? "",
+              modifiedTime: f.modifiedTime ?? "",
+            };
+          }
+          await setLocalSyncMeta({
+            id: "current",
+            lastUpdatedAt: data.remoteMeta.lastUpdatedAt,
+            files,
+          });
+          setLastUpdatedAt(data.remoteMeta.lastUpdatedAt);
+        } else {
+          setLastUpdatedAt(new Date().toISOString());
+        }
+      }
+
+      if (pushedFiles.length === allModifiedIds.size) {
+        await clearAllEditHistory();
+      } else {
+        for (const { fileId } of pushedFiles) {
+          await deleteEditHistoryEntry(fileId);
+        }
+      }
       window.dispatchEvent(new Event("sync-complete"));
-      setActionMsg("Full push completed.");
+      setActionMsg(
+        pushedFiles.length > 0
+          ? "Full push completed."
+          : "No modified files to push."
+      );
 
       // RAG registration in background (non-blocking)
       ragRegisterInBackground(pushedFiles);

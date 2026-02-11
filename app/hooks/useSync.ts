@@ -27,6 +27,37 @@ export interface ConflictInfo {
 
 export type SyncStatus = "idle" | "pushing" | "pulling" | "conflict" | "error";
 
+function toLocalSyncMeta(remoteMeta: {
+  lastUpdatedAt: string;
+  files: Record<string, { md5Checksum?: string; modifiedTime?: string }>;
+}): LocalSyncMeta {
+  const files: LocalSyncMeta["files"] = {};
+  for (const [id, f] of Object.entries(remoteMeta.files)) {
+    files[id] = {
+      md5Checksum: f.md5Checksum ?? "",
+      modifiedTime: f.modifiedTime ?? "",
+    };
+  }
+  return {
+    id: "current",
+    lastUpdatedAt: remoteMeta.lastUpdatedAt,
+    files,
+  };
+}
+
+function collectTrackedIds(
+  ...sources: Array<Record<string, unknown> | null | undefined>
+): Set<string> {
+  const ids = new Set<string>();
+  for (const source of sources) {
+    if (!source) continue;
+    for (const id of Object.keys(source)) {
+      ids.add(id);
+    }
+  }
+  return ids;
+}
+
 
 export function useSync() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
@@ -64,6 +95,7 @@ export function useSync() {
     setError(null);
     try {
       const localMeta = (await getLocalSyncMeta()) ?? null;
+      let diffRemoteFiles: Record<string, unknown> | null = null;
 
       // Check diff BEFORE writing anything to Drive
       if (localMeta) {
@@ -80,6 +112,7 @@ export function useSync() {
 
         if (!diffRes.ok) throw new Error("Failed to compute diff");
         const diffData = await diffRes.json();
+        diffRemoteFiles = (diffData.remoteMeta?.files as Record<string, unknown> | undefined) ?? null;
 
         if (diffData.diff.conflicts.length > 0) {
           setConflicts(diffData.diff.conflicts);
@@ -87,13 +120,8 @@ export function useSync() {
           return;
         }
 
-        // Reject push if remote is newer and has changes to pull
-        if (
-          diffData.remoteMeta?.lastUpdatedAt &&
-          localMeta.lastUpdatedAt &&
-          diffData.remoteMeta.lastUpdatedAt > localMeta.lastUpdatedAt &&
-          (diffData.diff.toPull.length > 0 || diffData.diff.remoteOnly.length > 0)
-        ) {
+        // Reject push when remote has pending changes that must be pulled first
+        if (diffData.diff.toPull.length > 0 || diffData.diff.remoteOnly.length > 0) {
           setError("settings.sync.pushRejected");
           setSyncStatus("error");
           return;
@@ -103,8 +131,14 @@ export function useSync() {
       // Safe to push — collect modified files and batch update on Drive
       const allModifiedIds = await getLocallyModifiedFileIds();
       const cachedRemote = await getCachedRemoteMeta();
-      const trackedFiles = cachedRemote?.files ?? {};
-      const modifiedIds = new Set([...allModifiedIds].filter((id) => trackedFiles[id]));
+      const trackedIds = collectTrackedIds(
+        cachedRemote?.files,
+        diffRemoteFiles,
+        localMeta?.files
+      );
+      const modifiedIds = trackedIds.size > 0
+        ? new Set([...allModifiedIds].filter((id) => trackedIds.has(id)))
+        : allModifiedIds;
 
       // Collect file contents from IndexedDB
       const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];
@@ -142,21 +176,18 @@ export function useSync() {
 
         // Update localSyncMeta directly from remoteMeta (no extra diff call)
         if (pushData.remoteMeta) {
-          const newLocal: LocalSyncMeta = {
-            id: "current",
-            lastUpdatedAt: pushData.remoteMeta.lastUpdatedAt,
-            files: {},
-          };
-          for (const [id, f] of Object.entries(pushData.remoteMeta.files) as [string, { md5Checksum: string; modifiedTime: string }][]) {
-            newLocal.files[id] = { md5Checksum: f.md5Checksum, modifiedTime: f.modifiedTime };
-          }
-          await setLocalSyncMeta(newLocal);
+          await setLocalSyncMeta(
+            toLocalSyncMeta(pushData.remoteMeta as {
+              lastUpdatedAt: string;
+              files: Record<string, { md5Checksum?: string; modifiedTime?: string }>;
+            })
+          );
         }
       }
 
       // Clear edit history only for files that were actually pushed
-      for (const fid of modifiedIds) {
-        await deleteEditHistoryEntry(fid);
+      for (const { fileId } of filesToPush) {
+        await deleteEditHistoryEntry(fileId);
       }
       const remainingModified = await getLocallyModifiedFileIds();
       setLocalModifiedCount(remainingModified.size);
@@ -360,17 +391,12 @@ export function useSync() {
 
         // Update local sync meta from remote meta
         if (data.remoteMeta) {
-          const metaToUpdate = localMeta ?? {
-            id: "current" as const,
-            lastUpdatedAt: new Date().toISOString(),
-            files: {} as Record<string, { md5Checksum: string; modifiedTime: string }>,
-          };
-          const fileEntry = data.remoteMeta.files[fileId];
-          if (fileEntry) {
-            metaToUpdate.files[fileId] = fileEntry;
-            metaToUpdate.lastUpdatedAt = new Date().toISOString();
-            await setLocalSyncMeta(metaToUpdate);
-          }
+          await setLocalSyncMeta(
+            toLocalSyncMeta(data.remoteMeta as {
+              lastUpdatedAt: string;
+              files: Record<string, { md5Checksum?: string; modifiedTime?: string }>;
+            })
+          );
         }
 
         // Remove resolved conflict (idle transition handled by useEffect)
@@ -475,10 +501,13 @@ export function useSync() {
     setError(null);
     try {
       // Collect modified files from IndexedDB (filter to tracked files only)
+      const localMeta = (await getLocalSyncMeta()) ?? null;
       const allModifiedIds = await getLocallyModifiedFileIds();
       const cachedRemote = await getCachedRemoteMeta();
-      const trackedFiles = cachedRemote?.files ?? {};
-      const modifiedIds = new Set([...allModifiedIds].filter((id) => trackedFiles[id]));
+      const trackedIds = collectTrackedIds(cachedRemote?.files, localMeta?.files);
+      const modifiedIds = trackedIds.size > 0
+        ? new Set([...allModifiedIds].filter((id) => trackedIds.has(id)))
+        : allModifiedIds;
       const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];
       for (const fid of modifiedIds) {
         const cached = await getCachedFile(fid);
@@ -514,20 +543,24 @@ export function useSync() {
 
         // Update localSyncMeta directly from remoteMeta
         if (pushData.remoteMeta) {
-          const newLocal: LocalSyncMeta = {
-            id: "current",
-            lastUpdatedAt: pushData.remoteMeta.lastUpdatedAt,
-            files: {},
-          };
-          for (const [id, f] of Object.entries(pushData.remoteMeta.files) as [string, { md5Checksum: string; modifiedTime: string }][]) {
-            newLocal.files[id] = { md5Checksum: f.md5Checksum, modifiedTime: f.modifiedTime };
-          }
-          await setLocalSyncMeta(newLocal);
+          await setLocalSyncMeta(
+            toLocalSyncMeta(pushData.remoteMeta as {
+              lastUpdatedAt: string;
+              files: Record<string, { md5Checksum?: string; modifiedTime?: string }>;
+            })
+          );
         }
       }
 
-      // All modified files were pushed to Drive, clear all edit history
-      await clearAllEditHistory();
+      // Clear all history only when every modified file was pushed.
+      // If any local edits were not pushed, keep remaining local history.
+      if (filesToPush.length === allModifiedIds.size) {
+        await clearAllEditHistory();
+      } else {
+        for (const { fileId } of filesToPush) {
+          await deleteEditHistoryEntry(fileId);
+        }
+      }
       const remainingModified = await getLocallyModifiedFileIds();
       setLocalModifiedCount(remainingModified.size);
       window.dispatchEvent(new Event("sync-complete"));

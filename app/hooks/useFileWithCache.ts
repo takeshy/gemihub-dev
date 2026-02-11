@@ -127,7 +127,6 @@ export function useFileWithCache(
             md5Checksum: md5,
             modifiedTime: modTime,
           };
-          syncMeta.lastUpdatedAt = new Date().toISOString();
           await setLocalSyncMeta(syncMeta);
         }
       } catch (err) {
