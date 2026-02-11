@@ -953,6 +953,7 @@ function IDEContent({
         onPush={push}
         onPull={pull}
         onShowConflicts={() => setShowConflictDialog(true)}
+        onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}
         onQuickOpen={() => setShowQuickOpen(true)}
         activeFilePath={activeFilePath}
         pluginSidebarViews={sidebarViews}

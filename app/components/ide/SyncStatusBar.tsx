@@ -5,6 +5,7 @@ import type { SyncStatus, ConflictInfo } from "~/hooks/useSync";
 import {
   getCachedRemoteMeta,
   getLocallyModifiedFileIds,
+  getLocalSyncMeta,
 } from "~/services/indexeddb-cache";
 
 interface SyncStatusBarProps {
@@ -42,7 +43,7 @@ export function SyncStatusBar({
   const conflictCount = conflicts.length;
   const isBusy = syncStatus === "pushing" || syncStatus === "pulling";
 
-  const [openList, setOpenList] = useState<"push" | null>(null);
+  const [openList, setOpenList] = useState<"push" | "pull" | null>(null);
   const [listFiles, setListFiles] = useState<FileListItem[]>([]);
   const [listLoading, setListLoading] = useState(false);
   // Filtered local modified count (only files tracked in remoteMeta)
@@ -84,30 +85,43 @@ export function SyncStatusBar({
     })();
   }, [localModifiedCount]);
 
-  const loadFileList = useCallback(async () => {
-    if (openList === "push") {
+  const loadFileList = useCallback(async (type: "push" | "pull") => {
+    if (openList === type) {
       setOpenList(null);
       return;
     }
 
     setListLoading(true);
-    setOpenList("push");
+    setOpenList(type);
 
     try {
       const remoteMeta = await getCachedRemoteMeta();
-      const nameMap = remoteMeta?.files ?? {};
+      const remoteFiles = remoteMeta?.files ?? {};
 
-      const localModified = await getLocallyModifiedFileIds();
-      const files: FileListItem[] = [];
-      // Only include files tracked in remoteMeta (exclude history/logs)
-      for (const id of localModified) {
-        if (nameMap[id]) {
-          files.push({ id, name: nameMap[id].name ?? id });
+      if (type === "push") {
+        const localModified = await getLocallyModifiedFileIds();
+        const files: FileListItem[] = [];
+        // Only include files tracked in remoteMeta (exclude history/logs)
+        for (const id of localModified) {
+          if (remoteFiles[id]) {
+            files.push({ id, name: remoteFiles[id].name ?? id });
+          }
         }
+        files.sort((a, b) => a.name.localeCompare(b.name));
+        setListFiles(files);
+      } else {
+        const localMeta = await getLocalSyncMeta();
+        const localFiles = localMeta?.files ?? {};
+        const files: FileListItem[] = [];
+        for (const [id, rf] of Object.entries(remoteFiles)) {
+          const lf = localFiles[id];
+          if (!lf || lf.md5Checksum !== (rf.md5Checksum ?? "")) {
+            files.push({ id, name: rf.name ?? id });
+          }
+        }
+        files.sort((a, b) => a.name.localeCompare(b.name));
+        setListFiles(files);
       }
-
-      files.sort((a, b) => a.name.localeCompare(b.name));
-      setListFiles(files);
     } catch {
       setListFiles([]);
     } finally {
@@ -144,7 +158,7 @@ export function SyncStatusBar({
       {pushCount > 0 && (
         <div className="relative" ref={openList === "push" ? popoverRef : undefined}>
           <button
-            onClick={() => loadFileList()}
+            onClick={() => loadFileList("push")}
             className="rounded-full bg-blue-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
           >
             {pushCount}
@@ -165,9 +179,17 @@ export function SyncStatusBar({
         {!compact && "Pull"}
       </button>
       {remoteModifiedCount > 0 && (
-        <span className="rounded-full bg-green-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white dark:bg-green-500">
-          {remoteModifiedCount}
-        </span>
+        <div className="relative" ref={openList === "pull" ? popoverRef : undefined}>
+          <button
+            onClick={() => loadFileList("pull")}
+            className="rounded-full bg-green-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
+          >
+            {remoteModifiedCount}
+          </button>
+          {openList === "pull" && (
+            <FileListPopover files={listFiles} loading={listLoading} />
+          )}
+        </div>
       )}
 
       {/* Conflict indicator */}
@@ -230,16 +252,26 @@ function FileListPopover({
         <div className="px-3 py-2 text-xs text-gray-400">No files</div>
       ) : (
         <div className="max-h-48 overflow-y-auto py-1">
-          {files.map((f) => (
-            <button
-              key={f.id}
-              className="block w-full truncate px-3 py-1 text-left text-xs text-blue-600 hover:bg-gray-100 hover:underline dark:text-blue-400 dark:hover:bg-gray-800"
-              title={f.name}
-              onClick={() => onSelect?.(f)}
-            >
-              {f.name}
-            </button>
-          ))}
+          {files.map((f) =>
+            onSelect ? (
+              <button
+                key={f.id}
+                className="block w-full truncate px-3 py-1 text-left text-xs text-blue-600 hover:bg-gray-100 hover:underline dark:text-blue-400 dark:hover:bg-gray-800"
+                title={f.name}
+                onClick={() => onSelect(f)}
+              >
+                {f.name}
+              </button>
+            ) : (
+              <div
+                key={f.id}
+                className="truncate px-3 py-1 text-xs text-gray-700 dark:text-gray-300"
+                title={f.name}
+              >
+                {f.name}
+              </div>
+            )
+          )}
         </div>
       )}
     </div>
