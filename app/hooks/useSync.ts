@@ -65,18 +65,6 @@ async function tryRagRetryPending(): Promise<void> {
   }
 }
 
-async function tryRagDeleteDoc(documentId: string | null | undefined): Promise<void> {
-  if (!documentId) return;
-  try {
-    await fetch("/api/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "ragDeleteDoc", documentId }),
-    });
-  } catch {
-    // best-effort cleanup
-  }
-}
 
 export function useSync() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
@@ -153,74 +141,73 @@ export function useSync() {
         }
       }
 
-      // Safe to push — update files directly on Drive
-      // Filter to only files tracked in remoteMeta (exclude history/logs)
+      // Safe to push — collect modified files and batch update on Drive
       const allModifiedIds = await getLocallyModifiedFileIds();
       const cachedRemote = await getCachedRemoteMeta();
       const trackedFiles = cachedRemote?.files ?? {};
       const modifiedIds = new Set([...allModifiedIds].filter((id) => trackedFiles[id]));
-      const meta = localMeta ?? {
-        id: "current" as const,
-        lastUpdatedAt: new Date().toISOString(),
-        files: {} as Record<string, { md5Checksum: string; modifiedTime: string }>,
-      };
 
+      // Collect file contents from IndexedDB
+      const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];
       for (const fid of modifiedIds) {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
-        const fileName = cached.fileName ?? fid;
+        filesToPush.push({ fileId: fid, content: cached.content, fileName: cached.fileName ?? fid });
+      }
 
-        // RAG registration (only for eligible file types) — failure does NOT block Drive push
-        let pendingRagUpdate: { fileName: string; ragFileInfo: { checksum: string; uploadedAt: number; fileId: string | null; status: "registered" | "pending" } } | null = null;
-        let pendingRagDocId: string | null = null;
-        if (isRagEligible(fileName)) {
-          const ragResult = await tryRagRegister(fid, cached.content, fileName);
-          if (!ragResult.ok) {
-            // RAG failed — record as pending, but continue with Drive update
-            pendingRagUpdate = { fileName, ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null, status: "pending" } };
-          } else if (!ragResult.skipped && ragResult.ragFileInfo) {
-            pendingRagUpdate = { fileName, ragFileInfo: { ...ragResult.ragFileInfo, status: "registered" } };
-            if (ragResult.storeName) ragStoreName = ragResult.storeName;
-            pendingRagDocId = ragResult.ragFileInfo.fileId ?? null;
+      // RAG registration (before Drive push, so we can roll back on failure)
+      for (const f of filesToPush) {
+        if (!isRagEligible(f.fileName)) continue;
+        const ragResult = await tryRagRegister(f.fileId, f.content, f.fileName);
+        if (!ragResult.ok) {
+          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null, status: "pending" } });
+        } else if (!ragResult.skipped && ragResult.ragFileInfo) {
+          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { ...ragResult.ragFileInfo, status: "registered" } });
+          if (ragResult.storeName) ragStoreName = ragResult.storeName;
+        }
+      }
+
+      // Batch push files to Drive via single API call
+      if (filesToPush.length > 0) {
+        const pushRes = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "pushFiles",
+            files: filesToPush.map(({ fileId, content }) => ({ fileId, content })),
+          }),
+        });
+        if (!pushRes.ok) throw new Error("Failed to push files");
+        const pushData = await pushRes.json();
+
+        // Update IndexedDB cache with new checksums/timestamps
+        for (const r of pushData.results as Array<{ fileId: string; md5Checksum: string; modifiedTime: string }>) {
+          const cached = await getCachedFile(r.fileId);
+          if (cached) {
+            await setCachedFile({
+              ...cached,
+              md5Checksum: r.md5Checksum,
+              modifiedTime: r.modifiedTime,
+              cachedAt: Date.now(),
+            });
           }
         }
 
-        // Drive update
-        let res: Response;
-        try {
-          res = await fetch("/api/drive/files", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "update",
-              fileId: fid,
-              content: cached.content,
-            }),
-          });
-        } catch (err) {
-          await tryRagDeleteDoc(pendingRagDocId);
-          throw err;
+        // Update localSyncMeta directly from remoteMeta (no extra diff call)
+        if (pushData.remoteMeta) {
+          const newLocal: LocalSyncMeta = {
+            id: "current",
+            lastUpdatedAt: pushData.remoteMeta.lastUpdatedAt,
+            files: {},
+          };
+          for (const [id, f] of Object.entries(pushData.remoteMeta.files) as [string, { md5Checksum: string; modifiedTime: string }][]) {
+            newLocal.files[id] = { md5Checksum: f.md5Checksum, modifiedTime: f.modifiedTime };
+          }
+          await setLocalSyncMeta(newLocal);
         }
-        if (!res.ok) {
-          await tryRagDeleteDoc(pendingRagDocId);
-          throw new Error(`Failed to update file ${cached.fileName ?? fid}`);
-        }
-        const data = await res.json();
-        meta.files[fid] = {
-          md5Checksum: data.md5Checksum,
-          modifiedTime: data.file.modifiedTime,
-        };
-        await setCachedFile({
-          ...cached,
-          md5Checksum: data.md5Checksum,
-          modifiedTime: data.file.modifiedTime,
-          cachedAt: Date.now(),
-        });
-        // Track RAG only after Drive update succeeds
-        if (pendingRagUpdate) ragUpdates.push(pendingRagUpdate);
       }
 
-      // Save RAG tracking info in one batch (even if ragStoreName is empty — server preserves existing storeName)
+      // Save RAG tracking info in one batch
       if (ragUpdates.length > 0) {
         await saveRagUpdates(ragUpdates, ragStoreName);
       }
@@ -233,29 +220,8 @@ export function useSync() {
       setLocalModifiedCount(remainingModified.size);
       window.dispatchEvent(new Event("sync-complete"));
 
-      // Rebuild localSyncMeta from server remoteMeta to stay in sync
-      const syncRes = await fetch("/api/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "diff", localMeta: null, locallyModifiedFileIds: [] }),
-      });
-      if (syncRes.ok) {
-        const syncData = await syncRes.json();
-        if (syncData.remoteMeta) {
-          const newLocal: LocalSyncMeta = {
-            id: "current",
-            lastUpdatedAt: syncData.remoteMeta.lastUpdatedAt,
-            files: {},
-          };
-          for (const [id, f] of Object.entries(syncData.remoteMeta.files) as [string, { md5Checksum: string; modifiedTime: string }][]) {
-            newLocal.files[id] = { md5Checksum: f.md5Checksum, modifiedTime: f.modifiedTime };
-          }
-          await setLocalSyncMeta(newLocal);
-        }
-      }
-
-      // Retry previously pending RAG registrations
-      await tryRagRetryPending();
+      // Retry previously pending RAG registrations (non-blocking)
+      tryRagRetryPending().catch(() => {});
 
       setLastSyncTime(new Date().toISOString());
       setSyncStatus("idle");
@@ -572,86 +538,71 @@ export function useSync() {
     const ragUpdates: Array<{ fileName: string; ragFileInfo: { checksum: string; uploadedAt: number; fileId: string | null; status: "registered" | "pending" } }> = [];
     let ragStoreName = "";
     try {
-      // Update modified files directly on Drive
+      // Collect modified files from IndexedDB
       const modifiedIds = await getLocallyModifiedFileIds();
-      const localMeta = (await getLocalSyncMeta()) ?? {
-        id: "current" as const,
-        lastUpdatedAt: new Date().toISOString(),
-        files: {} as Record<string, { md5Checksum: string; modifiedTime: string }>,
-      };
-
+      const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];
       for (const fid of modifiedIds) {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
-        const fileName = cached.fileName ?? fid;
+        filesToPush.push({ fileId: fid, content: cached.content, fileName: cached.fileName ?? fid });
+      }
 
-        // RAG registration (only for eligible file types) — failure does NOT block Drive push
-        let pendingRagUpdate: { fileName: string; ragFileInfo: { checksum: string; uploadedAt: number; fileId: string | null; status: "registered" | "pending" } } | null = null;
-        let pendingRagDocId: string | null = null;
-        if (isRagEligible(fileName)) {
-          const ragResult = await tryRagRegister(fid, cached.content, fileName);
-          if (!ragResult.ok) {
-            // RAG failed — record as pending, but continue with Drive update
-            pendingRagUpdate = { fileName, ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null, status: "pending" } };
-          } else if (!ragResult.skipped && ragResult.ragFileInfo) {
-            pendingRagUpdate = { fileName, ragFileInfo: { ...ragResult.ragFileInfo, status: "registered" } };
-            if (ragResult.storeName) ragStoreName = ragResult.storeName;
-            pendingRagDocId = ragResult.ragFileInfo.fileId ?? null;
+      // RAG registration (before Drive push)
+      for (const f of filesToPush) {
+        if (!isRagEligible(f.fileName)) continue;
+        const ragResult = await tryRagRegister(f.fileId, f.content, f.fileName);
+        if (!ragResult.ok) {
+          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null, status: "pending" } });
+        } else if (!ragResult.skipped && ragResult.ragFileInfo) {
+          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { ...ragResult.ragFileInfo, status: "registered" } });
+          if (ragResult.storeName) ragStoreName = ragResult.storeName;
+        }
+      }
+
+      // Batch push files to Drive via single API call
+      if (filesToPush.length > 0) {
+        const pushRes = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "pushFiles",
+            files: filesToPush.map(({ fileId, content }) => ({ fileId, content })),
+          }),
+        });
+        if (!pushRes.ok) throw new Error("Full push failed");
+        const pushData = await pushRes.json();
+
+        // Update IndexedDB cache with new checksums/timestamps
+        for (const r of pushData.results as Array<{ fileId: string; md5Checksum: string; modifiedTime: string }>) {
+          const cached = await getCachedFile(r.fileId);
+          if (cached) {
+            await setCachedFile({
+              ...cached,
+              md5Checksum: r.md5Checksum,
+              modifiedTime: r.modifiedTime,
+              cachedAt: Date.now(),
+            });
           }
         }
 
-        let res: Response;
-        try {
-          res = await fetch("/api/drive/files", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "update",
-              fileId: fid,
-              content: cached.content,
-            }),
-          });
-        } catch (err) {
-          await tryRagDeleteDoc(pendingRagDocId);
-          throw err;
+        // Update localSyncMeta directly from remoteMeta
+        if (pushData.remoteMeta) {
+          const newLocal: LocalSyncMeta = {
+            id: "current",
+            lastUpdatedAt: pushData.remoteMeta.lastUpdatedAt,
+            files: {},
+          };
+          for (const [id, f] of Object.entries(pushData.remoteMeta.files) as [string, { md5Checksum: string; modifiedTime: string }][]) {
+            newLocal.files[id] = { md5Checksum: f.md5Checksum, modifiedTime: f.modifiedTime };
+          }
+          await setLocalSyncMeta(newLocal);
         }
-        if (!res.ok) {
-          await tryRagDeleteDoc(pendingRagDocId);
-          throw new Error(`Failed to update file ${cached.fileName ?? fid}`);
-        }
-        const data = await res.json();
-        localMeta.files[fid] = {
-          md5Checksum: data.md5Checksum,
-          modifiedTime: data.file.modifiedTime,
-        };
-        await setCachedFile({
-          ...cached,
-          md5Checksum: data.md5Checksum,
-          modifiedTime: data.file.modifiedTime,
-          cachedAt: Date.now(),
-        });
-        if (pendingRagUpdate) ragUpdates.push(pendingRagUpdate);
       }
 
-      // Save RAG tracking info in one batch (even if ragStoreName is empty — server preserves existing storeName)
+      // Save RAG tracking info in one batch
       if (ragUpdates.length > 0) {
         await saveRagUpdates(ragUpdates, ragStoreName);
       }
-
-      localMeta.lastUpdatedAt = new Date().toISOString();
-      await setLocalSyncMeta(localMeta);
-
-      // Push metadata
-      const pushRes = await fetch("/api/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "fullPush",
-          localMeta: { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files },
-        }),
-      });
-
-      if (!pushRes.ok) throw new Error("Full push failed");
 
       // All modified files were pushed to Drive, clear all edit history
       await clearAllEditHistory();
@@ -659,8 +610,8 @@ export function useSync() {
       setLocalModifiedCount(remainingModified.size);
       window.dispatchEvent(new Event("sync-complete"));
 
-      // Retry previously pending RAG registrations
-      await tryRagRetryPending();
+      // Retry previously pending RAG registrations (non-blocking)
+      tryRagRetryPending().catch(() => {});
 
       setLastSyncTime(new Date().toISOString());
       setSyncStatus("idle");

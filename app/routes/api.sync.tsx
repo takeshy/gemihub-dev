@@ -25,6 +25,7 @@ import {
 import { parallelProcess } from "~/utils/parallel";
 import { getOrCreateStore, registerSingleFile, calculateChecksum, deleteSingleFileFromRag } from "~/services/file-search.server";
 import { DEFAULT_RAG_SETTING, DEFAULT_RAG_STORE_KEY } from "~/types/settings";
+import { saveEdit } from "~/services/edit-history.server";
 
 // GET: Fetch remote sync meta + current file list
 export async function loader({ request }: Route.LoaderArgs) {
@@ -52,7 +53,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   });
 }
 
-// POST: diff / pull / resolve / fullPush / fullPull / clearConflicts / detectUntracked / deleteUntracked / restoreUntracked
+// POST: diff / pull / resolve / pushFiles / fullPush / fullPull / clearConflicts / detectUntracked / deleteUntracked / restoreUntracked
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
@@ -69,6 +70,7 @@ export async function action({ request }: Route.ActionArgs) {
     "diff", "pull", "resolve", "fullPush", "fullPull",
     "clearConflicts", "detectUntracked", "deleteUntracked", "restoreUntracked",
     "listTrash", "restoreTrash", "listConflicts", "restoreConflict",
+    "pushFiles",
     "ragRegister", "ragSave", "ragDeleteDoc", "ragRetryPending",
   ]);
   if (!actionType || !VALID_ACTIONS.has(actionType)) {
@@ -537,6 +539,83 @@ export async function action({ request }: Route.ActionArgs) {
       } catch {
         return jsonWithCookie({ restored: 0, error: "Restore failed" });
       }
+    }
+
+    case "pushFiles": {
+      const files = body.files as Array<{ fileId: string; content: string }>;
+      if (!Array.isArray(files) || files.length === 0) {
+        return jsonWithCookie({ error: "Missing or empty files array" }, { status: 400 });
+      }
+
+      // Read sync meta once
+      const pushRemoteMeta =
+        (await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId))
+        ?? { lastUpdatedAt: new Date().toISOString(), files: {} as SyncMeta["files"] };
+
+      // Update files in parallel: read old content (for edit history), then update
+      const pushResults = await parallelProcess(files, async ({ fileId, content }) => {
+        let oldContent: string | null = null;
+        try {
+          oldContent = await readFile(validTokens.accessToken, fileId);
+        } catch {
+          // File might be new or unreadable, skip history
+        }
+
+        const existingMeta = pushRemoteMeta.files[fileId];
+        const mimeType = existingMeta?.mimeType || "text/plain";
+        const updated = await updateFile(validTokens.accessToken, fileId, content, mimeType);
+
+        return {
+          fileId,
+          md5Checksum: updated.md5Checksum ?? "",
+          modifiedTime: updated.modifiedTime ?? "",
+          name: updated.name,
+          mimeType: updated.mimeType,
+          oldContent,
+          newContent: content,
+        };
+      }, 5);
+
+      // Update meta entries from results
+      for (const r of pushResults) {
+        const existing = pushRemoteMeta.files[r.fileId];
+        pushRemoteMeta.files[r.fileId] = {
+          ...existing,
+          name: r.name || existing?.name || "",
+          mimeType: r.mimeType || existing?.mimeType || "",
+          md5Checksum: r.md5Checksum,
+          modifiedTime: r.modifiedTime,
+        };
+      }
+      pushRemoteMeta.lastUpdatedAt = new Date().toISOString();
+
+      // Write sync meta once
+      await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, pushRemoteMeta);
+
+      // Save remote edit history in parallel (best-effort, does not block response)
+      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+      const historyEntries = pushResults.filter(
+        (r) => r.oldContent != null && r.newContent != null && r.oldContent !== r.newContent
+      );
+      if (historyEntries.length > 0) {
+        parallelProcess(historyEntries, async (r) => {
+          await saveEdit(validTokens.accessToken, validTokens.rootFolderId, settings.editHistory, {
+            path: r.name,
+            oldContent: r.oldContent!,
+            newContent: r.newContent,
+            source: "manual",
+          });
+        }, 5).catch(() => {});
+      }
+
+      return jsonWithCookie({
+        results: pushResults.map((r) => ({
+          fileId: r.fileId,
+          md5Checksum: r.md5Checksum,
+          modifiedTime: r.modifiedTime,
+        })),
+        remoteMeta: pushRemoteMeta,
+      });
     }
 
     case "ragRegister": {
