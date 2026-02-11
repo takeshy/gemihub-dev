@@ -214,6 +214,8 @@ export function DriveFileTree({
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const swipeStartRef = useRef<{ x: number; y: number; time: number; item: CachedTreeNode } | null>(null);
+  const swipeElRef = useRef<HTMLElement | null>(null);
+  const swipeDirectionRef = useRef<"horizontal" | "vertical" | null>(null);
   const dragCounterRef = useRef(0);
   const folderDragCounterRef = useRef<Map<string, number>>(new Map());
   const { progress, upload, clearProgress } = useFileUpload();
@@ -791,16 +793,69 @@ export function DriveFileTree({
     []
   );
 
+  const resetSwipeEl = useCallback(() => {
+    const el = swipeElRef.current;
+    if (el) {
+      el.style.transition = "transform 200ms ease-out";
+      el.style.transform = "translateX(0)";
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        el.style.transform = "";
+        el.style.transition = "";
+      };
+      el.addEventListener("transitionend", cleanup, { once: true });
+      // Fallback in case transitionend doesn't fire
+      setTimeout(cleanup, 250);
+    }
+    swipeElRef.current = null;
+    swipeDirectionRef.current = null;
+  }, []);
+
   const handleSwipeStart = useCallback(
     (e: React.TouchEvent, item: CachedTreeNode) => {
       const touch = e.touches[0];
       swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now(), item };
+      swipeElRef.current = e.currentTarget as HTMLElement;
+      swipeDirectionRef.current = null;
     },
     []
   );
 
+  const handleSwipeMove = useCallback((e: React.TouchEvent) => {
+    if (!swipeStartRef.current || !swipeElRef.current) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - swipeStartRef.current.x;
+    const deltaY = touch.clientY - swipeStartRef.current.y;
+
+    // Lock direction once movement exceeds threshold
+    if (!swipeDirectionRef.current) {
+      if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+      swipeDirectionRef.current = Math.abs(deltaX) > Math.abs(deltaY) ? "horizontal" : "vertical";
+    }
+
+    // Vertical scroll — cancel swipe
+    if (swipeDirectionRef.current === "vertical") {
+      swipeElRef.current.style.transform = "";
+      swipeElRef.current.style.transition = "";
+      swipeElRef.current = null;
+      swipeStartRef.current = null;
+      swipeDirectionRef.current = null;
+      return;
+    }
+
+    // Right swipe animation with resistance
+    const capped = deltaX > 0 ? Math.min(deltaX * 0.6, 60) : 0;
+    swipeElRef.current.style.transition = "none";
+    swipeElRef.current.style.transform = `translateX(${capped}px)`;
+  }, []);
+
   const handleSwipeEnd = useCallback((e: React.TouchEvent) => {
-    if (!swipeStartRef.current) return;
+    if (!swipeStartRef.current) {
+      resetSwipeEl();
+      return;
+    }
     const touch = e.changedTouches[0];
     const deltaX = touch.clientX - swipeStartRef.current.x;
     const deltaY = touch.clientY - swipeStartRef.current.y;
@@ -808,12 +863,14 @@ export function DriveFileTree({
     const item = swipeStartRef.current.item;
     swipeStartRef.current = null;
 
+    resetSwipeEl();
+
     // Right swipe: horizontal, quick, mostly horizontal direction
     if (deltaX > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 2 && elapsed < 400) {
       e.preventDefault(); // Prevent synthetic click from selecting/opening the item
       setContextMenu({ x: touch.clientX, y: touch.clientY, item });
     }
-  }, []);
+  }, [resetSwipeEl]);
 
   // Collect all real file IDs under a virtual folder node
   const collectFileIds = useCallback(
@@ -1526,6 +1583,7 @@ export function DriveFileTree({
             onContextMenu={(e) => handleContextMenu(e, item)}
             {...(isMobile ? {
               onTouchStart: (e: React.TouchEvent) => handleSwipeStart(e, item),
+              onTouchMove: handleSwipeMove,
               onTouchEnd: handleSwipeEnd,
             } : {})}
             onDragStart={(e) => {
@@ -1585,6 +1643,7 @@ export function DriveFileTree({
         onContextMenu={(e) => handleContextMenu(e, item)}
         {...(isMobile ? {
           onTouchStart: (e: React.TouchEvent) => handleSwipeStart(e, item),
+          onTouchMove: handleSwipeMove,
           onTouchEnd: handleSwipeEnd,
         } : {})}
         onDragStart={(e) => {
