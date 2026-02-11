@@ -547,7 +547,7 @@ function IDEContent({
 
   // Mobile view state: which panel is shown full-screen
   const [mobileView, setMobileView] = useState<MobileView>("editor");
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   // Mobile plugin menu state
   const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
@@ -568,7 +568,13 @@ function IDEContent({
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    const edgeThreshold = 30;
+    const screenWidth = window.innerWidth;
+    if (touch.clientX <= edgeThreshold || touch.clientX >= screenWidth - edgeThreshold) {
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    } else {
+      touchStartRef.current = null;
+    }
   }, []);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
@@ -576,9 +582,10 @@ function IDEContent({
     const touch = e.changedTouches[0];
     const deltaX = touch.clientX - touchStartRef.current.x;
     const deltaY = touch.clientY - touchStartRef.current.y;
+    const elapsed = Date.now() - touchStartRef.current.time;
     touchStartRef.current = null;
 
-    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY)) {
+    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) && elapsed < 200) {
       const currentIndex = MOBILE_VIEW_ORDER.indexOf(mobileView);
       const nextIndex = deltaX > 0 ? currentIndex - 1 : currentIndex + 1;
       if (nextIndex >= 0 && nextIndex < MOBILE_VIEW_ORDER.length) {
