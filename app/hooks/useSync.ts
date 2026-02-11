@@ -383,6 +383,10 @@ export function useSync() {
 
       setLastSyncTime(new Date().toISOString());
       window.dispatchEvent(new Event("sync-complete"));
+      const pulledIds = (pullData.files as { fileId: string }[]).map((f) => f.fileId);
+      if (pulledIds.length > 0) {
+        window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: pulledIds } }));
+      }
       const remainingModified = await getLocallyModifiedFileIds();
       setLocalModifiedCount(remainingModified.size);
       setSyncStatus("idle");
@@ -470,6 +474,9 @@ export function useSync() {
 
         // Notify file tree to refresh
         window.dispatchEvent(new Event("sync-complete"));
+        if (choice === "remote") {
+          window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: [fileId] } }));
+        }
 
         // Update modified count after clearing edit history
         const remainingModified = await getLocallyModifiedFileIds();
@@ -546,6 +553,10 @@ export function useSync() {
       await setLocalSyncMeta(updatedMeta);
       setLastSyncTime(new Date().toISOString());
       window.dispatchEvent(new Event("sync-complete"));
+      const pulledIds = (data.files as { fileId: string }[]).map((f) => f.fileId);
+      if (pulledIds.length > 0) {
+        window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: pulledIds } }));
+      }
       const remainingModified = await getLocallyModifiedFileIds();
       setLocalModifiedCount(remainingModified.size);
       setSyncStatus("idle");

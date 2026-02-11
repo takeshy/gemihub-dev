@@ -287,6 +287,22 @@ export function useFileWithCache(
     return () => window.removeEventListener("file-restored", handler);
   }, [fileId]);
 
+  // After pull/fullPull/resolve-remote, re-read cached content for the current file
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      if (!fileId || fileId.startsWith("new:")) return;
+      const pulledIds: string[] = (e as CustomEvent).detail?.fileIds ?? [];
+      if (pulledIds.length > 0 && !pulledIds.includes(fileId)) return;
+      const cached = await getCachedFile(fileId);
+      if (cached && currentFileId.current === fileId) {
+        setContent(cached.content);
+        initSnapshot(fileId, cached.content).catch(() => {});
+      }
+    };
+    window.addEventListener("files-pulled", handler);
+    return () => window.removeEventListener("files-pulled", handler);
+  }, [fileId]);
+
   // When a new: file is migrated to a real Drive ID externally (by DriveFileTree),
   // update currentFileId so subsequent saveToCache calls use the real ID.
   useEffect(() => {
