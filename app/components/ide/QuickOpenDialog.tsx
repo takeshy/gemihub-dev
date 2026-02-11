@@ -9,6 +9,7 @@ interface QuickOpenDialogProps {
   onClose: () => void;
   fileList: FileListItem[];
   onSelectFile: (id: string, name: string, mimeType: string) => void;
+  zClass?: string;
 }
 
 function guessMimeType(name: string): string {
@@ -18,7 +19,7 @@ function guessMimeType(name: string): string {
 
 const MAX_VISIBLE = 10;
 
-export function QuickOpenDialog({ open, onClose, fileList, onSelectFile }: QuickOpenDialogProps) {
+export function QuickOpenDialog({ open, onClose, fileList, onSelectFile, zClass = "z-50" }: QuickOpenDialogProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -95,7 +96,7 @@ export function QuickOpenDialog({ open, onClose, fileList, onSelectFile }: Quick
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-center"
+      className={`fixed inset-0 flex justify-center ${zClass}`}
       onClick={onClose}
     >
       {/* Backdrop */}

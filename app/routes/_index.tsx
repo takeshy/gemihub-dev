@@ -1184,7 +1184,7 @@ function IDEContent({
         onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}
       />
 
-      {/* Image picker for wysimark-lite file select */}
+      {/* Image picker for wysimark-lite file select (z-[1001] to sit above wysimark dialog z-index:1000) */}
       <QuickOpenDialog
         open={showImagePicker}
         onClose={() => {
@@ -1199,6 +1199,7 @@ function IDEContent({
           imagePickerResolverRef.current?.(url);
           imagePickerResolverRef.current = null;
         }}
+        zClass="z-[1001]"
       />
 
       {/* Password prompt for API key unlock */}
