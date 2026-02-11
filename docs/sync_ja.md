@@ -84,32 +84,31 @@ Diff アルゴリズムは3つのデータソースを比較します:
    │   └─ リモートが新しい & 未 Pull の変更あり → エラー「先に Pull して」
    └─ localMeta が null（初回同期）: 事前チェックをスキップし直接続行
 
-2. アップロード: Drive 上のファイルを直接更新
+2. バッチアップロード: 全ファイルを単一 API コールで更新
    ├─ IndexedDB の editHistory から変更ファイル ID を取得
    ├─ キャッシュ済み remoteMeta で追跡されているファイルのみにフィルタ
-   ├─ 各変更ファイルについて:
-   │   ├─ IndexedDB キャッシュから内容を読み取り
-   │   ├─ （オプション）対象ファイルタイプの RAG 登録
-   │   │   └─ 失敗しても Drive 更新はブロックされない（"pending" として記録）
-   │   ├─ POST /api/drive/files { action: "update", fileId, content }
-   │   │   └─ サーバー: Drive 上のファイルを更新、_sync-meta.json を更新
-   │   │       → 新しい md5Checksum, modifiedTime を返す
-   │   ├─ Drive 更新失敗時: 登録済みの RAG ドキュメントをクリーンアップ
-   │   ├─ LocalSyncMeta を新しい md5/modifiedTime で更新
-   │   └─ IndexedDB キャッシュを新しい md5/modifiedTime で更新
-   ├─ 全更新ファイルの RAG 追跡情報を一括保存
+   ├─ IndexedDB キャッシュから全変更ファイルの内容を読み取り
+   ├─ POST /api/sync { action: "pushFiles", files: [{ fileId, content }, ...] }
+   │   └─ サーバー:
+   │       ├─ _sync-meta.json を1回読み取り
+   │       ├─ 各ファイル（並列、最大5同時実行）:
+   │       │   ├─ Drive から旧コンテンツを読み取り（編集履歴用）
+   │       │   └─ Drive 上のファイルを更新
+   │       ├─ _sync-meta.json を1回書き込み（全ファイルの新 md5/modifiedTime で）
+   │       ├─ リモート編集履歴をバックグラウンドで保存（best-effort）
+   │       └─ results + 更新済み remoteMeta を返す
+   ├─ IndexedDB キャッシュを新しい md5/modifiedTime で更新
+   └─ 返された remoteMeta から LocalSyncMeta を直接更新
 
 3. クリーンアップ
    ├─ Push したファイルの editHistory のみクリア
    ├─ localModifiedCount を更新
    └─ "sync-complete" イベント発火（UI 更新用）
 
-4. メタデータ同期
-   ├─ POST /api/sync { action: "diff", localMeta: null }
-   │   └─ サーバー: 現在の remoteMeta を返す
-   └─ サーバーの remoteMeta から LocalSyncMeta を再構築
-
-5. RAG リトライ
+4. RAG（バックグラウンド、ノンブロッキング）
+   ├─ 対象ファイルを RAG ストアに登録
+   │   └─ 失敗時は RAG 追跡メタに "pending" として記録
+   ├─ RAG 追跡情報を保存
    └─ 以前失敗した RAG 登録をリトライ
 ```
 
@@ -203,13 +202,11 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 ### フロー
 
-1. **変更ファイルをアップロード** — 各変更ファイルを `/api/drive/files` 経由で Drive に直接更新（対象ファイルはオプションで RAG 登録）
-2. **RAG 追跡情報を一括保存** — 全更新ファイルの RAG 追跡情報を保存
-3. **IndexedDB を更新** — キャッシュと LocalSyncMeta を新しい md5/modifiedTime で更新
-4. **ローカルメタの全エントリをリモートの `_sync-meta.json` にマージ**（`fullPush` アクション経由）
-5. **全編集履歴をクリア**
-6. **"sync-complete" イベント発火** + localModifiedCount を更新
-7. **RAG リトライ** — 以前失敗した RAG 登録をリトライ
+1. **バッチアップロード** — 全変更ファイルを単一の `pushFiles` API コールで送信。サーバーは Drive ファイルを並列更新（最大5同時実行）し、`_sync-meta.json` の読み書きは1回ずつ、リモート編集履歴はバックグラウンドで保存
+2. **IndexedDB を更新** — サーバーレスポンスの md5/modifiedTime でキャッシュと LocalSyncMeta を更新
+3. **全編集履歴をクリア**
+4. **"sync-complete" イベント発火** + localModifiedCount を更新
+5. **RAG 登録（バックグラウンド）** — 対象ファイルを登録し、追跡情報を保存、失敗した登録をリトライ
 
 ### 使用するタイミング
 
@@ -426,7 +423,7 @@ Push 後、diff は Drive に保存済みのため、Push されたファイル�
 |---------|------|
 | `app/hooks/useSync.ts` | クライアント側の同期フック（push, pull, resolveConflict, fullPush, fullPull, localModifiedCount） |
 | `app/hooks/useFileWithCache.ts` | IndexedDB キャッシュ優先のファイル読取、編集履歴付き自動保存 |
-| `app/routes/api.sync.tsx` | サーバー側の同期 API（17 POST アクション） |
+| `app/routes/api.sync.tsx` | サーバー側の同期 API（18 POST アクション） |
 | `app/routes/api.drive.files.tsx` | Drive ファイル CRUD（Push 時のファイル直接更新に使用、削除は trash/ に移動） |
 | `app/services/sync-meta.server.ts` | 同期メタデータの読取・書込・再構築・Diff |
 | `app/services/indexeddb-cache.ts` | IndexedDB キャッシュ（files, syncMeta, fileTree, editHistory, remoteMeta） |
@@ -446,6 +443,7 @@ Push 後、diff は Drive に保存済みのため、Push されたファイル�
 | `pull` | POST | 指定 ID のファイル内容をダウンロードし、同期メタを更新/削除 |
 | `resolve` | POST | コンフリクト解決（敗者をバックアップ、Drive ファイルとメタを更新） |
 | `fullPull` | POST | リモートの全ファイルをダウンロード（一致分はスキップ） |
+| `pushFiles` | POST | 複数ファイルを Drive に並列バッチ更新し、同期メタの読み書きを1回で完了 |
 | `fullPush` | POST | ローカルの全メタをリモートメタにマージ |
 | `clearConflicts` | POST | コンフリクトフォルダの全ファイルを削除 |
 | `detectUntracked` | POST | 同期メタに含まれない Drive 上のファイルを検出 |

@@ -592,20 +592,26 @@ export async function action({ request }: Route.ActionArgs) {
       // Write sync meta once
       await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, pushRemoteMeta);
 
-      // Save remote edit history in parallel (best-effort, does not block response)
-      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+      // Save remote edit history in background (best-effort, does not block response)
       const historyEntries = pushResults.filter(
         (r) => r.oldContent != null && r.newContent != null && r.oldContent !== r.newContent
       );
       if (historyEntries.length > 0) {
-        parallelProcess(historyEntries, async (r) => {
-          await saveEdit(validTokens.accessToken, validTokens.rootFolderId, settings.editHistory, {
-            path: r.name,
-            oldContent: r.oldContent!,
-            newContent: r.newContent,
-            source: "manual",
-          });
-        }, 5).catch(() => {});
+        (async () => {
+          try {
+            const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+            await parallelProcess(historyEntries, async (r) => {
+              await saveEdit(validTokens.accessToken, validTokens.rootFolderId, settings.editHistory, {
+                path: r.name,
+                oldContent: r.oldContent!,
+                newContent: r.newContent,
+                source: "manual",
+              });
+            }, 5);
+          } catch {
+            // best-effort
+          }
+        })();
       }
 
       return jsonWithCookie({

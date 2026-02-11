@@ -65,6 +65,32 @@ async function tryRagRetryPending(): Promise<void> {
   }
 }
 
+function ragRegisterInBackground(
+  filesToPush: Array<{ fileId: string; content: string; fileName: string }>
+): void {
+  (async () => {
+    const ragUpdates: Array<{ fileName: string; ragFileInfo: { checksum: string; uploadedAt: number; fileId: string | null; status: "registered" | "pending" } }> = [];
+    let ragStoreName = "";
+    for (const f of filesToPush) {
+      if (!isRagEligible(f.fileName)) continue;
+      try {
+        const ragResult = await tryRagRegister(f.fileId, f.content, f.fileName);
+        if (!ragResult.ok) {
+          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null, status: "pending" } });
+        } else if (!ragResult.skipped && ragResult.ragFileInfo) {
+          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { ...ragResult.ragFileInfo, status: "registered" } });
+          if (ragResult.storeName) ragStoreName = ragResult.storeName;
+        }
+      } catch {
+        ragUpdates.push({ fileName: f.fileName, ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null, status: "pending" } });
+      }
+    }
+    if (ragUpdates.length > 0) {
+      await saveRagUpdates(ragUpdates, ragStoreName);
+    }
+    await tryRagRetryPending();
+  })().catch(() => {});
+}
 
 export function useSync() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
@@ -100,9 +126,6 @@ export function useSync() {
   const push = useCallback(async () => {
     setSyncStatus("pushing");
     setError(null);
-    // Declare outside try so catch block can access for best-effort RAG save
-    const ragUpdates: Array<{ fileName: string; ragFileInfo: { checksum: string; uploadedAt: number; fileId: string | null; status: "registered" | "pending" } }> = [];
-    let ragStoreName = "";
     try {
       const localMeta = (await getLocalSyncMeta()) ?? null;
 
@@ -155,18 +178,6 @@ export function useSync() {
         filesToPush.push({ fileId: fid, content: cached.content, fileName: cached.fileName ?? fid });
       }
 
-      // RAG registration (before Drive push, so we can roll back on failure)
-      for (const f of filesToPush) {
-        if (!isRagEligible(f.fileName)) continue;
-        const ragResult = await tryRagRegister(f.fileId, f.content, f.fileName);
-        if (!ragResult.ok) {
-          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null, status: "pending" } });
-        } else if (!ragResult.skipped && ragResult.ragFileInfo) {
-          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { ...ragResult.ragFileInfo, status: "registered" } });
-          if (ragResult.storeName) ragStoreName = ragResult.storeName;
-        }
-      }
-
       // Batch push files to Drive via single API call
       if (filesToPush.length > 0) {
         const pushRes = await fetch("/api/sync", {
@@ -207,11 +218,6 @@ export function useSync() {
         }
       }
 
-      // Save RAG tracking info in one batch
-      if (ragUpdates.length > 0) {
-        await saveRagUpdates(ragUpdates, ragStoreName);
-      }
-
       // Clear edit history only for files that were actually pushed
       for (const fid of modifiedIds) {
         await deleteEditHistoryEntry(fid);
@@ -220,16 +226,12 @@ export function useSync() {
       setLocalModifiedCount(remainingModified.size);
       window.dispatchEvent(new Event("sync-complete"));
 
-      // Retry previously pending RAG registrations (non-blocking)
-      tryRagRetryPending().catch(() => {});
-
       setLastSyncTime(new Date().toISOString());
       setSyncStatus("idle");
+
+      // RAG registration + retry in background (non-blocking)
+      ragRegisterInBackground(filesToPush);
     } catch (err) {
-      // Best-effort: save RAG tracking for files that did succeed, to prevent orphans
-      if (ragUpdates.length > 0) {
-        try { await saveRagUpdates(ragUpdates, ragStoreName); } catch { /* ignore */ }
-      }
       setError(err instanceof Error ? err.message : "Push failed");
       setSyncStatus("error");
     }
@@ -535,8 +537,6 @@ export function useSync() {
   const fullPush = useCallback(async () => {
     setSyncStatus("pushing");
     setError(null);
-    const ragUpdates: Array<{ fileName: string; ragFileInfo: { checksum: string; uploadedAt: number; fileId: string | null; status: "registered" | "pending" } }> = [];
-    let ragStoreName = "";
     try {
       // Collect modified files from IndexedDB
       const modifiedIds = await getLocallyModifiedFileIds();
@@ -545,18 +545,6 @@ export function useSync() {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
         filesToPush.push({ fileId: fid, content: cached.content, fileName: cached.fileName ?? fid });
-      }
-
-      // RAG registration (before Drive push)
-      for (const f of filesToPush) {
-        if (!isRagEligible(f.fileName)) continue;
-        const ragResult = await tryRagRegister(f.fileId, f.content, f.fileName);
-        if (!ragResult.ok) {
-          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null, status: "pending" } });
-        } else if (!ragResult.skipped && ragResult.ragFileInfo) {
-          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { ...ragResult.ragFileInfo, status: "registered" } });
-          if (ragResult.storeName) ragStoreName = ragResult.storeName;
-        }
       }
 
       // Batch push files to Drive via single API call
@@ -599,27 +587,18 @@ export function useSync() {
         }
       }
 
-      // Save RAG tracking info in one batch
-      if (ragUpdates.length > 0) {
-        await saveRagUpdates(ragUpdates, ragStoreName);
-      }
-
       // All modified files were pushed to Drive, clear all edit history
       await clearAllEditHistory();
       const remainingModified = await getLocallyModifiedFileIds();
       setLocalModifiedCount(remainingModified.size);
       window.dispatchEvent(new Event("sync-complete"));
 
-      // Retry previously pending RAG registrations (non-blocking)
-      tryRagRetryPending().catch(() => {});
-
       setLastSyncTime(new Date().toISOString());
       setSyncStatus("idle");
+
+      // RAG registration + retry in background (non-blocking)
+      ragRegisterInBackground(filesToPush);
     } catch (err) {
-      // Best-effort: save RAG tracking for files that did succeed, to prevent orphans
-      if (ragUpdates.length > 0) {
-        try { await saveRagUpdates(ragUpdates, ragStoreName); } catch { /* ignore */ }
-      }
       setError(err instanceof Error ? err.message : "Full push failed");
       setSyncStatus("error");
     }
