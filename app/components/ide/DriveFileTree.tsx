@@ -1308,25 +1308,31 @@ export function DriveFileTree({
           icon: <Download size={ICON.MD} />,
           onClick: async () => {
             const fileName = item.name.split("/").pop() || item.name;
-            const cached = await getCachedFile(item.id);
-            if (cached) {
-              const blob = new Blob([cached.content], { type: "text/plain" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = fileName;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              URL.revokeObjectURL(url);
-            } else {
-              const a = document.createElement("a");
-              a.href = `/api/drive/files?action=raw&fileId=${item.id}`;
-              a.download = fileName;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
+            const isBinary = item.mimeType?.startsWith("image/") ||
+              item.mimeType?.startsWith("video/") ||
+              item.mimeType?.startsWith("audio/") ||
+              item.mimeType === "application/pdf";
+            if (!isBinary) {
+              const cached = await getCachedFile(item.id);
+              if (cached) {
+                const blob = new Blob([cached.content], { type: item.mimeType || "text/plain" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                return;
+              }
             }
+            const a = document.createElement("a");
+            a.href = `/api/drive/files?action=raw&fileId=${item.id}`;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
           },
         });
 
