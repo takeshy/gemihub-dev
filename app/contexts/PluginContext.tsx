@@ -55,7 +55,6 @@ export function PluginProvider({
   const [loading, setLoading] = useState(false);
   const loadedRef = useRef<Set<string>>(new Set());
   const apiMapRef = useRef<Map<string, PluginAPI>>(new Map());
-  const cancelledRef = useRef(false);
 
   const addView = useCallback((view: PluginView) => {
     if (view.location === "sidebar") {
@@ -84,7 +83,7 @@ export function PluginProvider({
   }, []);
 
   useEffect(() => {
-    cancelledRef.current = false;
+    let isCancelled = false;
 
     const enabledConfigs = pluginConfigs.filter((c) => c.enabled);
     const enabledIds = new Set(enabledConfigs.map((c) => c.id));
@@ -116,7 +115,10 @@ export function PluginProvider({
       (c) => !loadedRef.current.has(c.id)
     );
 
-    if (toLoad.length === 0) return;
+    if (toLoad.length === 0) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
 
@@ -132,7 +134,7 @@ export function PluginProvider({
           const instance = await loadPlugin(config, api);
           await loadPluginStyles(config);
 
-          if (cancelledRef.current) {
+          if (isCancelled) {
             unloadPlugin(instance);
             return null;
           }
@@ -146,7 +148,7 @@ export function PluginProvider({
         }
       })
     ).then((loaded) => {
-      if (cancelledRef.current) return;
+      if (isCancelled) return;
       const valid = loaded.filter(Boolean) as PluginInstance[];
       if (valid.length > 0) {
         setPlugins((prev) => [...prev, ...valid]);
@@ -155,7 +157,7 @@ export function PluginProvider({
     });
 
     return () => {
-      cancelledRef.current = true;
+      isCancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pluginConfigs]);

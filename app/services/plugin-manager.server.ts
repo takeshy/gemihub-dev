@@ -24,6 +24,52 @@ interface GitHubRelease {
   assets: GitHubReleaseAsset[];
 }
 
+function parsePluginManifest(content: string): PluginManifest {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error("Invalid manifest.json: must be valid JSON");
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Invalid manifest.json: expected object");
+  }
+
+  const manifest = parsed as Partial<PluginManifest>;
+  const requiredFields: Array<keyof PluginManifest> = [
+    "id",
+    "name",
+    "version",
+    "minAppVersion",
+    "description",
+    "author",
+  ];
+
+  for (const field of requiredFields) {
+    const value = manifest[field];
+    if (typeof value !== "string" || value.trim() === "") {
+      throw new Error(`Invalid manifest.json: "${field}" must be a non-empty string`);
+    }
+  }
+
+  const id = manifest.id!.trim();
+  if (!/^[A-Za-z0-9._-]+$/.test(id) || id === "." || id === "..") {
+    throw new Error(
+      'Invalid manifest.json: "id" may contain only letters, numbers, dot, underscore, and hyphen'
+    );
+  }
+
+  return {
+    id,
+    name: manifest.name!.trim(),
+    version: manifest.version!.trim(),
+    minAppVersion: manifest.minAppVersion!.trim(),
+    description: manifest.description!.trim(),
+    author: manifest.author!.trim(),
+  };
+}
+
 /**
  * Ensure the plugins/ folder exists under root
  */
@@ -66,7 +112,8 @@ async function downloadAsset(url: string): Promise<string> {
 export async function installPlugin(
   accessToken: string,
   rootFolderId: string,
-  repo: string
+  repo: string,
+  expectedPluginId?: string
 ): Promise<{ manifest: PluginManifest; version: string }> {
   const release = await fetchLatestRelease(repo);
   const version = release.tag_name;
@@ -89,7 +136,12 @@ export async function installPlugin(
     stylesAsset ? downloadAsset(stylesAsset.browser_download_url) : Promise.resolve(""),
   ]);
 
-  const manifest: PluginManifest = JSON.parse(manifestContent);
+  const manifest = parsePluginManifest(manifestContent);
+  if (expectedPluginId && manifest.id !== expectedPluginId) {
+    throw new Error(
+      `Update manifest ID mismatch: expected "${expectedPluginId}", got "${manifest.id}"`
+    );
+  }
 
   // Create plugin folder in Drive: plugins/{plugin-id}/
   const pluginsFolderId = await ensurePluginsFolder(accessToken, rootFolderId);

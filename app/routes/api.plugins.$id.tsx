@@ -15,7 +15,6 @@ import {
   isLocalPlugin,
   getLocalPluginData,
   saveLocalPluginData,
-  uninstallLocalPlugin,
 } from "~/services/local-plugins.server";
 
 // ---------------------------------------------------------------------------
@@ -103,8 +102,13 @@ export async function action({ request, params }: Route.ActionArgs) {
     // Uninstall plugin
     try {
       if (isLocalPlugin(pluginId)) {
-        uninstallLocalPlugin(pluginId);
-        return jsonWithCookie({ success: true });
+        return jsonWithCookie(
+          {
+            error:
+              "Local plugins cannot be uninstalled from the UI. Remove plugins/{id}/ manually.",
+          },
+          { status: 400 }
+        );
       }
 
       await uninstallPlugin(
@@ -228,7 +232,8 @@ export async function action({ request, params }: Route.ActionArgs) {
         const { manifest, version } = await installPlugin(
           validTokens.accessToken,
           validTokens.rootFolderId,
-          plugin.repo
+          plugin.repo,
+          plugin.id
         );
 
         // Update version in settings

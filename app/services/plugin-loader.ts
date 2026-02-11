@@ -4,6 +4,7 @@ import type { PluginConfig } from "~/types/settings";
 import type { PluginManifest, PluginInstance, PluginAPI } from "~/types/plugin";
 import React from "react";
 import ReactDOM from "react-dom";
+import * as ReactDOMClient from "react-dom/client";
 
 // ---------------------------------------------------------------------------
 // IndexedDB cache for plugin assets
@@ -89,7 +90,7 @@ function createRequire() {
   const modules: Record<string, unknown> = {
     react: React,
     "react-dom": ReactDOM,
-    "react-dom/client": ReactDOM,
+    "react-dom/client": ReactDOMClient,
   };
   return (name: string): unknown => {
     if (name in modules) return modules[name];

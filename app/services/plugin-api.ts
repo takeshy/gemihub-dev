@@ -22,8 +22,9 @@ export function createPluginAPI(
     language,
 
     registerView(view) {
+      const namespacedViewId = `${pluginId}:${view.id}`;
       callbacks.onRegisterView({
-        id: view.id,
+        id: namespacedViewId,
         pluginId,
         name: view.name,
         icon: view.icon,

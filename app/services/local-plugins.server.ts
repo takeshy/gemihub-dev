@@ -117,15 +117,10 @@ export function saveLocalPluginData(
 }
 
 /**
- * Uninstall a local plugin by deleting its directory.
+ * Local plugin uninstall is intentionally blocked to avoid accidental source deletion.
  */
 export function uninstallLocalPlugin(pluginId: string): void {
-  const dirPath = path.resolve(PLUGINS_DIR, pluginId);
-  if (!dirPath.startsWith(PLUGINS_DIR + path.sep)) {
-    throw new Error("Invalid plugin ID");
-  }
-  if (!fs.existsSync(dirPath)) {
-    throw new Error(`Plugin directory not found: ${pluginId}`);
-  }
-  fs.rmSync(dirPath, { recursive: true, force: true });
+  throw new Error(
+    `Local plugins cannot be uninstalled from the UI. Remove plugins/${pluginId}/ manually.`
+  );
 }

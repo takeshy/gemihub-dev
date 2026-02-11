@@ -123,6 +123,14 @@ export function PluginsTab({ settings }: PluginsTabProps) {
 
   const handleUninstall = useCallback(
     async (pluginId: string) => {
+      const plugin = plugins.find((p) => p.id === pluginId);
+      if (plugin?.source === "local") {
+        showStatus(
+          "error",
+          "Local plugins cannot be uninstalled from the UI."
+        );
+        return;
+      }
       if (!confirm(t("plugins.confirmUninstall"))) return;
       setDeletingId(pluginId);
       try {
@@ -141,7 +149,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
         setDeletingId(null);
       }
     },
-    [showStatus, t]
+    [plugins, showStatus, t]
   );
 
   const handleUpdate = useCallback(
@@ -335,18 +343,20 @@ export function PluginsTab({ settings }: PluginsTabProps) {
                         </>
                       )}
                       {/* Uninstall */}
-                      <button
-                        onClick={() => handleUninstall(plugin.id)}
-                        disabled={deletingId === plugin.id}
-                        className="p-1.5 rounded text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
-                        title={t("plugins.uninstall")}
-                      >
-                        {deletingId === plugin.id ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <Trash2 size={14} />
-                        )}
-                      </button>
+                      {plugin.source !== "local" && (
+                        <button
+                          onClick={() => handleUninstall(plugin.id)}
+                          disabled={deletingId === plugin.id}
+                          className="p-1.5 rounded text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+                          title={t("plugins.uninstall")}
+                        >
+                          {deletingId === plugin.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={14} />
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                   {/* Plugin settings panel */}
