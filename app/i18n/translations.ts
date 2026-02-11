@@ -344,6 +344,10 @@ export interface TranslationStrings {
   "trash.softDeleteConfirm": string;
   "trash.softDeleteFolderConfirm": string;
   "trash.conflictInfo": string;
+
+  // Offline
+  "offline.indicator": string;
+  "offline.banner": string;
 }
 
 const en: TranslationStrings = {
@@ -689,6 +693,10 @@ const en: TranslationStrings = {
   "trash.softDeleteConfirm": "Move \"{name}\" to trash?",
   "trash.softDeleteFolderConfirm": "Move all {count} file(s) in folder \"{name}\" to trash?",
   "trash.conflictInfo": "Conflict backups created during sync resolution.",
+
+  // Offline
+  "offline.indicator": "Offline",
+  "offline.banner": "You are in offline mode. Some features are unavailable.",
 };
 
 const ja: TranslationStrings = {
@@ -1034,6 +1042,10 @@ const ja: TranslationStrings = {
   "trash.softDeleteConfirm": "「{name}」をゴミ箱に移動しますか？",
   "trash.softDeleteFolderConfirm": "フォルダ「{name}」内の{count}件のファイルをゴミ箱に移動しますか？",
   "trash.conflictInfo": "同期コンフリクト解決時に作成されたバックアップです。",
+
+  // Offline
+  "offline.indicator": "オフライン",
+  "offline.banner": "オフラインモードです。一部の機能は利用できません。",
 };
 
 const translations: Record<Language, TranslationStrings> = { en, ja };
