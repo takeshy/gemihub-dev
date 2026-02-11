@@ -129,9 +129,14 @@ function IDELayout({
   const [searchParams] = useSearchParams();
 
   // Active file state — use local state to avoid React Router navigation on file switch
-  const [activeFileId, setActiveFileId] = useState<string | null>(
-    searchParams.get("file")
-  );
+  const [activeFileId, setActiveFileId] = useState<string | null>(() => {
+    const fromUrl = searchParams.get("file");
+    if (fromUrl) return fromUrl;
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gemihub:lastFileId");
+    }
+    return null;
+  });
   const [activeFileName, setActiveFileName] = useState<string | null>(null);
   const [activeFileMimeType, setActiveFileMimeType] = useState<string | null>(
     null
@@ -234,6 +239,8 @@ function IDELayout({
       setActiveFileId(fileId);
       setActiveFileName(fileName);
       setActiveFileMimeType(mimeType);
+      // Remember last opened file for next visit
+      localStorage.setItem("gemihub:lastFileId", fileId);
       // Auto-switch right panel based on file type, but keep plugin views open
       if (!rightPanel.startsWith("plugin:") && !rightPanel.startsWith("main-plugin:")) {
         if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
@@ -610,7 +617,7 @@ function IDEContent({
       animateTo(mobileIndex);
     }
     prevIndexRef.current = mobileIndex;
-  }, [mobileIndex, animateTo]);
+  }, [mobileIndex, animateTo, isMobile]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (isAnimatingRef.current) return;
