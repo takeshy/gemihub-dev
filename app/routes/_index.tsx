@@ -142,6 +142,7 @@ function IDELayout({
 
   // Resolve file name when opened via URL (fileId present, fileName unknown)
   useEffect(() => {
+    if (activeFileId?.startsWith("new:")) return; // Not yet on Drive
     if (activeFileId && !activeFileName) {
       fetch(`/api/drive/files?action=metadata&fileId=${activeFileId}`)
         .then((res) => res.ok ? res.json() : null)
@@ -162,6 +163,26 @@ function IDELayout({
         .catch(() => {});
     }
   }, [activeFileId, activeFileName, rightPanel]);
+
+  // When a new: file is migrated to a real Drive ID, update active file state + URL
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { oldId, newId, fileName, mimeType } = (e as CustomEvent).detail;
+      setActiveFileId((prev) => (prev === oldId ? newId : prev));
+      // Use base name (last segment) — fileName from Drive API may be a full path
+      const baseName = fileName ? (fileName as string).split("/").pop()! : null;
+      setActiveFileName((prev) => (prev === null && baseName ? baseName : prev));
+      setActiveFileMimeType((prev) => (prev === null && mimeType ? mimeType : prev));
+      // Update URL to use real Drive ID
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("file") === oldId) {
+        url.searchParams.set("file", newId);
+        window.history.replaceState({}, "", url.toString());
+      }
+    };
+    window.addEventListener("file-id-migrated", handler);
+    return () => window.removeEventListener("file-id-migrated", handler);
+  }, []);
 
   // Workflow version for refreshing MainViewer after sidebar edits
   const [workflowVersion, setWorkflowVersion] = useState(0);

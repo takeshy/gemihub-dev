@@ -20,6 +20,8 @@ export function useFileWithCache(
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const currentFileId = useRef(fileId);
+  // Guard to prevent concurrent new: → Drive migration
+  const migratingRef = useRef(false);
   // Track fileId changes — reset saved, but keep content (avoid null flash)
   const [prevFileId, setPrevFileId] = useState(fileId);
   const [prevRefreshKey, setPrevRefreshKey] = useState(refreshKey);
@@ -29,6 +31,7 @@ export function useFileWithCache(
     setContent(null);
     setSaved(false);
     setError(null);
+    migratingRef.current = false;
   }
   if (refreshKey !== prevRefreshKey) {
     setPrevRefreshKey(refreshKey);
@@ -40,6 +43,16 @@ export function useFileWithCache(
       let contentShown = false;
 
       try {
+        // new: prefix files are not yet on Drive — read from seeded cache only
+        if (id.startsWith("new:")) {
+          const cached = await getCachedFile(id);
+          if (cached && currentFileId.current === id) {
+            setContent(cached.content);
+            setLoading(false);
+          }
+          return;
+        }
+
         // 1. Try IndexedDB cache
         const cached = await getCachedFile(id);
 
@@ -181,18 +194,77 @@ export function useFileWithCache(
 
   const saveToCache = useCallback(
     async (newContent: string) => {
-      if (!fileId) return;
+      // After migration, the closure still has the old new: fileId until React re-renders.
+      // Use the migrated real ID from currentFileId.current instead.
+      const effectiveFileId = (fileId?.startsWith("new:") && migratingRef.current)
+        ? currentFileId.current
+        : fileId;
+      if (!effectiveFileId) return;
       // Immediately reflect in React state so the UI never lags behind the cache
       setContent(newContent);
+
+      // Handle new: prefix — create Drive file on first save, then migrate IDs
+      if (effectiveFileId.startsWith("new:") && !migratingRef.current) {
+        migratingRef.current = true;
+        try {
+          const fullName = effectiveFileId.slice("new:".length);
+          const res = await fetch("/api/drive/files", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "create",
+              name: fullName,
+              content: newContent,
+              mimeType: "text/plain",
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const file = data.file;
+            const newId = file.id as string;
+            const fileName = file.name as string;
+            const mimeType = file.mimeType as string;
+
+            // Delete old new: cache entry, create real one
+            await deleteCachedFile(effectiveFileId);
+            await setCachedFile({
+              fileId: newId,
+              content: newContent,
+              md5Checksum: file.md5Checksum ?? "",
+              modifiedTime: file.modifiedTime ?? "",
+              cachedAt: Date.now(),
+              fileName,
+            });
+
+            // Update ref so subsequent saves use the real ID
+            currentFileId.current = newId;
+
+            // Dispatch migration event for DriveFileTree and _index to pick up
+            window.dispatchEvent(
+              new CustomEvent("file-id-migrated", {
+                detail: { oldId: effectiveFileId, newId, fileName, mimeType },
+              })
+            );
+          } else {
+            // Non-ok response (e.g. 500) — allow retry on next save
+            migratingRef.current = false;
+          }
+        } catch {
+          // Network error — allow retry on next save
+          migratingRef.current = false;
+        }
+        return;
+      }
+
       try {
-        const cached = await getCachedFile(fileId);
-        const fileName = cached?.fileName ?? fileId;
+        const cached = await getCachedFile(effectiveFileId);
+        const fileName = cached?.fileName ?? effectiveFileId;
 
         // 1. Record local edit history BEFORE cache update
         //    (saveLocalEdit reads old cache content for reverse-apply diff)
         let hasChange = false;
         try {
-          const entry = await saveLocalEdit(fileId, fileName, newContent);
+          const entry = await saveLocalEdit(effectiveFileId, fileName, newContent);
           hasChange = entry !== null;
         } catch {
           // edit history failure is non-critical
@@ -200,7 +272,7 @@ export function useFileWithCache(
 
         // 2. Update cache with new content
         await setCachedFile({
-          fileId,
+          fileId: effectiveFileId,
           content: newContent,
           md5Checksum: cached?.md5Checksum ?? "",
           modifiedTime: cached?.modifiedTime ?? "",
@@ -211,7 +283,7 @@ export function useFileWithCache(
         // Notify file tree only when edit history actually recorded a change
         if (hasChange) {
           window.dispatchEvent(
-            new CustomEvent("file-modified", { detail: { fileId } })
+            new CustomEvent("file-modified", { detail: { fileId: effectiveFileId } })
           );
         }
       } catch {

@@ -296,15 +296,35 @@ export function DriveFileTree({
     const workflowHandler = () => {
       fetchAndCacheTree(true);
     };
+    // When a new: file is migrated to a real Drive ID, update tree node IDs
+    const handleMigrated = (e: Event) => {
+      const { oldId, newId, mimeType } = (e as CustomEvent).detail;
+      setTreeItems((prev) => {
+        const replaceId = (nodes: CachedTreeNode[]): CachedTreeNode[] =>
+          nodes.map((n) => {
+            if (n.id === oldId) {
+              // Keep the existing node name (base name) — don't overwrite with full path
+              return { ...n, id: newId, mimeType: mimeType ?? n.mimeType };
+            }
+            if (n.children) {
+              return { ...n, children: replaceId(n.children) };
+            }
+            return n;
+          });
+        return replaceId(prev);
+      });
+    };
     window.addEventListener("file-modified", handleModified);
     window.addEventListener("file-cached", handleCached);
     window.addEventListener("sync-complete", syncHandler);
     window.addEventListener("workflow-completed", workflowHandler);
+    window.addEventListener("file-id-migrated", handleMigrated);
     return () => {
       window.removeEventListener("file-modified", handleModified);
       window.removeEventListener("file-cached", handleCached);
       window.removeEventListener("sync-complete", syncHandler);
       window.removeEventListener("workflow-completed", workflowHandler);
+      window.removeEventListener("file-id-migrated", handleMigrated);
     };
   }, [fetchAndCacheTree]);
 
@@ -416,12 +436,13 @@ export function DriveFileTree({
   }, [selectedFolderId]);
 
   const handleCreateFile = useCallback(() => {
-    setCreateFileDialog({ open: true, name: "", ext: ".md", customExt: "" });
+    setCreateFileDialog({ open: true, name: "", ext: ".txt", customExt: "" });
   }, []);
 
   const handleCreateFileSubmit = useCallback(async () => {
-    const name = createFileDialog.name.trim();
-    if (!name) return;
+    const now = new Date();
+    const defaultName = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+    const name = createFileDialog.name.trim() || defaultName;
     const ext = createFileDialog.ext === "custom"
       ? (createFileDialog.customExt.startsWith(".") ? createFileDialog.customExt : "." + createFileDialog.customExt)
       : createFileDialog.ext;
@@ -454,35 +475,66 @@ export function DriveFileTree({
       return;
     }
 
-    try {
-      const res = await fetch("/api/drive/files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create",
-          name: fullName,
-          content: "",
-          mimeType: "text/plain",
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        onSelectFile(data.file.id, data.file.name, data.file.mimeType);
-        // Expand parent folder
-        if (selectedFolderId) {
-          setExpandedFolders((prev) => new Set(prev).add(selectedFolderId));
-        }
-        // Update tree from returned meta (no server roundtrip needed)
-        if (data.meta) {
-          await updateTreeFromMeta(data.meta);
-        } else {
-          await fetchAndCacheTree();
-        }
+    // Generate temporary ID — Drive file will be created on first auto-save
+    const tempId = `new:${fullName}`;
+    const mimeType = fileName.endsWith(".yaml") || fileName.endsWith(".yml")
+      ? "text/yaml"
+      : "text/plain";
+
+    // Seed IndexedDB cache with empty content
+    await setCachedFile({
+      fileId: tempId,
+      content: "",
+      md5Checksum: "",
+      modifiedTime: "",
+      cachedAt: Date.now(),
+      fileName: fullName,
+    });
+
+    // Add the new file to the tree optimistically
+    const folderId = selectedFolderId;
+    const newNode: CachedTreeNode = {
+      id: tempId,
+      name: fileName,
+      mimeType,
+      isFolder: false,
+      modifiedTime: new Date().toISOString(),
+    };
+
+    setTreeItems((prev) => {
+      if (!folderPath) {
+        return [...prev, newNode].sort((a, b) => {
+          if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
       }
-    } catch {
-      // ignore
+      const insertIntoFolder = (nodes: CachedTreeNode[]): CachedTreeNode[] =>
+        nodes.map((n) => {
+          if (n.id === folderId && n.children) {
+            return {
+              ...n,
+              children: [...n.children, newNode].sort((a, b) => {
+                if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+                return a.name.localeCompare(b.name);
+              }),
+            };
+          }
+          if (n.children) {
+            return { ...n, children: insertIntoFolder(n.children) };
+          }
+          return n;
+        });
+      return insertIntoFolder(prev);
+    });
+
+    // Expand parent folder
+    if (folderId) {
+      setExpandedFolders((prev) => new Set(prev).add(folderId));
     }
-  }, [createFileDialog, selectedFolderId, fetchAndCacheTree, updateTreeFromMeta, onSelectFile, treeItems, t]);
+
+    // Open the file immediately
+    onSelectFile(tempId, fileName, mimeType);
+  }, [createFileDialog, selectedFolderId, onSelectFile, treeItems, t]);
 
   // Auto-clear progress after 3 seconds when all done
   useEffect(() => {
@@ -1435,7 +1487,7 @@ export function DriveFileTree({
                     if (e.key === "Enter") handleCreateFileSubmit();
                     if (e.key === "Escape") setCreateFileDialog((prev) => ({ ...prev, open: false }));
                   }}
-                  placeholder="filename"
+                  placeholder={t("fileTree.fileNamePlaceholder")}
                   className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   autoFocus
                 />
@@ -1447,11 +1499,11 @@ export function DriveFileTree({
                   onChange={(e) => setCreateFileDialog((prev) => ({ ...prev, ext: e.target.value }))}
                   className="w-full px-2 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
+                  <option value=".txt">.txt</option>
                   <option value=".md">.md</option>
                   <option value=".yaml">.yaml</option>
                   <option value=".json">.json</option>
                   <option value=".html">.html</option>
-                  <option value=".txt">.txt</option>
                   <option value="custom">{t("fileTree.customExt")}</option>
                 </select>
               </div>
@@ -1481,7 +1533,7 @@ export function DriveFileTree({
               </button>
               <button
                 onClick={handleCreateFileSubmit}
-                disabled={!createFileDialog.name.trim() || (createFileDialog.ext === "custom" && !createFileDialog.customExt.trim())}
+                disabled={createFileDialog.ext === "custom" && !createFileDialog.customExt.trim()}
                 className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
               >
                 {t("fileTree.create")}
