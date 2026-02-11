@@ -306,7 +306,7 @@ export function ChatInput({
         : selectedRagSetting;
     const requestedMode = pendingOverrides?.driveToolMode ?? driveToolMode;
     const effectiveMode =
-      getDriveToolModeConstraint(effectiveModel, effectiveSearchSetting).forcedMode ??
+      getDriveToolModeConstraint(effectiveModel, effectiveSearchSetting ?? null).forcedMode ??
       requestedMode;
     resolved = await resolveFileReferences(resolved, editorCtx.fileList, effectiveMode === "none");
 

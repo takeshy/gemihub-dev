@@ -44,7 +44,7 @@ export async function calculateChecksum(content: string | Uint8Array | ArrayBuff
     : content instanceof Uint8Array
       ? content
       : new Uint8Array(content);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data.buffer as ArrayBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -91,7 +91,7 @@ export async function uploadDriveFile(
   const ai = new GoogleGenAI({ apiKey });
   const content = await readFileBytes(accessToken, fileId);
   const mimeType = getMimeTypeForFile(fileName);
-  const blob = new Blob([content], { type: mimeType });
+  const blob = new Blob([content.buffer as ArrayBuffer], { type: mimeType });
 
   const operation = await ai.fileSearchStores.uploadToFileSearchStore({
     file: blob,
@@ -291,7 +291,8 @@ export async function registerSingleFile(
 
   const checksum = await calculateChecksum(content);
   const mimeType = getMimeTypeForFile(fileName);
-  const blob = new Blob([content], { type: mimeType });
+  const blobData = content instanceof Uint8Array ? content.buffer as ArrayBuffer : content;
+  const blob = new Blob([blobData], { type: mimeType });
 
   const operation = await ai.fileSearchStores.uploadToFileSearchStore({
     file: blob,
