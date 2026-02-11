@@ -14,20 +14,6 @@ body {
   @apply bg-white dark:bg-gray-950;
 }
 
-/* Make wysimark-lite editor fill its container.
-   DOM: .wysimark-fill
-     > div[position:relative]   (entry wrapper)
-       > div[display:block]     (visual editor toggle)
-         > div.$OuterContainer  (emotion styled, already flex-col)
-*/
-.wysimark-fill > div,
-.wysimark-fill > div > div:last-child,
-.wysimark-fill > div > div:last-child > div {
-  flex: 1 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  min-height: 0 !important;
-}
 
 /* Safe area padding for iOS devices with home indicator */
 .safe-area-bottom {
