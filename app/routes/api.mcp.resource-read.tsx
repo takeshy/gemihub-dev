@@ -60,20 +60,19 @@ export async function action({ request }: Route.ActionArgs) {
     }
     const matchedServer = resolved.matchedServer;
 
-    const tokenBefore = matchedServer
-      ? JSON.stringify(matchedServer.oauthTokens ?? null)
-      : null;
-
-    const config: McpServerConfig = matchedServer ? matchedServer : {
-      name: "mcp-resource-proxy",
-      url: serverUrl,
-      headers: serverHeaders,
-    };
+    if (!matchedServer) {
+      return Response.json(
+        { error: "No matching MCP server found in settings" },
+        { status: 403, headers: responseHeaders }
+      );
+    }
+    const config: McpServerConfig = matchedServer;
+    const tokenBefore = JSON.stringify(matchedServer.oauthTokens ?? null);
 
     const client = await getOrCreateClient(config);
     const resource = await client.readResource(resourceUri);
 
-    if (matchedServer && tokenBefore !== JSON.stringify(matchedServer.oauthTokens ?? null)) {
+    if (tokenBefore !== JSON.stringify(matchedServer.oauthTokens ?? null)) {
       await saveSettings(validTokens.accessToken, validTokens.rootFolderId, settings);
     }
 

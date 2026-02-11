@@ -85,6 +85,8 @@ function isPrivateHost(hostname: string): boolean {
     // Loopback, unique-local (fc00::/7), link-local (fe80::/10)
     return (
       normalized === "::1" ||
+      normalized === "::" ||
+      normalized === "::0" ||
       normalized.startsWith("fc") ||
       normalized.startsWith("fd") ||
       normalized.startsWith("fe8") ||

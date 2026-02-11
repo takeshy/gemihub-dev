@@ -128,7 +128,6 @@ export function useSync() {
         if (
           diffData.diff.toPull.length > 0
           || diffData.diff.remoteOnly.length > 0
-          || diffData.diff.localOnly.length > 0
         ) {
           setError("settings.sync.pushRejected");
           setSyncStatus("error");
@@ -408,14 +407,23 @@ export function useSync() {
         // Clear edit history for the resolved file (conflict is resolved)
         await deleteEditHistoryEntry(fileId);
 
-        // Update local sync meta from remote meta
+        // Update local sync meta from remote meta (merge to preserve local-only entries)
         if (data.remoteMeta) {
-          await setLocalSyncMeta(
-            toLocalSyncMeta(data.remoteMeta as {
-              lastUpdatedAt: string;
-              files: Record<string, { md5Checksum?: string; modifiedTime?: string }>;
-            })
-          );
+          const existing = await getLocalSyncMeta();
+          const incoming = toLocalSyncMeta(data.remoteMeta as {
+            lastUpdatedAt: string;
+            files: Record<string, { md5Checksum?: string; modifiedTime?: string }>;
+          });
+          if (existing) {
+            const merged: LocalSyncMeta = {
+              id: "current",
+              lastUpdatedAt: incoming.lastUpdatedAt,
+              files: { ...existing.files, ...incoming.files },
+            };
+            await setLocalSyncMeta(merged);
+          } else {
+            await setLocalSyncMeta(incoming);
+          }
         }
 
         // Remove resolved conflict (idle transition handled by useEffect)

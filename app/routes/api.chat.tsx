@@ -242,10 +242,23 @@ export async function action({ request }: Route.ActionArgs) {
           );
           if (tokenChanged) {
             try {
+              const freshSettings = await getSettings(
+                validTokens.accessToken,
+                validTokens.rootFolderId
+              );
+              for (const server of resolvedMcpServers!) {
+                const key = server.id || server.name;
+                const target = freshSettings.mcpServers.find(
+                  (s) => (s.id || s.name) === key
+                );
+                if (target) {
+                  target.oauthTokens = server.oauthTokens;
+                }
+              }
               await saveSettings(
                 validTokens.accessToken,
                 validTokens.rootFolderId,
-                settingsForMcpPersistence
+                freshSettings
               );
             } catch (error) {
               console.error("Failed to persist refreshed MCP OAuth tokens:", error);

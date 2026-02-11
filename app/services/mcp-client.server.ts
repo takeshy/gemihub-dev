@@ -83,10 +83,7 @@ export class McpClient {
   private createRequestSignal(timeoutMs: number, abortSignal?: AbortSignal): AbortSignal {
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     if (!abortSignal) return timeoutSignal;
-    if (AbortSignal.any) {
-      return AbortSignal.any([timeoutSignal, abortSignal]);
-    }
-    return abortSignal.aborted ? abortSignal : timeoutSignal;
+    return AbortSignal.any([timeoutSignal, abortSignal]);
   }
 
   /**

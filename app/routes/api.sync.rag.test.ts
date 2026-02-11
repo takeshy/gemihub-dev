@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { handleRagAction } from "./api.sync.tsx";
+import { handleRagAction } from "~/services/sync-rag.server";
 import { DEFAULT_RAG_SETTING, DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 
 test("ragRegister -> ragSave -> ragRetryPending uses bytes", async () => {
