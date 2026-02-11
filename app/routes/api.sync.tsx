@@ -297,36 +297,12 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     case "fullPush": {
-      // Full push: merge all local meta entries into remote meta
-      const localMeta = body.localMeta as SyncMeta;
-
-      const remoteMeta =
-        (await readRemoteSyncMeta(
-          validTokens.accessToken,
-          validTokens.rootFolderId
-        )) ?? {
-          lastUpdatedAt: new Date().toISOString(),
-          files: {},
-        };
-
-      // Merge all local entries into remote
-      for (const [fileId, fileMeta] of Object.entries(localMeta.files)) {
-        const existing = remoteMeta.files[fileId];
-        remoteMeta.files[fileId] = {
-          ...existing,
-          ...fileMeta,
-          name: fileMeta.name || existing?.name || "",
-          mimeType: fileMeta.mimeType || existing?.mimeType || "",
-        };
-      }
-      remoteMeta.lastUpdatedAt = new Date().toISOString();
-
-      await writeRemoteSyncMeta(
+      // Keep fullPush metadata safe by rebuilding from authoritative Drive state.
+      // Actual file overwrite happens via pushFiles.
+      const remoteMeta = await rebuildSyncMeta(
         validTokens.accessToken,
-        validTokens.rootFolderId,
-        remoteMeta
+        validTokens.rootFolderId
       );
-
       return jsonWithCookie({ remoteMeta });
     }
 
@@ -700,6 +676,9 @@ export async function action({ request }: Route.ActionArgs) {
       };
 
       const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+      if (!settings.ragRegistrationOnPush) {
+        return jsonWithCookie({ ok: true, pendingCount: 0, skipped: true });
+      }
       const storeKey = DEFAULT_RAG_STORE_KEY;
       let ragSetting = settings.ragSettings[storeKey];
       if (!ragSetting) {

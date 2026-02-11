@@ -47,6 +47,12 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const ragSetting = settings.ragSettings[settingName];
+  if (ragSetting.isExternal) {
+    return Response.json(
+      { error: "External RAG settings cannot be synced" },
+      { status: 400, headers: responseHeaders }
+    );
+  }
 
   // Create SSE stream for progress reporting
   const stream = new ReadableStream({
@@ -99,6 +105,13 @@ export async function action({ request }: Route.ActionArgs) {
         );
 
         // Update settings with sync results
+        const hasRegistered = Object.values(result.newFiles).some((f) => f.status === "registered");
+        if (hasRegistered) {
+          settings.ragEnabled = true;
+          if (!settings.selectedRagSetting) {
+            settings.selectedRagSetting = settingName;
+          }
+        }
         settings.ragSettings[settingName] = {
           ...ragSetting,
           files: result.newFiles,

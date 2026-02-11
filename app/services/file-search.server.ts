@@ -1,7 +1,7 @@
 // RAG / Gemini File Search manager - ported from obsidian-gemini-helper (Drive-based version)
 
 import { GoogleGenAI } from "@google/genai";
-import { readFile } from "./google-drive.server";
+import { readFileRaw } from "./google-drive.server";
 import { getFileListFromMeta } from "./sync-meta.server";
 import type { RagSetting, RagFileInfo } from "~/types/settings";
 import { isRagEligible } from "~/constants/rag";
@@ -16,12 +16,40 @@ export interface SyncResult {
   lastFullSync: number;
 }
 
+function getMimeTypeForFile(fileName: string): string {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".doc")) return "application/msword";
+  if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (lower.endsWith(".xls")) return "application/vnd.ms-excel";
+  if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (lower.endsWith(".ppt")) return "application/vnd.ms-powerpoint";
+  if (lower.endsWith(".pptx")) return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  if (lower.endsWith(".md")) return "text/markdown";
+  if (lower.endsWith(".csv")) return "text/csv";
+  if (lower.endsWith(".tsv")) return "text/tab-separated-values";
+  if (lower.endsWith(".json")) return "application/json";
+  if (lower.endsWith(".xml")) return "application/xml";
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
+  if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
+  return "text/plain";
+}
+
+async function readDriveFileBytes(accessToken: string, fileId: string): Promise<Uint8Array> {
+  const res = await readFileRaw(accessToken, fileId);
+  const buffer = await res.arrayBuffer();
+  return new Uint8Array(buffer);
+}
+
 /**
  * Calculate SHA-256 checksum of content
  */
-export async function calculateChecksum(content: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(content);
+export async function calculateChecksum(content: string | Uint8Array | ArrayBuffer): Promise<string> {
+  const data = typeof content === "string"
+    ? new TextEncoder().encode(content)
+    : content instanceof Uint8Array
+      ? content
+      : new Uint8Array(content);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -67,14 +95,8 @@ export async function uploadDriveFile(
   storeName: string
 ): Promise<string | null> {
   const ai = new GoogleGenAI({ apiKey });
-  const content = await readFile(accessToken, fileId);
-
-  const mimeType = fileName.endsWith(".pdf")
-    ? "application/pdf"
-    : fileName.endsWith(".md")
-      ? "text/markdown"
-      : "text/plain";
-
+  const content = await readDriveFileBytes(accessToken, fileId);
+  const mimeType = getMimeTypeForFile(fileName);
   const blob = new Blob([content], { type: mimeType });
 
   const operation = await ai.fileSearchStores.uploadToFileSearchStore({
@@ -189,7 +211,7 @@ export async function smartSync(
   const processFile = async (file: { id: string; name: string }) => {
     currentOperation++;
     try {
-      const content = await readFile(accessToken, file.id);
+      const content = await readDriveFileBytes(accessToken, file.id);
       const checksum = await calculateChecksum(content);
       const existing = ragSetting.files[file.name];
 
@@ -256,7 +278,7 @@ export async function registerSingleFile(
   apiKey: string,
   storeName: string,
   fileName: string,
-  content: string,
+  content: string | Uint8Array | ArrayBuffer,
   existingFileId: string | null
 ): Promise<{ checksum: string; fileId: string | null }> {
   const ai = new GoogleGenAI({ apiKey });
@@ -274,13 +296,7 @@ export async function registerSingleFile(
   }
 
   const checksum = await calculateChecksum(content);
-
-  const mimeType = fileName.endsWith(".pdf")
-    ? "application/pdf"
-    : fileName.endsWith(".md")
-      ? "text/markdown"
-      : "text/plain";
-
+  const mimeType = getMimeTypeForFile(fileName);
   const blob = new Blob([content], { type: mimeType });
 
   const operation = await ai.fileSearchStores.uploadToFileSearchStore({
