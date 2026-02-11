@@ -4,16 +4,8 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { getOrCreateClient } from "~/services/mcp-tools.server";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
+import { resolveMcpServerForProxy } from "~/services/mcp-proxy-server-resolver";
 import type { McpServerConfig } from "~/types/settings";
-
-function canonicalizeHeaders(headers?: Record<string, string>): string {
-  if (!headers) return "";
-  return JSON.stringify(
-    Object.entries(headers)
-      .map(([k, v]) => [k.toLowerCase(), v] as const)
-      .sort(([a], [b]) => a.localeCompare(b))
-  );
-}
 
 /**
  * Server-side proxy for reading MCP resources (used by McpAppRenderer as fallback).
@@ -54,12 +46,19 @@ export async function action({ request }: Route.ActionArgs) {
 
   try {
     const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-    const targetHeaderSig = canonicalizeHeaders(serverHeaders);
-    const matchedServer = serverId
-      ? settings.mcpServers.find((s) => s.id === serverId)
-      : settings.mcpServers.find(
-          (s) => s.url === serverUrl && canonicalizeHeaders(s.headers) === targetHeaderSig
-        );
+    const resolved = resolveMcpServerForProxy({
+      servers: settings.mcpServers,
+      serverId,
+      serverUrl,
+      serverHeaders,
+    });
+    if (resolved.error) {
+      return Response.json(
+        { error: resolved.error.message },
+        { status: resolved.error.status, headers: responseHeaders }
+      );
+    }
+    const matchedServer = resolved.matchedServer;
 
     const tokenBefore = matchedServer
       ? JSON.stringify(matchedServer.oauthTokens ?? null)
