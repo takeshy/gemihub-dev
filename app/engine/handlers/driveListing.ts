@@ -22,7 +22,7 @@ export async function handleDriveListNode(
 ): Promise<void> {
   const folder = replaceVariables(node.properties["folder"] || "", context);
   const limitStr = node.properties["limit"] || "50";
-  const limit = parseInt(limitStr, 10) || 50;
+  const limit = parseInt(replaceVariables(limitStr, context), 10) || 50;
   const sortBy = replaceVariables(node.properties["sortBy"] || "modified", context);
   const sortOrder = replaceVariables(node.properties["sortOrder"] || "desc", context);
   const modifiedWithin = node.properties["modifiedWithin"]

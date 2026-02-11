@@ -139,7 +139,7 @@ Gemini API を使用して LLM プロンプトを実行します。
 | プロパティ | 必須 | テンプレート | 説明 |
 |-----------|:----:|:----------:|------|
 | `prompt` | Yes | Yes | LLM に送信するプロンプトテキスト |
-| `model` | No | No | モデル名（デフォルト: `gemini-2.5-flash`） |
+| `model` | No | Yes | モデル名（デフォルト: `gemini-2.5-flash`） |
 | `saveTo` | No | No | テキスト応答を保存する変数 |
 
 ---
@@ -305,7 +305,7 @@ Google Drive でファイルを検索します。
 | プロパティ | 必須 | テンプレート | 説明 |
 |-----------|:----:|:----------:|------|
 | `folder` | No | Yes | 仮想フォルダプレフィックス（例: `"Projects"`） |
-| `limit` | No | No | 最大件数（デフォルト: 50） |
+| `limit` | No | Yes | 最大件数（デフォルト: 50） |
 | `saveTo` | Yes | No | 結果を保存する変数 |
 
 **出力形式:**
@@ -366,7 +366,7 @@ FileExplorerData を Google Drive にファイルとして保存します。
 
 | プロパティ | 必須 | テンプレート | 説明 |
 |-----------|:----:|:----------:|------|
-| `source` | Yes | No | FileExplorerData JSON を含む変数名 |
+| `source` | Yes | Yes | FileExplorerData JSON を含む変数名またはテンプレート |
 | `path` | Yes | Yes | 保存先パス（ソースデータから拡張子を自動付与） |
 | `savePathTo` | No | No | 最終ファイル名を保存する変数 |
 

@@ -145,11 +145,11 @@ Execute an LLM prompt via Gemini API.
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
 | `prompt` | Yes | Yes | Prompt text to send to the LLM |
-| `model` | No | No | Model name (default: user's selected model) |
+| `model` | No | Yes | Model name (default: user's selected model) |
 | `ragSetting` | No | No | RAG setting name, `__websearch__` for web search, or `__none__` (default) |
 | `driveToolMode` | No | No | `none` (default), `all`, `noSearch` — enables Drive tool calling |
 | `mcpServers` | No | No | Comma-separated MCP server names to enable |
-| `attachments` | No | No | Comma-separated variable names containing FileExplorerData |
+| `attachments` | No | Yes | Comma-separated variable names containing FileExplorerData |
 | `saveTo` | No | No | Variable to store text response |
 | `saveImageTo` | No | No | Variable to store generated image (FileExplorerData JSON) |
 | `systemPrompt` | No | Yes | System prompt for the LLM |
@@ -294,7 +294,7 @@ Search for files on Google Drive.
 |----------|:--------:|:--------:|-------------|
 | `query` | Yes | Yes | Search query string |
 | `searchContent` | No | No | `"true"` to search file contents (default: name only) |
-| `limit` | No | No | Maximum results (default: 10) |
+| `limit` | No | Yes | Maximum results (default: 10) |
 | `saveTo` | Yes | No | Variable for results |
 
 **Output format:**
@@ -324,7 +324,7 @@ List files with filtering.
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
 | `folder` | No | Yes | Virtual folder prefix (e.g., `"Projects"`) |
-| `limit` | No | No | Maximum results (default: 50) |
+| `limit` | No | Yes | Maximum results (default: 50) |
 | `sortBy` | No | No | `modified` (default), `created`, `name` |
 | `sortOrder` | No | No | `desc` (default), `asc` |
 | `modifiedWithin` | No | Yes | Time filter (e.g., `"7d"`, `"24h"`, `"30m"`) |
@@ -389,7 +389,7 @@ Save FileExplorerData as a file on Google Drive.
 
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
-| `source` | Yes | No | Variable name containing FileExplorerData JSON |
+| `source` | Yes | Yes | Variable name or template containing FileExplorerData JSON |
 | `path` | Yes | Yes | Target file path (extension auto-added from source data) |
 | `savePathTo` | No | No | Variable to store final file name |
 
@@ -445,7 +445,6 @@ Show a file picker and read the selected file's content.
 - id: pickFile
   type: prompt-file
   title: "Select a file"
-  default: "notes/readme.md"
   saveTo: fileContent
   saveFileTo: fileInfo
 ```
@@ -453,7 +452,6 @@ Show a file picker and read the selected file's content.
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
 | `title` | No | Yes | Picker dialog title (default: `"Select a file"`) |
-| `default` | No | Yes | Default file path |
 | `saveTo` | No | No | Variable to store file content (text) |
 | `saveFileTo` | No | No | Variable to store file info JSON (`{path, basename, name, extension}`) |
 

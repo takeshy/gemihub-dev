@@ -6,6 +6,7 @@ export function handleVariableNode(
   context: ExecutionContext
 ): void {
   const name = node.properties["name"];
+  if (!name) throw new Error("Variable node missing 'name' property");
   const value: string | number = replaceVariables(
     node.properties["value"] || "",
     context

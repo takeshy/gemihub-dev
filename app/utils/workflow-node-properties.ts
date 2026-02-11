@@ -145,7 +145,6 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
     case "prompt-file":
       return [
         { key: "title", label: "Title", required: false, placeholder: "Select a file" },
-        { key: "default", label: "Default", required: false, placeholder: "path/to/file.md" },
         { key: "saveTo", label: "Save To (content)", required: false, placeholder: "fileContent" },
         { key: "saveFileTo", label: "Save File Info To", required: false, placeholder: "fileInfo" },
       ];
@@ -156,7 +155,7 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
       ];
     case "workflow":
       return [
-        { key: "path", label: "Path", required: false, placeholder: "sub-workflow.yaml" },
+        { key: "path", label: "Path", required: true, placeholder: "sub-workflow.yaml" },
         { key: "name", label: "Name", required: false, placeholder: "Sub Workflow" },
         { key: "input", label: "Input", required: false, multiline: true, placeholder: '{"subVar": "{{parentValue}}"}' },
         { key: "output", label: "Output", required: false, multiline: true, placeholder: '{"parentVar": "subResultVar"}' },
