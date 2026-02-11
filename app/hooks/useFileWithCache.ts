@@ -3,7 +3,6 @@ import {
   getCachedFile,
   setCachedFile,
   deleteCachedFile,
-  deleteEditHistoryEntry,
   getLocalSyncMeta,
   setLocalSyncMeta,
 } from "~/services/indexeddb-cache";
@@ -262,12 +261,13 @@ export function useFileWithCache(
   );
 
   // Listen for drive-file-changed events (from chat function calling)
+  // ChatPanel also deletes cache/editHistory (fire-and-forget) for non-viewed files.
+  // Here we await deletion to avoid race with fetchFile's cache-first read.
   useEffect(() => {
     const handler = async (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.fileId && detail.fileId === fileId) {
         await deleteCachedFile(detail.fileId);
-        await deleteEditHistoryEntry(detail.fileId);
         await fetchFile(detail.fileId);
       }
     };

@@ -24,6 +24,7 @@ import { useI18n } from "~/i18n/context";
 import { isEncryptedFile, decryptWithPrivateKey, decryptFileContent } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
 import { CryptoPasswordPrompt } from "~/components/shared/CryptoPasswordPrompt";
+import { deleteCachedFile, deleteEditHistoryEntry } from "~/services/indexeddb-cache";
 
 export interface ChatOverrides {
   model?: ModelType | null;
@@ -498,6 +499,8 @@ export function ChatPanel({
                 case "drive_changed":
                   window.dispatchEvent(new Event("sync-complete"));
                   if (chunk.changedFileId) {
+                    deleteCachedFile(chunk.changedFileId);
+                    deleteEditHistoryEntry(chunk.changedFileId);
                     window.dispatchEvent(
                       new CustomEvent("drive-file-changed", {
                         detail: { fileId: chunk.changedFileId },
