@@ -596,23 +596,21 @@ function IDEContent({
     setTimeout(cleanup, 350);
   }, []);
 
-  // When mobileView changes (e.g. bottom nav tap), animate to the target
-  const prevIndexRef = useRef(mobileIndex);
+  // Sync container position with mobileIndex.
+  // On first run (prevIndexRef is null), set position instantly (no animation).
+  // On subsequent changes (bottom nav tap, etc.), animate to the target.
+  const prevIndexRef = useRef<number | null>(null);
   useEffect(() => {
-    if (prevIndexRef.current !== mobileIndex) {
-      animateTo(mobileIndex);
-      prevIndexRef.current = mobileIndex;
-    }
-  }, [mobileIndex, animateTo]);
-
-  // Set initial position on mount
-  useEffect(() => {
-    if (containerRef.current) {
+    if (!containerRef.current) return;
+    if (prevIndexRef.current === null) {
+      // Initial positioning — no transition to avoid flash
       const offset = -(mobileIndex * 100) / MOBILE_PANEL_COUNT;
       containerRef.current.style.transform = `translateX(${offset}%)`;
+    } else if (prevIndexRef.current !== mobileIndex) {
+      animateTo(mobileIndex);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    prevIndexRef.current = mobileIndex;
+  }, [mobileIndex, animateTo]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (isAnimatingRef.current) return;
@@ -882,17 +880,14 @@ function IDEContent({
               style={{ width: `${MOBILE_PANEL_COUNT * 100}%` }}
             >
               {/* Panel 0: Files */}
-              <div className="h-full overflow-hidden bg-white dark:bg-gray-900" style={{ width: `${100 / MOBILE_PANEL_COUNT}%` }}>
+              <div className="flex h-full flex-col overflow-hidden bg-white dark:bg-gray-900" style={{ width: `${100 / MOBILE_PANEL_COUNT}%` }}>
                 {leftSidebarContent}
               </div>
               {/* Panel 1: Editor */}
-              <div className="relative h-full overflow-hidden" style={{ width: `${100 / MOBILE_PANEL_COUNT}%` }}>
+              <div className="relative flex h-full flex-col overflow-hidden" style={{ width: `${100 / MOBILE_PANEL_COUNT}%` }}>
                 {mainViewerContent}
                 <button
-                  onClick={() => {
-                    setMobileView("files");
-                    setTimeout(() => window.dispatchEvent(new CustomEvent("create-file-requested")), 0);
-                  }}
+                  onClick={() => window.dispatchEvent(new CustomEvent("create-file-requested"))}
                   className="absolute bottom-4 right-4 z-10 rounded-full bg-blue-600 p-3 text-white shadow-lg hover:bg-blue-700 active:bg-blue-800"
                   title={t("fileTree.newFile")}
                 >
