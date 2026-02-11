@@ -79,8 +79,7 @@ Uploads locally-changed files to remote.
    ├─ Read LocalSyncMeta from IndexedDB (may be null on first sync)
    ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
    │   └─ Server: read _sync-meta.json → compute diff
-   ├─ Conflicts found → abort (show conflict dialog)
-   └─ Remote is newer & has pending pulls → error "Pull first"
+   └─ Remote has any pending changes (conflicts, toPull, or remoteOnly) → error "Pull first"
 
 2. BATCH UPLOAD: Update all files via single API call
    ├─ Get modified file IDs from IndexedDB editHistory

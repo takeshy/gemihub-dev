@@ -79,8 +79,7 @@ Drive API のリアルタイム一覧は不要: `drive.file` スコープによ�
    ├─ IndexedDB から LocalSyncMeta を読み取り（初回同期時は null）
    ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
    │   └─ サーバー: _sync-meta.json を読み取り → diff を計算
-   ├─ コンフリクトあり → 中断（コンフリクトダイアログを表示）
-   └─ リモートが新しい & 未 Pull の変更あり → エラー「先に Pull して」
+   └─ リモートに未 Pull の変更あり（コンフリクト・toPull・remoteOnly）→ エラー「先に Pull して」
 
 2. バッチアップロード: 全ファイルを単一 API コールで更新
    ├─ IndexedDB の editHistory から変更ファイル ID を取得

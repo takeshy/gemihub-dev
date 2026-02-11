@@ -119,15 +119,11 @@ export function useSync() {
       const diffData = await diffRes.json();
       diffRemoteFiles = (diffData.remoteMeta?.files as Record<string, unknown> | undefined) ?? null;
 
-      if (diffData.diff.conflicts.length > 0) {
-        setConflicts(diffData.diff.conflicts);
-        setSyncStatus("conflict");
-        return;
-      }
-
-      // Reject push when remote has pending changes that must be pulled first
+      // Reject push when remote has any pending changes (pull first)
+      // Conflicts also mean remote has changed — resolve via Pull flow
       if (
-        diffData.diff.toPull.length > 0
+        diffData.diff.conflicts.length > 0
+        || diffData.diff.toPull.length > 0
         || diffData.diff.remoteOnly.length > 0
       ) {
         setError("settings.sync.pushRejected");
