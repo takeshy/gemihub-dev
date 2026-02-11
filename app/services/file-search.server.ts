@@ -1,7 +1,7 @@
 // RAG / Gemini File Search manager - ported from obsidian-gemini-helper (Drive-based version)
 
 import { GoogleGenAI } from "@google/genai";
-import { readFileRaw } from "./google-drive.server";
+import { readFileBytes } from "./google-drive.server";
 import { getFileListFromMeta } from "./sync-meta.server";
 import type { RagSetting, RagFileInfo } from "~/types/settings";
 import { isRagEligible } from "~/constants/rag";
@@ -33,12 +33,6 @@ function getMimeTypeForFile(fileName: string): string {
   if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
   if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
   return "text/plain";
-}
-
-async function readDriveFileBytes(accessToken: string, fileId: string): Promise<Uint8Array> {
-  const res = await readFileRaw(accessToken, fileId);
-  const buffer = await res.arrayBuffer();
-  return new Uint8Array(buffer);
 }
 
 /**
@@ -95,7 +89,7 @@ export async function uploadDriveFile(
   storeName: string
 ): Promise<string | null> {
   const ai = new GoogleGenAI({ apiKey });
-  const content = await readDriveFileBytes(accessToken, fileId);
+  const content = await readFileBytes(accessToken, fileId);
   const mimeType = getMimeTypeForFile(fileName);
   const blob = new Blob([content], { type: mimeType });
 
@@ -211,7 +205,7 @@ export async function smartSync(
   const processFile = async (file: { id: string; name: string }) => {
     currentOperation++;
     try {
-      const content = await readDriveFileBytes(accessToken, file.id);
+      const content = await readFileBytes(accessToken, file.id);
       const checksum = await calculateChecksum(content);
       const existing = ragSetting.files[file.name];
 

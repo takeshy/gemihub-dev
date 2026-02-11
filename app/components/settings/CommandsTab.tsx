@@ -8,7 +8,7 @@ import type {
   ModelType,
   DriveToolMode,
 } from "~/types/settings";
-import { getAvailableModels } from "~/types/settings";
+import { getAvailableModels, normalizeSelectedMcpServerIds } from "~/types/settings";
 import { useI18n } from "~/i18n/context";
 
 const inputClass =
@@ -49,7 +49,7 @@ const emptyForm: CommandFormData = {
   enabledMcpServers: [],
 };
 
-function commandToForm(cmd: SlashCommand): CommandFormData {
+function commandToForm(cmd: SlashCommand, settings: UserSettings): CommandFormData {
   return {
     name: cmd.name,
     description: cmd.description,
@@ -57,7 +57,10 @@ function commandToForm(cmd: SlashCommand): CommandFormData {
     model: cmd.model || "",
     searchSetting: cmd.searchSetting || "",
     driveToolMode: cmd.driveToolMode || "",
-    enabledMcpServers: cmd.enabledMcpServers || [],
+    enabledMcpServers: normalizeSelectedMcpServerIds(
+      cmd.enabledMcpServers,
+      settings.mcpServers
+    ),
   };
 }
 
@@ -79,7 +82,15 @@ export function CommandsTab({ settings }: CommandsTabProps) {
   const loading = fetcher.state !== "idle";
   const { t } = useI18n();
 
-  const [commands, setCommands] = useState<SlashCommand[]>(settings.slashCommands || []);
+  const [commands, setCommands] = useState<SlashCommand[]>(
+    (settings.slashCommands || []).map((cmd) => ({
+      ...cmd,
+      enabledMcpServers: normalizeSelectedMcpServerIds(
+        cmd.enabledMcpServers,
+        settings.mcpServers
+      ),
+    }))
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<CommandFormData>({ ...emptyForm });
@@ -98,9 +109,9 @@ export function CommandsTab({ settings }: CommandsTabProps) {
 
   const startEdit = useCallback((cmd: SlashCommand) => {
     setEditingId(cmd.id);
-    setForm(commandToForm(cmd));
+    setForm(commandToForm(cmd, settings));
     setAdding(false);
-  }, []);
+  }, [settings]);
 
   const startAdd = useCallback(() => {
     setAdding(true);
@@ -142,11 +153,11 @@ export function CommandsTab({ settings }: CommandsTabProps) {
     }
   }, [commands, editingId, submitCommands]);
 
-  const toggleMcpServer = useCallback((serverName: string) => {
+  const toggleMcpServer = useCallback((serverId: string) => {
     setForm((prev) => {
-      const servers = prev.enabledMcpServers.includes(serverName)
-        ? prev.enabledMcpServers.filter((s) => s !== serverName)
-        : [...prev.enabledMcpServers, serverName];
+      const servers = prev.enabledMcpServers.includes(serverId)
+        ? prev.enabledMcpServers.filter((s) => s !== serverId)
+        : [...prev.enabledMcpServers, serverId];
       return { ...prev, enabledMcpServers: servers };
     });
   }, []);
@@ -307,13 +318,13 @@ export function CommandsTab({ settings }: CommandsTabProps) {
               <div className="space-y-1 mt-1">
                 {enabledMcpServers.map((server) => (
                   <label
-                    key={server.name}
+                    key={server.id || server.name}
                     className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
                   >
                     <input
                       type="checkbox"
-                      checked={form.enabledMcpServers.includes(server.name)}
-                      onChange={() => toggleMcpServer(server.name)}
+                      checked={form.enabledMcpServers.includes(server.id || server.name)}
+                      onChange={() => toggleMcpServer(server.id || server.name)}
                       className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                     />
                     {server.name}

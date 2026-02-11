@@ -12,6 +12,7 @@ import {
 } from "~/services/mcp-tools.server";
 import {
   getDefaultModelForPlan,
+  getDriveToolModeConstraint,
   isImageGenerationModel,
   type ToolDefinition,
   type ModelType,
@@ -41,6 +42,10 @@ export async function handleCommandNode(
   serviceContext: ServiceContext,
   _promptCallbacks?: PromptCallbacks
 ): Promise<CommandNodeResult> {
+  if (serviceContext.abortSignal?.aborted) {
+    throw new Error("Execution cancelled");
+  }
+
   const promptTemplate = node.properties["prompt"];
   if (!promptTemplate) throw new Error("Command node missing 'prompt' property");
 
@@ -90,8 +95,18 @@ export async function handleCommandNode(
   // Build tools array
   const tools: ToolDefinition[] = [];
 
+  const requestedDriveToolMode = node.properties["driveToolMode"] || "none";
+  const ragSettingForConstraint = webSearchEnabled
+    ? "__websearch__"
+    : ragStoreIds && ragStoreIds.length > 0
+      ? "__rag__"
+      : null;
+  const toolConstraint = getDriveToolModeConstraint(modelName, ragSettingForConstraint);
+  const driveToolMode = toolConstraint.forcedMode ?? requestedDriveToolMode;
+  const functionToolsForcedOff =
+    toolConstraint.locked && toolConstraint.forcedMode === "none";
+
   // Drive tools
-  const driveToolMode = node.properties["driveToolMode"] || "none";
   if (driveToolMode !== "none") {
     if (driveToolMode === "noSearch") {
       tools.push(...DRIVE_TOOL_DEFINITIONS.filter(t => !DRIVE_SEARCH_TOOL_NAMES.has(t.name)));
@@ -102,11 +117,13 @@ export async function handleCommandNode(
 
   // MCP tools
   const mcpServersProp = node.properties["mcpServers"] || "";
-  const mcpServerNames = mcpServersProp
+  const mcpServerIds = mcpServersProp
     ? mcpServersProp.split(",").map(s => s.trim()).filter(Boolean)
     : [];
-  const enabledMcpServers = mcpServerNames.length > 0 && settings?.mcpServers
-    ? settings.mcpServers.filter(s => mcpServerNames.includes(s.name))
+  const enabledMcpServers = !functionToolsForcedOff && mcpServerIds.length > 0 && settings?.mcpServers
+    ? settings.mcpServers.filter(
+        (s) => mcpServerIds.includes(s.id || "") || mcpServerIds.includes(s.name)
+      )
     : [];
   let mcpToolDefs: ToolDefinition[] = [];
   if (enabledMcpServers.length > 0) {
@@ -127,6 +144,9 @@ export async function handleCommandNode(
     name: string,
     args: Record<string, unknown>
   ): Promise<unknown> => {
+    if (serviceContext.abortSignal?.aborted) {
+      throw new Error("Execution cancelled");
+    }
     if (driveToolNames.has(name)) {
       return executeDriveTool(
         name,
@@ -210,6 +230,9 @@ export async function handleCommandNode(
     const imageGenerator = generateImageStream(apiKey, messages, modelName, systemPrompt);
     let fullResponse = "";
     for await (const chunk of imageGenerator) {
+      if (serviceContext.abortSignal?.aborted) {
+        throw new Error("Execution cancelled");
+      }
       if (chunk.type === "text" && chunk.content) {
         fullResponse += chunk.content;
       } else if (chunk.type === "image_generated" && chunk.generatedImage && saveImageTo) {
@@ -263,6 +286,9 @@ export async function handleCommandNode(
   let pendingToolCall: { name: string; args: Record<string, unknown> } | null = null;
 
   for await (const chunk of generator) {
+    if (serviceContext.abortSignal?.aborted) {
+      throw new Error("Execution cancelled");
+    }
     if (chunk.type === "text" && chunk.content) {
       fullResponse += chunk.content;
     } else if (chunk.type === "tool_call" && chunk.toolCall) {

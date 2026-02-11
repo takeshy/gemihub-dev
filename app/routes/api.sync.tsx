@@ -5,6 +5,7 @@ import { getSettings, saveSettings } from "~/services/user-settings.server";
 import {
   listUserFiles,
   readFile,
+  readFileBytes,
   createFile,
   updateFile,
   getFileMetadata,
@@ -297,11 +298,46 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     case "fullPush": {
-      // Keep fullPush metadata safe by rebuilding from authoritative Drive state.
-      // Actual file overwrite happens via pushFiles.
-      const remoteMeta = await rebuildSyncMeta(
+      // Full push: merge local meta entries into remote meta
+      const localMeta = body.localMeta as SyncMeta | null;
+      if (!localMeta || typeof localMeta !== "object" || typeof localMeta.files !== "object") {
+        return jsonWithCookie({ error: "Missing localMeta" }, { status: 400 });
+      }
+
+      const remoteMeta =
+        (await readRemoteSyncMeta(
+          validTokens.accessToken,
+          validTokens.rootFolderId
+        )) ?? {
+          lastUpdatedAt: new Date().toISOString(),
+          files: {},
+        };
+
+      // Merge only files that currently exist on Drive
+      const currentFiles = await listUserFiles(validTokens.accessToken, validTokens.rootFolderId);
+      const currentById = new Map(currentFiles.map((f) => [f.id, f]));
+
+      for (const [fileId, fileMeta] of Object.entries(localMeta.files)) {
+        const current = currentById.get(fileId);
+        if (!current) continue;
+        const existing = remoteMeta.files[fileId];
+        remoteMeta.files[fileId] = {
+          ...existing,
+          ...fileMeta,
+          name: fileMeta.name || existing?.name || current.name || "",
+          mimeType: fileMeta.mimeType || existing?.mimeType || current.mimeType || "",
+          md5Checksum: fileMeta.md5Checksum || existing?.md5Checksum || current.md5Checksum || "",
+          modifiedTime: fileMeta.modifiedTime || existing?.modifiedTime || current.modifiedTime || "",
+          createdTime: fileMeta.createdTime || existing?.createdTime || current.createdTime,
+          webViewLink: fileMeta.webViewLink || existing?.webViewLink || current.webViewLink,
+        };
+      }
+      remoteMeta.lastUpdatedAt = new Date().toISOString();
+
+      await writeRemoteSyncMeta(
         validTokens.accessToken,
-        validTokens.rootFolderId
+        validTokens.rootFolderId,
+        remoteMeta
       );
       return jsonWithCookie({ remoteMeta });
     }
@@ -523,6 +559,9 @@ export async function action({ request }: Route.ActionArgs) {
         return jsonWithCookie({ error: "Missing or empty files array" }, { status: 400 });
       }
 
+      const isNotFoundError = (err: unknown) =>
+        err instanceof Error && /\b404\b/.test(err.message);
+
       // Read sync meta once
       const pushRemoteMeta =
         (await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId))
@@ -539,21 +578,44 @@ export async function action({ request }: Route.ActionArgs) {
 
         const existingMeta = pushRemoteMeta.files[fileId];
         const mimeType = existingMeta?.mimeType || "text/plain";
-        const updated = await updateFile(validTokens.accessToken, fileId, content, mimeType);
-
-        return {
-          fileId,
-          md5Checksum: updated.md5Checksum ?? "",
-          modifiedTime: updated.modifiedTime ?? "",
-          name: updated.name,
-          mimeType: updated.mimeType,
-          oldContent,
-          newContent: content,
-        };
+        try {
+          const updated = await updateFile(validTokens.accessToken, fileId, content, mimeType);
+          return {
+            ok: true as const,
+            fileId,
+            md5Checksum: updated.md5Checksum ?? "",
+            modifiedTime: updated.modifiedTime ?? "",
+            name: updated.name,
+            mimeType: updated.mimeType,
+            oldContent,
+            newContent: content,
+          };
+        } catch (err) {
+          // Skip files that no longer exist on Drive.
+          if (isNotFoundError(err)) {
+            return {
+              ok: false as const,
+              fileId,
+            };
+          }
+          throw err;
+        }
       }, 5);
 
-      // Update meta entries from results
-      for (const r of pushResults) {
+      const successful = pushResults.filter((r): r is {
+        ok: true;
+        fileId: string;
+        md5Checksum: string;
+        modifiedTime: string;
+        name: string;
+        mimeType: string;
+        oldContent: string | null;
+        newContent: string;
+      } => r.ok);
+      const skippedFileIds = pushResults.filter((r) => !r.ok).map((r) => r.fileId);
+
+      // Update meta entries from successful results
+      for (const r of successful) {
         const existing = pushRemoteMeta.files[r.fileId];
         pushRemoteMeta.files[r.fileId] = {
           ...existing,
@@ -563,13 +625,15 @@ export async function action({ request }: Route.ActionArgs) {
           modifiedTime: r.modifiedTime,
         };
       }
-      pushRemoteMeta.lastUpdatedAt = new Date().toISOString();
 
-      // Write sync meta once
-      await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, pushRemoteMeta);
+      if (successful.length > 0) {
+        pushRemoteMeta.lastUpdatedAt = new Date().toISOString();
+        // Write sync meta once
+        await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, pushRemoteMeta);
+      }
 
       // Save remote edit history in background (best-effort, does not block response)
-      const historyEntries = pushResults.filter(
+      const historyEntries = successful.filter(
         (r) => r.oldContent != null && r.newContent != null && r.oldContent !== r.newContent
       );
       if (historyEntries.length > 0) {
@@ -591,11 +655,12 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       return jsonWithCookie({
-        results: pushResults.map((r) => ({
-          fileId: r.fileId,
+        results: successful.map((r) => ({
+          fileId,
           md5Checksum: r.md5Checksum,
           modifiedTime: r.modifiedTime,
         })),
+        skippedFileIds,
         remoteMeta: pushRemoteMeta,
       });
     }
@@ -776,7 +841,7 @@ export async function action({ request }: Route.ActionArgs) {
         }
 
         try {
-          const content = await readFile(validTokens.accessToken, driveFileId);
+          const content = await readFileBytes(validTokens.accessToken, driveFileId);
           const result = await registerSingleFile(
             retryApiKey,
             retryRagSetting.storeName,

@@ -135,7 +135,7 @@ Execute an LLM prompt via Gemini API.
   model: gemini-2.5-flash
   ragSetting: __websearch__
   driveToolMode: all
-  mcpServers: "server1,server2"
+  mcpServers: "mcp_server_id_1,mcp_server_id_2"
   attachments: "imageVar"
   saveTo: summary
   saveImageTo: generatedImage
@@ -148,11 +148,15 @@ Execute an LLM prompt via Gemini API.
 | `model` | No | Yes | Model name (default: user's selected model) |
 | `ragSetting` | No | No | RAG setting name, `__websearch__` for web search, or `__none__` (default) |
 | `driveToolMode` | No | No | `none` (default), `all`, `noSearch` — enables Drive tool calling |
-| `mcpServers` | No | No | Comma-separated MCP server names to enable |
+| `mcpServers` | No | No | Comma-separated MCP server IDs to enable |
 | `attachments` | No | Yes | Comma-separated variable names containing FileExplorerData |
 | `saveTo` | No | No | Variable to store text response |
 | `saveImageTo` | No | No | Variable to store generated image (FileExplorerData JSON) |
 | `systemPrompt` | No | Yes | System prompt for the LLM |
+
+`command` node uses the same tool constraints as chat:
+- Gemma models force function tools (Drive/MCP) off
+- Web Search mode forces function tools (Drive/MCP) off
 
 ---
 

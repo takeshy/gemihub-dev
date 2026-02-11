@@ -19,12 +19,81 @@ export interface OAuthTokens {
 
 // MCP (Model Context Protocol) server configuration
 export interface McpServerConfig {
+  id?: string;
   name: string;
   url: string;
   headers?: Record<string, string>;
   tools?: McpToolInfo[];
   oauth?: OAuthConfig;
   oauthTokens?: OAuthTokens;
+}
+
+export function sanitizeMcpIdentifier(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+}
+
+function hashString(input: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+export function deriveMcpServerId(
+  server: Pick<McpServerConfig, "id" | "name" | "url">,
+  fallbackIndex = 0
+): string {
+  const preferred = sanitizeMcpIdentifier(server.id || "");
+  if (preferred) return preferred;
+
+  const base = sanitizeMcpIdentifier(server.name || "server") || "server";
+  const hash = hashString(`${server.url || ""}|${server.name || ""}|${fallbackIndex}`);
+  return `mcp_${base}_${hash}`;
+}
+
+export function normalizeMcpServers(servers: McpServerConfig[]): McpServerConfig[] {
+  const used = new Set<string>();
+  return servers.map((server, index) => {
+    const baseId = deriveMcpServerId(server, index);
+    let id = baseId;
+    let suffix = 2;
+    while (used.has(id)) {
+      id = `${baseId}_${suffix++}`;
+    }
+    used.add(id);
+    if (server.id === id) return server;
+    return { ...server, id };
+  });
+}
+
+export function normalizeSelectedMcpServerIds(
+  selected: string[] | null | undefined,
+  servers: McpServerConfig[]
+): string[] {
+  if (!selected || selected.length === 0) return [];
+  const byId = new Map<string, string>();
+  const byName = new Map<string, string>();
+
+  for (const server of normalizeMcpServers(servers)) {
+    if (!server.id) continue;
+    byId.set(server.id, server.id);
+    byName.set(server.name, server.id);
+  }
+
+  const resolved: string[] = [];
+  for (const value of selected) {
+    const id = byId.get(value) || byName.get(value);
+    if (id && !resolved.includes(id)) {
+      resolved.push(id);
+    }
+  }
+  return resolved;
 }
 
 // MCP tool information (from server)
@@ -401,6 +470,7 @@ export interface SlashCommand {
   model?: ModelType | null;
   searchSetting?: string | null;
   driveToolMode?: DriveToolMode | null;
+  // MCP server IDs (legacy data may still contain names; normalized on read).
   enabledMcpServers?: string[] | null;
 }
 

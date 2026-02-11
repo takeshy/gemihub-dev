@@ -29,7 +29,8 @@ export async function action({ request }: Route.ActionArgs) {
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const body = await request.json();
-  const { serverUrl, serverHeaders, resourceUri } = body as {
+  const { serverId, serverUrl, serverHeaders, resourceUri } = body as {
+    serverId?: string;
     serverUrl: string;
     serverHeaders?: Record<string, string>;
     resourceUri: string;
@@ -54,9 +55,11 @@ export async function action({ request }: Route.ActionArgs) {
   try {
     const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
     const targetHeaderSig = canonicalizeHeaders(serverHeaders);
-    const matchedServer = settings.mcpServers.find(
-      (s) => s.url === serverUrl && canonicalizeHeaders(s.headers) === targetHeaderSig
-    );
+    const matchedServer = serverId
+      ? settings.mcpServers.find((s) => s.id === serverId)
+      : settings.mcpServers.find(
+          (s) => s.url === serverUrl && canonicalizeHeaders(s.headers) === targetHeaderSig
+        );
 
     const tokenBefore = matchedServer
       ? JSON.stringify(matchedServer.oauthTokens ?? null)

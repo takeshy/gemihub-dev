@@ -1,7 +1,12 @@
 // User settings CRUD via Google Drive (settings.json in root folder)
 
 import { listFiles, readFile, createFile, updateFile } from "./google-drive.server";
-import { DEFAULT_USER_SETTINGS, type UserSettings } from "~/types/settings";
+import {
+  DEFAULT_USER_SETTINGS,
+  normalizeMcpServers,
+  normalizeSelectedMcpServerIds,
+  type UserSettings,
+} from "~/types/settings";
 
 const SETTINGS_FILE_NAME = "settings.json";
 
@@ -43,11 +48,24 @@ export async function getSettings(
 
     const content = await readFile(accessToken, fileId);
     const parsed = JSON.parse(content) as Partial<UserSettings>;
+    const normalizedMcpServers = normalizeMcpServers(parsed.mcpServers || []);
+    const normalizedSlashCommands = (parsed.slashCommands || []).map((cmd) => {
+      const normalizedIds = normalizeSelectedMcpServerIds(
+        cmd.enabledMcpServers,
+        normalizedMcpServers
+      );
+      return {
+        ...cmd,
+        enabledMcpServers: normalizedIds.length > 0 ? normalizedIds : null,
+      };
+    });
 
     // Merge with defaults to handle missing fields from older versions
     const settings: UserSettings = {
       ...DEFAULT_USER_SETTINGS,
       ...parsed,
+      mcpServers: normalizedMcpServers,
+      slashCommands: normalizedSlashCommands,
       encryption: { ...DEFAULT_USER_SETTINGS.encryption, ...parsed.encryption },
       editHistory: {
         ...DEFAULT_USER_SETTINGS.editHistory,
@@ -78,7 +96,22 @@ export async function saveSettings(
   rootFolderId: string,
   settings: UserSettings
 ): Promise<void> {
-  const content = JSON.stringify(settings, null, 2);
+  const normalizedMcpServers = normalizeMcpServers(settings.mcpServers || []);
+  const normalizedSettings: UserSettings = {
+    ...settings,
+    mcpServers: normalizedMcpServers,
+    slashCommands: (settings.slashCommands || []).map((cmd) => {
+      const normalizedIds = normalizeSelectedMcpServerIds(
+        cmd.enabledMcpServers,
+        normalizedMcpServers
+      );
+      return {
+        ...cmd,
+        enabledMcpServers: normalizedIds.length > 0 ? normalizedIds : null,
+      };
+    }),
+  };
+  const content = JSON.stringify(normalizedSettings, null, 2);
   const fileId = await getSettingsFileId(accessToken, rootFolderId);
 
   if (fileId) {
@@ -89,7 +122,7 @@ export async function saveSettings(
 
   // Update cache
   const cacheKey = rootFolderId;
-  settingsCache.set(cacheKey, { settings, fileId, cachedAt: Date.now() });
+  settingsCache.set(cacheKey, { settings: normalizedSettings, fileId, cachedAt: Date.now() });
 }
 
 /**

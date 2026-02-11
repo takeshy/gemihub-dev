@@ -349,6 +349,7 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming 
           {message.mcpApps!.map((mcpApp, index) => (
             <McpAppRenderer
               key={index}
+              serverId={mcpApp.serverId}
               serverUrl={mcpApp.serverUrl}
               serverHeaders={mcpApp.serverHeaders}
               toolResult={mcpApp.toolResult}

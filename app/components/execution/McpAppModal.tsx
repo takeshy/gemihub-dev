@@ -44,6 +44,7 @@ export function McpAppModal({ mcpApps, onClose }: McpAppModalProps) {
           {mcpApps.map((app, i) => (
             <McpAppRenderer
               key={i}
+              serverId={app.serverId}
               serverUrl={app.serverUrl}
               serverHeaders={app.serverHeaders}
               toolResult={app.toolResult}

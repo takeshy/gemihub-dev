@@ -4,6 +4,7 @@ import { ICON } from "~/utils/icon-sizes";
 import type { McpAppResult, McpAppUiResource } from "~/types/settings";
 
 interface McpAppRendererProps {
+  serverId?: string;
   serverUrl: string;
   serverHeaders?: Record<string, string>;
   toolResult: McpAppResult;
@@ -30,6 +31,7 @@ interface JsonRpcResponse {
  * Call an MCP tool via the server-side proxy to avoid CORS issues
  */
 async function callMcpTool(
+  serverId: string | undefined,
   serverUrl: string,
   serverHeaders: Record<string, string> | undefined,
   toolName: string,
@@ -38,7 +40,7 @@ async function callMcpTool(
   const res = await fetch("/api/mcp/tool-call", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ serverUrl, serverHeaders, toolName, args }),
+    body: JSON.stringify({ serverId, serverUrl, serverHeaders, toolName, args }),
   });
 
   if (!res.ok) {
@@ -52,6 +54,7 @@ async function callMcpTool(
  * Read an MCP resource via the server-side proxy
  */
 async function readMcpResource(
+  serverId: string | undefined,
   serverUrl: string,
   serverHeaders: Record<string, string> | undefined,
   resourceUri: string
@@ -59,7 +62,7 @@ async function readMcpResource(
   const res = await fetch("/api/mcp/resource-read", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ serverUrl, serverHeaders, resourceUri }),
+    body: JSON.stringify({ serverId, serverUrl, serverHeaders, resourceUri }),
   });
 
   if (!res.ok) return null;
@@ -82,6 +85,7 @@ function getHtmlContent(resource: McpAppUiResource | null | undefined): string |
 }
 
 export function McpAppRenderer({
+  serverId,
   serverUrl,
   serverHeaders,
   toolResult,
@@ -105,7 +109,7 @@ export function McpAppRenderer({
     if (initialUiResource || fetchedResource || fetching || !resourceUri || !expanded) return;
 
     setFetching(true);
-    readMcpResource(serverUrl, serverHeaders, resourceUri)
+    readMcpResource(serverId, serverUrl, serverHeaders, resourceUri)
       .then((resource) => {
         if (resource) {
           setFetchedResource(resource);
@@ -117,7 +121,7 @@ export function McpAppRenderer({
         setError(e instanceof Error ? e.message : "Failed to load resource");
       })
       .finally(() => setFetching(false));
-  }, [initialUiResource, fetchedResource, fetching, resourceUri, expanded, serverUrl, serverHeaders]);
+  }, [initialUiResource, fetchedResource, fetching, resourceUri, expanded, serverId, serverUrl, serverHeaders]);
 
   // Close maximized on Escape key
   useEffect(() => {
@@ -150,6 +154,7 @@ export function McpAppRenderer({
               arguments?: Record<string, unknown>;
             };
             const result = await callMcpTool(
+              serverId,
               serverUrl,
               serverHeaders,
               params.name,
@@ -193,7 +198,7 @@ export function McpAppRenderer({
         });
       }
     },
-    [serverUrl, serverHeaders]
+    [serverId, serverUrl, serverHeaders]
   );
 
   useEffect(() => {

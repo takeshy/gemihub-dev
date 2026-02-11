@@ -212,6 +212,16 @@ export async function readFileRaw(
   );
 }
 
+// Read file as raw bytes (for binary files)
+export async function readFileBytes(
+  accessToken: string,
+  fileId: string
+): Promise<Uint8Array> {
+  const res = await readFileRaw(accessToken, fileId);
+  const buffer = await res.arrayBuffer();
+  return new Uint8Array(buffer);
+}
+
 // Get file metadata
 export async function getFileMetadata(
   accessToken: string,

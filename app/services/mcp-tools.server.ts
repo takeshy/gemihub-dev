@@ -3,6 +3,7 @@
 import { McpClient } from "./mcp-client.server";
 import { isTokenExpired, refreshAccessToken } from "./mcp-oauth.server";
 import { validateMcpServerUrl } from "./url-validator.server";
+import { deriveMcpServerId } from "~/types/settings";
 import type {
   McpServerConfig,
   McpToolInfo,
@@ -82,9 +83,10 @@ export async function getMcpToolDefinitions(
       const client = await getOrCreateClient(server);
       const tools = await client.listTools();
       server.tools = tools;
+      const serverIdentifier = deriveMcpServerId(server);
 
       for (const tool of tools) {
-        const toolDef = mcpToolInfoToDefinition(server.name, tool);
+        const toolDef = mcpToolInfoToDefinition(serverIdentifier, server.name, tool);
         allTools.push(toolDef);
       }
     } catch (error) {
@@ -130,8 +132,12 @@ function convertProperty(raw: Record<string, unknown>, fallbackDesc: string): To
 /**
  * Convert MCP tool info to Gemini ToolDefinition
  */
-function mcpToolInfoToDefinition(serverName: string, tool: McpToolInfo): ToolDefinition {
-  const safeName = sanitizeMcpName(serverName);
+function mcpToolInfoToDefinition(
+  serverIdentifier: string,
+  serverDisplayName: string,
+  tool: McpToolInfo
+): ToolDefinition {
+  const safeName = sanitizeMcpName(serverIdentifier);
   const safeToolName = sanitizeMcpName(tool.name);
   const properties: Record<string, ToolPropertyDefinition> = {};
   const required: string[] = [];
@@ -155,7 +161,7 @@ function mcpToolInfoToDefinition(serverName: string, tool: McpToolInfo): ToolDef
 
   return {
     name: `mcp_${safeName}_${safeToolName}`,
-    description: tool.description || `MCP tool: ${tool.name} from ${serverName}`,
+    description: tool.description || `MCP tool: ${tool.name} from ${serverDisplayName}`,
     parameters: {
       type: "object",
       properties,
@@ -183,7 +189,7 @@ function buildToolMap(mcpServers: McpServerConfig[]): Map<string, { server: McpS
 
   for (const server of mcpServers) {
     if (!server.tools) continue;
-    const safeName = sanitizeMcpName(server.name);
+    const safeName = sanitizeMcpName(deriveMcpServerId(server));
 
     for (const tool of server.tools) {
       const safeToolName = sanitizeMcpName(tool.name);
@@ -214,7 +220,7 @@ export async function executeMcpTool(
     let sanitizedToolName = "";
 
     for (const s of mcpServers) {
-      const safeName = sanitizeMcpName(s.name);
+      const safeName = sanitizeMcpName(deriveMcpServerId(s));
       const prefix = `mcp_${safeName}_`;
       if (toolName.startsWith(prefix)) {
         server = s;
@@ -286,6 +292,7 @@ async function executeToolOnServer(
       }
 
       mcpApp = {
+        serverId: deriveMcpServerId(server),
         serverUrl: server.url,
         serverHeaders: server.headers,
         toolResult: appResult,

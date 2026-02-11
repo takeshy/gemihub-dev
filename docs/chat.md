@@ -7,7 +7,7 @@ AI chat with Gemini streaming, function calling, RAG, image generation, and MCP 
 - **Streaming Responses**: Real-time text generation via Server-Sent Events (SSE)
 - **Function Calling**: Gemini calls Drive tools, MCP tools, RAG/File Search, and Google Search
 - **Drive Tool Integration**: Read, search, list, create, and update Drive files from chat
-- **MCP Tools**: Dynamically-discovered tools from MCP servers (prefixed `mcp_{server}_{tool}`)
+- **MCP Tools**: Dynamically-discovered tools from MCP servers (prefixed `mcp_{serverId}_{tool}`)
 - **RAG / Web Search**: Retrieval-Augmented Generation via Gemini File Search, or Google Search mode
 - **Extended Thinking**: Collapsible thinking/reasoning display for supported models
 - **Image Generation**: Generate images with Imagen-capable models
@@ -78,7 +78,7 @@ Mode is auto-constrained by model and RAG settings:
 
 ### MCP Tools
 
-MCP tools are dynamically discovered from configured MCP servers. Tool names use the format `mcp_{serverName}_{toolName}`. MCP server selection is persisted to `localStorage`.
+MCP tools are dynamically discovered from configured MCP servers. Tool names use the format `mcp_{serverId}_{toolName}`. MCP server selection is persisted to `localStorage` as server IDs.
 
 ### Function Call Limits
 

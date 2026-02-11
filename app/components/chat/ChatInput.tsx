@@ -37,8 +37,8 @@ interface ChatInputProps {
   driveToolMode?: DriveToolMode;
   onDriveToolModeChange?: (mode: DriveToolMode) => void;
   mcpServers?: McpServerConfig[];
-  enabledMcpServerNames?: string[];
-  onEnabledMcpServerNamesChange?: (names: string[]) => void;
+  enabledMcpServerIds?: string[];
+  onEnabledMcpServerIdsChange?: (ids: string[]) => void;
   slashCommands?: (SlashCommand & { execute?: (args: string) => Promise<string> })[];
   driveToolModeLocked?: boolean;
   driveToolModeReasonKey?: keyof TranslationStrings;
@@ -141,8 +141,8 @@ export function ChatInput({
   driveToolMode = "all",
   onDriveToolModeChange,
   mcpServers = [],
-  enabledMcpServerNames = [],
-  onEnabledMcpServerNamesChange,
+  enabledMcpServerIds = [],
+  onEnabledMcpServerIdsChange,
   slashCommands = [],
   driveToolModeLocked = false,
   driveToolModeReasonKey,
@@ -499,7 +499,7 @@ export function ChatInput({
                   className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
                     driveToolModeLocked
                       ? "text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/30"
-                      : driveToolMode !== "all" || (mcpServers.length > 0 && enabledMcpServerNames.length < mcpServers.length)
+                      : driveToolMode !== "all" || (mcpServers.length > 0 && enabledMcpServerIds.length < mcpServers.length)
                         ? "text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/30"
                         : "text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   }`}
@@ -552,14 +552,15 @@ export function ChatInput({
                         </button>
                       );
                     })}
-                    {mcpServers.length > 0 && onEnabledMcpServerNamesChange && (
+                    {mcpServers.length > 0 && onEnabledMcpServerIdsChange && (
                       <>
                         <div className="mx-3 my-1 border-t border-gray-200 dark:border-gray-700" />
                         <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                          {t("chat.mcpToolsLabel")}
+                        {t("chat.mcpToolsLabel")}
                         </div>
                         {mcpServers.map((server) => {
-                          const isEnabled = enabledMcpServerNames.includes(server.name);
+                          const serverId = server.id || server.name;
+                          const isEnabled = enabledMcpServerIds.includes(serverId);
                           const toolNames = (server.tools || []).map(tl => tl.name);
                           const toolCount = toolNames.length;
                           const preview = toolNames.slice(0, 3).join(", ") + (toolNames.length > 3 ? ", ..." : "");
@@ -568,13 +569,13 @@ export function ChatInput({
                             : server.name;
                           return (
                             <button
-                              key={server.name}
+                              key={serverId}
                               onClick={() => {
                                 if (driveToolModeLocked) return;
                                 const next = isEnabled
-                                  ? enabledMcpServerNames.filter(n => n !== server.name)
-                                  : [...enabledMcpServerNames, server.name];
-                                onEnabledMcpServerNamesChange(next);
+                                  ? enabledMcpServerIds.filter(n => n !== serverId)
+                                  : [...enabledMcpServerIds, serverId];
+                                onEnabledMcpServerIdsChange(next);
                               }}
                               className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
                                 driveToolModeLocked

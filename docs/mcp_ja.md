@@ -106,19 +106,19 @@ RFC 9728 に基づく OAuth 2.0 認証が必要なサーバーをサポートし
 
 ### ツール選択
 
-チャット入力のツールドロップダウンで、各 MCP サーバーがチェックボックスとして表示されます。ユーザーはチャットセッションごとにサーバーを有効/無効にできます。選択は `localStorage` に永続化されます。
+チャット入力のツールドロップダウンで、各 MCP サーバーがチェックボックスとして表示されます。ユーザーはチャットセッションごとにサーバーを有効/無効にできます。選択は MCP サーバー ID として `localStorage` に永続化されます。
 
 ### ツール命名
 
 MCP ツールはプレフィックス付きの名前で Gemini に公開されます：
 
 ```
-mcp_{sanitizedServerName}_{sanitizedToolName}
+mcp_{sanitizedServerId}_{sanitizedToolName}
 ```
 
-サニタイズ: 小文字化、英数字以外を `_` に置換、先頭/末尾の `_` を除去。
+`sanitizedServerId` は各サーバーの一意 ID（または移行時の正規化/サニタイズ済みフォールバック）から生成されます。サニタイズ: 小文字化、英数字以外を `_` に置換、先頭/末尾の `_` を除去。
 
-例: サーバー「Brave Search」、ツール「web_search」→ `mcp_brave_search_web_search`
+例: サーバー ID `brave_search_ab12cd`、ツール `web_search` → `mcp_brave_search_ab12cd_web_search`
 
 ### 実行フロー
 
@@ -218,7 +218,12 @@ iframe からのツール呼び出しは CORS を回避するため `POST /api/m
 
 ### Command ノード
 
-`command` ワークフローノードは `mcpServers` プロパティ（カンマ区切りのサーバー名）をサポートし、ワークフロー内の Gemini チャットで MCP ツールを有効にします。
+`command` ワークフローノードは `mcpServers` プロパティ（カンマ区切りのサーバー ID）をサポートし、ワークフロー内の Gemini チャットで MCP ツールを有効にします。
+
+`command` ノードのツール制約は `api.chat` と同一です:
+- **Web Search** が有効な場合、MCP ツールは無効
+- **Gemma モデル** 選択時、MCP ツールは無効
+- モデル/検索制約で function tools が強制無効化される場合、MCP ツールも無効
 
 ---
 

@@ -106,19 +106,19 @@ All OAuth discovery URLs are validated for SSRF protection before fetching.
 
 ### Tool Selection
 
-In the chat input tool dropdown, each MCP server appears as a checkbox. Users enable/disable servers per chat session. Selection is persisted to `localStorage`.
+In the chat input tool dropdown, each MCP server appears as a checkbox. Users enable/disable servers per chat session. Selection is persisted to `localStorage` as MCP server IDs.
 
 ### Tool Naming
 
 MCP tools are exposed to Gemini with prefixed names:
 
 ```
-mcp_{sanitizedServerName}_{sanitizedToolName}
+mcp_{sanitizedServerId}_{sanitizedToolName}
 ```
 
-Sanitization: lowercase, replace non-alphanumeric with `_`, strip leading/trailing `_`.
+`sanitizedServerId` is derived from each server's unique ID (or normalized/sanitized fallback when migrating legacy configs). Sanitization: lowercase, replace non-alphanumeric with `_`, strip leading/trailing `_`.
 
-Example: Server "Brave Search", tool "web_search" → `mcp_brave_search_web_search`
+Example: Server ID `brave_search_ab12cd`, tool `web_search` → `mcp_brave_search_ab12cd_web_search`
 
 ### Execution Flow
 
@@ -218,7 +218,12 @@ The workflow MCP handler creates a dedicated `McpClient` per execution (not cach
 
 ### Command Node
 
-The `command` workflow node supports `mcpServers` property (comma-separated server names) to enable MCP tools during Gemini chat within workflows.
+The `command` workflow node supports `mcpServers` property (comma-separated server IDs) to enable MCP tools during Gemini chat within workflows.
+
+`command` node tool constraints are identical to `api.chat`:
+- MCP tools are disabled when **Web Search** mode is active
+- MCP tools are disabled when **Gemma models** are selected
+- MCP tools are disabled when function tools are forced off by model/search constraints
 
 ---
 

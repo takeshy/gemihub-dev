@@ -10,6 +10,7 @@ export interface GeneratedImage {
 
 // MCP App info for rendering in messages
 export interface McpAppInfo {
+  serverId?: string;
   serverUrl: string;
   serverHeaders?: Record<string, string>;
   toolResult: McpAppResult;

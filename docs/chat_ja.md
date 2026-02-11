@@ -7,7 +7,7 @@ Gemini ストリーミング、Function Calling、RAG、画像生成、MCP 連�
 - **ストリーミングレスポンス**: Server-Sent Events (SSE) によるリアルタイムテキスト生成
 - **Function Calling**: Gemini が Drive ツール、MCP ツール、RAG/File Search、Google Search を呼び出し
 - **Drive ツール連携**: チャットから Drive ファイルの読み取り・検索・一覧・作成・更新
-- **MCP ツール**: MCP サーバーから動的に検出されるツール（`mcp_{server}_{tool}` 形式）
+- **MCP ツール**: MCP サーバーから動的に検出されるツール（`mcp_{serverId}_{tool}` 形式）
 - **RAG / Web Search**: Gemini File Search による検索拡張生成、または Google Search モード
 - **拡張思考**: 対応モデルでの折りたたみ可能な思考/推論表示
 - **画像生成**: Imagen 対応モデルによる画像生成
@@ -78,7 +78,7 @@ Gemini ストリーミング、Function Calling、RAG、画像生成、MCP 連�
 
 ### MCP ツール
 
-MCP ツールは設定済み MCP サーバーから動的に検出される。ツール名は `mcp_{serverName}_{toolName}` 形式。MCP サーバーの選択は `localStorage` に永続化。
+MCP ツールは設定済み MCP サーバーから動的に検出される。ツール名は `mcp_{serverId}_{toolName}` 形式。MCP サーバーの選択はサーバー ID として `localStorage` に永続化。
 
 ### Function Call 制限
 
