@@ -529,7 +529,7 @@ function MarkdownFileEditor({
       {mode === "raw" && (
         <div className="flex-1 p-4">
           <textarea
-            value={content}
+            value={content.replace(/\u00A0/g, "")}
             onChange={(e) => updateContent(e.target.value)}
             onSelect={handleSelect}
             className="w-full h-full font-mono text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
