@@ -475,7 +475,7 @@ export function DriveFileTree({
       return;
     }
 
-    // Generate temporary ID — Drive file will be created on first auto-save
+    // Generate temporary ID — Drive file is created in the background below
     const tempId = `new:${fullName}`;
     const mimeType = fileName.endsWith(".yaml") || fileName.endsWith(".yml")
       ? "text/yaml"
@@ -534,6 +534,45 @@ export function DriveFileTree({
 
     // Open the file immediately
     onSelectFile(tempId, fileName, mimeType);
+
+    // Create Drive file in background — migrate IDs when done
+    fetch("/api/drive/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create", name: fullName, content: "", mimeType }),
+    }).then(async (res) => {
+      if (!res.ok) return;
+      const data = await res.json();
+      const file = data.file;
+      // Read current content from cache (user may have already typed)
+      const cached = await getCachedFile(tempId);
+      if (!cached) return; // temp entry was removed (e.g. file renamed/deleted before migration)
+      const currentContent = cached.content;
+      // Swap cache entries: delete temp, create real
+      await deleteCachedFile(tempId);
+      await setCachedFile({
+        fileId: file.id,
+        content: currentContent,
+        md5Checksum: file.md5Checksum ?? "",
+        modifiedTime: file.modifiedTime ?? "",
+        cachedAt: Date.now(),
+        fileName: file.name,
+      });
+      // Notify tree, _index, and useFileWithCache to migrate
+      window.dispatchEvent(
+        new CustomEvent("file-id-migrated", {
+          detail: { oldId: tempId, newId: file.id, fileName: file.name, mimeType: file.mimeType },
+        })
+      );
+      // If user edited before migration, push content to Drive
+      if (currentContent) {
+        fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "update", fileId: file.id, content: currentContent }),
+        }).catch(() => {});
+      }
+    }).catch(() => {});
   }, [createFileDialog, selectedFolderId, onSelectFile, treeItems, t]);
 
   // Auto-clear progress after 3 seconds when all done
@@ -1104,12 +1143,41 @@ export function DriveFileTree({
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.meta) {
-            await updateTreeFromMeta(data.meta);
-          } else {
-            await fetchAndCacheTree();
-          }
-          onSelectFile(data.file.id, data.file.name, data.file.mimeType);
+          const file = data.file;
+          // Add the new file to the tree directly
+          const baseName = (file.name as string).split("/").pop()!;
+          const newNode: CachedTreeNode = {
+            id: file.id,
+            name: baseName,
+            mimeType: file.mimeType,
+            isFolder: false,
+            modifiedTime: file.modifiedTime ?? new Date().toISOString(),
+          };
+          setTreeItems((prev) => {
+            const parts = (file.name as string).split("/");
+            if (parts.length <= 1) {
+              return [...prev, newNode].sort((a, b) => {
+                if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+                return a.name.localeCompare(b.name);
+              });
+            }
+            // Insert into the correct parent folder
+            const parentPath = parts.slice(0, -1).join("/");
+            const parentId = `vfolder:${parentPath}`;
+            const insertInto = (nodes: CachedTreeNode[]): CachedTreeNode[] =>
+              nodes.map((n) => {
+                if (n.id === parentId && n.children) {
+                  return { ...n, children: [...n.children, newNode].sort((a, b) => {
+                    if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+                    return a.name.localeCompare(b.name);
+                  }) };
+                }
+                if (n.children) return { ...n, children: insertInto(n.children) };
+                return n;
+              });
+            return insertInto(prev);
+          });
+          onSelectFile(file.id, baseName, file.mimeType);
         }
       } catch {
         // ignore
@@ -1117,7 +1185,7 @@ export function DriveFileTree({
         clearBusy([item.id]);
       }
     },
-    [treeItems, findFullFileName, fetchAndCacheTree, updateTreeFromMeta, onSelectFile, setBusy, clearBusy]
+    [treeItems, findFullFileName, onSelectFile, setBusy, clearBusy]
   );
 
   const handlePublish = useCallback(

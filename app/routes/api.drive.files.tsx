@@ -105,9 +105,8 @@ export async function action({ request }: Route.ActionArgs) {
         validTokens.rootFolderId,
         mimeType || "text/yaml"
       );
-      // Update sync meta in background — don't block the response
-      upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file).catch(() => {});
-      return jsonWithCookie({ file });
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+      return jsonWithCookie({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "create-image": {
       if (!name || !data) return jsonWithCookie({ error: "Missing name or data" }, { status: 400 });

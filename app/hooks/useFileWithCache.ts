@@ -26,9 +26,13 @@ export function useFileWithCache(
   const [prevFileId, setPrevFileId] = useState(fileId);
   const [prevRefreshKey, setPrevRefreshKey] = useState(refreshKey);
   if (fileId !== prevFileId) {
+    const wasMigration = prevFileId?.startsWith("new:") && !fileId?.startsWith("new:");
     setPrevFileId(fileId);
     currentFileId.current = fileId;
-    setContent(null);
+    // Don't clear content when migrating from new: to real ID (same content, avoids flash)
+    if (!wasMigration) {
+      setContent(null);
+    }
     setSaved(false);
     setError(null);
     migratingRef.current = false;
@@ -203,56 +207,19 @@ export function useFileWithCache(
       // Immediately reflect in React state so the UI never lags behind the cache
       setContent(newContent);
 
-      // Handle new: prefix — create Drive file on first save, then migrate IDs
-      if (effectiveFileId.startsWith("new:") && !migratingRef.current) {
-        migratingRef.current = true;
+      // new: prefix files — just update cache; Drive creation is handled by DriveFileTree background
+      if (effectiveFileId.startsWith("new:")) {
         try {
-          const fullName = effectiveFileId.slice("new:".length);
-          const res = await fetch("/api/drive/files", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "create",
-              name: fullName,
-              content: newContent,
-              mimeType: "text/plain",
-            }),
+          const cached = await getCachedFile(effectiveFileId);
+          await setCachedFile({
+            fileId: effectiveFileId,
+            content: newContent,
+            md5Checksum: "",
+            modifiedTime: "",
+            cachedAt: Date.now(),
+            fileName: cached?.fileName ?? effectiveFileId.slice("new:".length),
           });
-          if (res.ok) {
-            const data = await res.json();
-            const file = data.file;
-            const newId = file.id as string;
-            const fileName = file.name as string;
-            const mimeType = file.mimeType as string;
-
-            // Delete old new: cache entry, create real one
-            await deleteCachedFile(effectiveFileId);
-            await setCachedFile({
-              fileId: newId,
-              content: newContent,
-              md5Checksum: file.md5Checksum ?? "",
-              modifiedTime: file.modifiedTime ?? "",
-              cachedAt: Date.now(),
-              fileName,
-            });
-
-            // Update ref so subsequent saves use the real ID
-            currentFileId.current = newId;
-
-            // Dispatch migration event for DriveFileTree and _index to pick up
-            window.dispatchEvent(
-              new CustomEvent("file-id-migrated", {
-                detail: { oldId: effectiveFileId, newId, fileName, mimeType },
-              })
-            );
-          } else {
-            // Non-ok response (e.g. 500) — allow retry on next save
-            migratingRef.current = false;
-          }
-        } catch {
-          // Network error — allow retry on next save
-          migratingRef.current = false;
-        }
+        } catch { /* ignore */ }
         return;
       }
 
@@ -303,6 +270,20 @@ export function useFileWithCache(
     };
     window.addEventListener("file-restored", handler);
     return () => window.removeEventListener("file-restored", handler);
+  }, [fileId]);
+
+  // When a new: file is migrated to a real Drive ID externally (by DriveFileTree),
+  // update currentFileId so subsequent saveToCache calls use the real ID.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { oldId, newId } = (e as CustomEvent).detail;
+      if (oldId === fileId) {
+        currentFileId.current = newId;
+        migratingRef.current = true;
+      }
+    };
+    window.addEventListener("file-id-migrated", handler);
+    return () => window.removeEventListener("file-id-migrated", handler);
   }, [fileId]);
 
   const refresh = useCallback(async () => {
