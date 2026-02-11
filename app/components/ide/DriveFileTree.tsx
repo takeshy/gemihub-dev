@@ -743,6 +743,43 @@ export function DriveFileTree({
 
   const handleRename = useCallback(
     async (item: CachedTreeNode) => {
+      // new: prefix files are not yet on Drive — rename locally only
+      if (!item.isFolder && item.id.startsWith("new:")) {
+        const newBaseName = prompt(t("contextMenu.rename"), item.name);
+        if (!newBaseName?.trim() || newBaseName.trim() === item.name) return;
+        const oldFullName = item.id.slice("new:".length);
+        const hasPath = oldFullName.includes("/");
+        const prefix = hasPath ? oldFullName.substring(0, oldFullName.lastIndexOf("/")) : "";
+        const newFullName = prefix ? `${prefix}/${newBaseName.trim()}` : newBaseName.trim();
+        const newTempId = `new:${newFullName}`;
+        // Migrate cache entry
+        const cached = await getCachedFile(item.id);
+        await deleteCachedFile(item.id);
+        await setCachedFile({
+          fileId: newTempId,
+          content: cached?.content ?? "",
+          md5Checksum: "",
+          modifiedTime: "",
+          cachedAt: Date.now(),
+          fileName: newFullName,
+        });
+        // Update tree node
+        setTreeItems((prev) => {
+          const replace = (nodes: CachedTreeNode[]): CachedTreeNode[] =>
+            nodes.map((n) => {
+              if (n.id === item.id) return { ...n, id: newTempId, name: newBaseName.trim() };
+              if (n.children) return { ...n, children: replace(n.children) };
+              return n;
+            });
+          return replace(prev);
+        });
+        // Update active file if it was the renamed file
+        if (activeFileId === item.id) {
+          onSelectFile(newTempId, newBaseName.trim(), item.mimeType);
+        }
+        return;
+      }
+
       if (item.isFolder && item.id.startsWith("vfolder:")) {
         // Virtual folder rename: rename the path prefix in all contained files
         const oldPrefix = item.id.slice("vfolder:".length);
@@ -829,11 +866,19 @@ export function DriveFileTree({
         clearBusy([item.id]);
       }
     },
-    [fetchAndCacheTree, updateTreeFromMeta, t, collectFileIds, findFullFileName, treeItems, setBusy, clearBusy]
+    [fetchAndCacheTree, updateTreeFromMeta, t, collectFileIds, findFullFileName, treeItems, setBusy, clearBusy, activeFileId, onSelectFile]
   );
 
   const handleDelete = useCallback(
     async (item: CachedTreeNode) => {
+      // new: prefix files are not yet on Drive — delete locally only
+      if (!item.isFolder && item.id.startsWith("new:")) {
+        if (!confirm(t("trash.softDeleteConfirm").replace("{name}", item.name))) return;
+        await deleteCachedFile(item.id);
+        setTreeItems((prev) => removeNodeFromTree(prev, item.id));
+        return;
+      }
+
       if (item.isFolder && item.id.startsWith("vfolder:")) {
         // Virtual folder: move all files within to trash
         const fileIds = collectFileIds(item);
