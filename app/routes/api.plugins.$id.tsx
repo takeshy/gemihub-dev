@@ -9,6 +9,7 @@ import {
   uninstallPlugin,
   installPlugin,
   checkPluginUpdate,
+  PluginClientError,
 } from "~/services/plugin-manager.server";
 import {
   getLocalPluginFile,
@@ -273,6 +274,9 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Operation failed";
+    if (err instanceof PluginClientError) {
+      return jsonWithCookie({ error: message }, { status: 400 });
+    }
     return jsonWithCookie({ error: message }, { status: 500 });
   }
 }

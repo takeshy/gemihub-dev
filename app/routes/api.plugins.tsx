@@ -2,7 +2,7 @@ import type { Route } from "./+types/api.plugins";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
-import { installPlugin } from "~/services/plugin-manager.server";
+import { installPlugin, PluginClientError } from "~/services/plugin-manager.server";
 import type { PluginConfig } from "~/types/settings";
 
 // ---------------------------------------------------------------------------
@@ -97,6 +97,9 @@ export async function action({ request }: Route.ActionArgs) {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Install failed";
+    if (err instanceof PluginClientError) {
+      return Response.json({ error: message }, { status: 400 });
+    }
     return Response.json({ error: message }, { status: 500 });
   }
 }

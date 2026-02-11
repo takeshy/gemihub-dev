@@ -24,16 +24,26 @@ interface GitHubRelease {
   assets: GitHubReleaseAsset[];
 }
 
-function parsePluginManifest(content: string): PluginManifest {
+export class PluginClientError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PluginClientError";
+  }
+}
+
+export function parsePluginManifest(
+  content: string,
+  expectedPluginId?: string
+): PluginManifest {
   let parsed: unknown;
   try {
     parsed = JSON.parse(content);
   } catch {
-    throw new Error("Invalid manifest.json: must be valid JSON");
+    throw new PluginClientError("Invalid manifest.json: must be valid JSON");
   }
 
   if (!parsed || typeof parsed !== "object") {
-    throw new Error("Invalid manifest.json: expected object");
+    throw new PluginClientError("Invalid manifest.json: expected object");
   }
 
   const manifest = parsed as Partial<PluginManifest>;
@@ -49,14 +59,21 @@ function parsePluginManifest(content: string): PluginManifest {
   for (const field of requiredFields) {
     const value = manifest[field];
     if (typeof value !== "string" || value.trim() === "") {
-      throw new Error(`Invalid manifest.json: "${field}" must be a non-empty string`);
+      throw new PluginClientError(
+        `Invalid manifest.json: "${field}" must be a non-empty string`
+      );
     }
   }
 
   const id = manifest.id!.trim();
   if (!/^[A-Za-z0-9._-]+$/.test(id) || id === "." || id === "..") {
-    throw new Error(
+    throw new PluginClientError(
       'Invalid manifest.json: "id" may contain only letters, numbers, dot, underscore, and hyphen'
+    );
+  }
+  if (expectedPluginId && id !== expectedPluginId) {
+    throw new PluginClientError(
+      `Update manifest ID mismatch: expected "${expectedPluginId}", got "${id}"`
     );
   }
 
@@ -136,12 +153,7 @@ export async function installPlugin(
     stylesAsset ? downloadAsset(stylesAsset.browser_download_url) : Promise.resolve(""),
   ]);
 
-  const manifest = parsePluginManifest(manifestContent);
-  if (expectedPluginId && manifest.id !== expectedPluginId) {
-    throw new Error(
-      `Update manifest ID mismatch: expected "${expectedPluginId}", got "${manifest.id}"`
-    );
-  }
+  const manifest = parsePluginManifest(manifestContent, expectedPluginId);
 
   // Create plugin folder in Drive: plugins/{plugin-id}/
   const pluginsFolderId = await ensurePluginsFolder(accessToken, rootFolderId);
