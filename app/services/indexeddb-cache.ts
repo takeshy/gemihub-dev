@@ -242,6 +242,16 @@ export async function getAllCachedFileIds(): Promise<Set<string>> {
   }
 }
 
+export async function getPendingNewFiles(): Promise<CachedFile[]> {
+  if (typeof indexedDB === "undefined") return [];
+  try {
+    const allFiles = await getAllCachedFiles();
+    return allFiles.filter((f) => f.fileId.startsWith("new:"));
+  } catch {
+    return [];
+  }
+}
+
 // --- syncMeta store ---
 
 export async function getLocalSyncMeta(): Promise<LocalSyncMeta | undefined> {

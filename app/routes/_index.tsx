@@ -28,6 +28,7 @@ import { QuickOpenDialog } from "~/components/ide/QuickOpenDialog";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 import { useSync } from "~/hooks/useSync";
 import { useIsMobile } from "~/hooks/useIsMobile";
+import { usePendingFileMigration } from "~/hooks/usePendingFileMigration";
 import { ICON } from "~/utils/icon-sizes";
 
 // ---------------------------------------------------------------------------
@@ -568,6 +569,9 @@ function IDEContent({
       window.removeEventListener("online", goOnline);
     };
   }, []);
+
+  // Migrate offline-created new: files to Drive when back online
+  usePendingFileMigration(isOffline);
 
   // Search panel state
   const [showSearch, setShowSearch] = useState(false);
