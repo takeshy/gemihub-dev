@@ -5,12 +5,12 @@ import { getTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
-import type { UserSettings } from "~/types/settings";
-import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus } from "lucide-react";
+import { DEFAULT_USER_SETTINGS, type UserSettings } from "~/types/settings";
+import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus, WifiOff } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
-import { setCachedFile } from "~/services/indexeddb-cache";
+import { setCachedFile, getCachedLoaderData, setCachedLoaderData } from "~/services/indexeddb-cache";
 import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
 
 import { Header, type RightPanelId } from "~/components/ide/Header";
@@ -55,31 +55,89 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     return data(
       {
-        settings,
+        settings: settings as UserSettings,
         hasGeminiApiKey: !!validTokens.geminiApiKey,
         hasEncryptedApiKey: !!settings.encryptedApiKey,
         rootFolderId: validTokens.rootFolderId,
+        isOffline: false,
       },
       { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined }
     );
   } catch (e) {
     if (e instanceof Response) throw e;
-    throw redirect("/lp");
+    // Network error (Google API unreachable) — return offline-compatible data
+    // so the client can fall back to IndexedDB-cached settings.
+    return data({
+      settings: DEFAULT_USER_SETTINGS,
+      hasGeminiApiKey: !!tokens.geminiApiKey,
+      hasEncryptedApiKey: false,
+      rootFolderId: tokens.rootFolderId,
+      isOffline: true,
+    });
   }
 }
 
 // ---------------------------------------------------------------------------
-// Client-side loader cache
+// Client-side loader cache (with offline fallback via IndexedDB)
 // ---------------------------------------------------------------------------
 
-let cachedLoaderData: Awaited<ReturnType<Route.ClientLoaderArgs["serverLoader"]>> | null = null;
+type LoaderData = Awaited<ReturnType<Route.ClientLoaderArgs["serverLoader"]>>;
+let cachedLoaderData: LoaderData | null = null;
 
 export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
   if (cachedLoaderData) return cachedLoaderData;
-  const loaderData = await serverLoader();
-  cachedLoaderData = loaderData;
-  return loaderData;
+
+  try {
+    const loaderData = await serverLoader();
+
+    // Server indicated offline (Google API unreachable) — restore cached settings
+    if (loaderData.isOffline) {
+      const cached = await getCachedLoaderData();
+      if (cached) {
+        cachedLoaderData = {
+          ...loaderData,
+          settings: cached.settings as typeof loaderData.settings,
+          hasGeminiApiKey: cached.hasGeminiApiKey,
+          hasEncryptedApiKey: cached.hasEncryptedApiKey,
+          rootFolderId: cached.rootFolderId,
+          isOffline: true,
+        };
+        return cachedLoaderData;
+      }
+      // No IndexedDB cache — use default settings from server response
+      cachedLoaderData = loaderData;
+      return loaderData;
+    }
+
+    // Online — cache for future offline use
+    cachedLoaderData = loaderData;
+    setCachedLoaderData({
+      id: "current",
+      settings: loaderData.settings,
+      hasGeminiApiKey: loaderData.hasGeminiApiKey,
+      hasEncryptedApiKey: loaderData.hasEncryptedApiKey,
+      rootFolderId: loaderData.rootFolderId,
+      cachedAt: Date.now(),
+    }).catch(() => {});
+    return loaderData;
+  } catch {
+    // Server completely unreachable (SW served cached HTML) — try IndexedDB
+    const cached = await getCachedLoaderData();
+    if (cached) {
+      cachedLoaderData = {
+        settings: cached.settings as LoaderData["settings"],
+        hasGeminiApiKey: cached.hasGeminiApiKey,
+        hasEncryptedApiKey: cached.hasEncryptedApiKey,
+        rootFolderId: cached.rootFolderId,
+        isOffline: true,
+      };
+      return cachedLoaderData;
+    }
+    // Never loaded online before — redirect to landing
+    throw redirect("/lp");
+  }
 }
+clientLoader.hydrate = true;
 
 export function invalidateIndexCache() {
   cachedLoaderData = null;
@@ -98,6 +156,7 @@ export default function Index() {
       hasGeminiApiKey={data.hasGeminiApiKey}
       hasEncryptedApiKey={data.hasEncryptedApiKey}
       rootFolderId={data.rootFolderId}
+      initialOffline={data.isOffline}
     />
   );
 }
@@ -118,11 +177,13 @@ function IDELayout({
   hasGeminiApiKey: initialHasGeminiApiKey,
   hasEncryptedApiKey,
   rootFolderId,
+  initialOffline,
 }: {
   settings: UserSettings;
   hasGeminiApiKey: boolean;
   hasEncryptedApiKey: boolean;
   rootFolderId: string;
+  initialOffline: boolean;
 }) {
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(initialHasGeminiApiKey);
   useApplySettings(settings.language, settings.fontSize, settings.theme);
@@ -384,6 +445,7 @@ function IDELayout({
         hasGeminiApiKey={hasGeminiApiKey}
         hasEncryptedApiKey={hasEncryptedApiKey}
         rootFolderId={rootFolderId}
+        initialOffline={initialOffline}
         rightPanel={rightPanel}
         setRightPanel={setRightPanel}
         activeFileId={activeFileId}
@@ -429,6 +491,7 @@ function IDEContent({
   hasGeminiApiKey,
   hasEncryptedApiKey,
   rootFolderId,
+  initialOffline,
   rightPanel,
   setRightPanel,
   activeFileId,
@@ -460,6 +523,7 @@ function IDEContent({
   hasGeminiApiKey: boolean;
   hasEncryptedApiKey: boolean;
   rootFolderId: string;
+  initialOffline: boolean;
   rightPanel: RightPanelId;
   setRightPanel: (panel: RightPanelId) => void;
   activeFileId: string | null;
@@ -491,6 +555,19 @@ function IDEContent({
   const isMobile = useIsMobile();
   const { sidebarViews, mainViews, slashCommands: pluginSlashCommands, getPluginAPI } = usePlugins();
   const { fileList } = useEditorContext();
+
+  // Online/offline state — starts from loader detection, updates with browser events
+  const [isOffline, setIsOffline] = useState(initialOffline);
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+    };
+  }, []);
 
   // Search panel state
   const [showSearch, setShowSearch] = useState(false);
@@ -846,6 +923,7 @@ function IDEContent({
         pluginSidebarViews={sidebarViews}
         pluginMainViews={mainViews}
         isMobile={isMobile}
+        isOffline={isOffline}
       />
 
       {!hasGeminiApiKey && (
@@ -869,6 +947,13 @@ function IDEContent({
               {t("common.settings")}
             </a>
           </div>
+        </div>
+      )}
+
+      {isOffline && (
+        <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs dark:border-amber-800 dark:bg-amber-900/20">
+          <WifiOff size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+          <span className="text-amber-800 dark:text-amber-200">{t("offline.banner")}</span>
         </div>
       )}
 

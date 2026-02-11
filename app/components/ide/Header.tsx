@@ -7,6 +7,7 @@ import {
   LogOut,
   Puzzle,
   Search,
+  WifiOff,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { SyncStatusBar } from "./SyncStatusBar";
@@ -34,6 +35,7 @@ interface HeaderProps {
   pluginSidebarViews?: PluginView[];
   pluginMainViews?: PluginView[];
   isMobile?: boolean;
+  isOffline?: boolean;
 }
 
 export function Header({
@@ -54,6 +56,7 @@ export function Header({
   pluginSidebarViews = [],
   pluginMainViews = [],
   isMobile = false,
+  isOffline = false,
 }: HeaderProps) {
   const { t } = useI18n();
   const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
@@ -92,18 +95,25 @@ export function Header({
           </span>
         </a>
         <div className="hidden sm:block mx-1 h-4 w-px bg-gray-200 dark:bg-gray-700 shrink-0" />
-        <SyncStatusBar
-          syncStatus={syncStatus}
-          lastSyncTime={lastSyncTime}
-          error={syncError}
-          localModifiedCount={localModifiedCount}
-          onPush={onPush}
-          onPull={onPull}
-          onShowConflicts={onShowConflicts}
-          onSelectFile={onSelectFile}
-          conflicts={syncConflicts}
-          compact={isMobile}
-        />
+        {isOffline ? (
+          <div className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800">
+            <WifiOff size={ICON.SM} />
+            {t("offline.indicator")}
+          </div>
+        ) : (
+          <SyncStatusBar
+            syncStatus={syncStatus}
+            lastSyncTime={lastSyncTime}
+            error={syncError}
+            localModifiedCount={localModifiedCount}
+            onPush={onPush}
+            onPull={onPull}
+            onShowConflicts={onShowConflicts}
+            onSelectFile={onSelectFile}
+            conflicts={syncConflicts}
+            compact={isMobile}
+          />
+        )}
         {onQuickOpen && (
           <button
             onClick={onQuickOpen}

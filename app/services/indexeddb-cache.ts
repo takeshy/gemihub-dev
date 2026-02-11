@@ -2,7 +2,7 @@
 // Uses a singleton DB connection for performance.
 
 const DB_NAME = "gemihub-cache";
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 // --- Store types ---
 
@@ -57,6 +57,15 @@ export interface CachedRemoteMeta {
   cachedAt: number;
 }
 
+export interface CachedLoaderData {
+  id: "current"; // primary key (fixed key, always 1 record)
+  settings: unknown; // UserSettings — stored as opaque JSON to avoid circular import
+  hasGeminiApiKey: boolean;
+  hasEncryptedApiKey: boolean;
+  rootFolderId: string;
+  cachedAt: number;
+}
+
 // --- Singleton DB connection ---
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -92,6 +101,10 @@ function getDB(): Promise<IDBDatabase> {
 
       if (!db.objectStoreNames.contains("remoteMeta")) {
         db.createObjectStore("remoteMeta", { keyPath: "id" });
+      }
+
+      if (!db.objectStoreNames.contains("loaderData")) {
+        db.createObjectStore("loaderData", { keyPath: "id" });
       }
     };
 
@@ -372,6 +385,28 @@ export async function setCachedRemoteMeta(meta: CachedRemoteMeta): Promise<void>
   }
 }
 
+// --- loaderData store ---
+
+export async function getCachedLoaderData(): Promise<CachedLoaderData | undefined> {
+  if (typeof indexedDB === "undefined") return undefined;
+  try {
+    const db = await getDB();
+    return await txGet<CachedLoaderData>(db, "loaderData", "current");
+  } catch {
+    return undefined;
+  }
+}
+
+export async function setCachedLoaderData(entry: CachedLoaderData): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    const db = await getDB();
+    await txPut(db, "loaderData", entry);
+  } catch {
+    // ignore
+  }
+}
+
 // --- clearAll ---
 
 export async function clearAllCache(): Promise<void> {
@@ -379,7 +414,7 @@ export async function clearAllCache(): Promise<void> {
   try {
     const db = await getDB();
     const tx = db.transaction(
-      ["files", "syncMeta", "editHistory", "fileTree", "remoteMeta"],
+      ["files", "syncMeta", "editHistory", "fileTree", "remoteMeta", "loaderData"],
       "readwrite"
     );
     tx.objectStore("files").clear();
@@ -387,6 +422,7 @@ export async function clearAllCache(): Promise<void> {
     tx.objectStore("editHistory").clear();
     tx.objectStore("fileTree").clear();
     tx.objectStore("remoteMeta").clear();
+    tx.objectStore("loaderData").clear();
     await new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
