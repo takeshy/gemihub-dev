@@ -1,18 +1,15 @@
-# Cloud Build trigger for auto-deploy on push to main
-# NOTE: GitHub connection must be created manually in Cloud Console FIRST (OAuth flow required).
-# Steps:
-#   1. Go to Cloud Build > Triggers > Connect Repository
-#   2. Authenticate with GitHub and select takeshy/gemini-hub
-#   3. Then uncomment and apply this resource
+# Cloud Build trigger for auto-deploy on push to main.
+# NOTE:
+# - This project uses a 2nd-gen Cloud Build repository link.
+# - The GitHub connection/repository is created manually in Cloud Console
+#   (OAuth flow required), then referenced below.
 #
 # resource "google_cloudbuild_trigger" "deploy" {
 #   name     = "gemini-hub-deploy"
 #   location = var.region
 #
-#   github {
-#     owner = "takeshy"
-#     name  = "gemini-hub"
-#
+#   repository_event_config {
+#     repository = "projects/${var.project_id}/locations/${var.region}/connections/<connection-id>/repositories/<repo-id>"
 #     push {
 #       branch = "^main$"
 #     }

@@ -74,7 +74,7 @@ terraform/
   iam.tf               # Service accounts and IAM bindings
   cloud-run.tf         # Cloud Run service
   networking.tf        # Load Balancer (IP, NEG, backend, URL map, SSL, proxies, forwarding rules)
-  dns.tf               # Cloud DNS managed zone, A record, and TXT verification record
+  dns.tf               # Cloud DNS managed zone, A record, optional TXT verification record
   cloud-build.tf       # Cloud Build trigger (reference only, created via gcloud)
 ```
 
@@ -98,7 +98,7 @@ terraform/
 | Min instances | 0 (scale to zero) |
 | Max instances | 3 |
 | Port | 8080 |
-| Ingress | All traffic |
+| Ingress | Internal + Cloud Load Balancing (`INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER`) |
 | Auth | Public (allUsers) |
 | Deletion protection | Disabled |
 | Startup probe | HTTP GET `/`, 5s initial delay, 10s period, 3 failure threshold |
@@ -130,13 +130,14 @@ The following GCP APIs are enabled via Terraform:
 - **HTTP (port 80)**: 301 redirect to HTTPS via `MOVED_PERMANENTLY_DEFAULT`
 - **HTTPS (port 443)**: Google-managed SSL certificate (`gemihub-cert`), terminates TLS at the load balancer
 - **Serverless NEG**: Routes traffic from the load balancer to Cloud Run
+- **Cloud Run ingress**: Direct public `run.app` access is blocked; traffic must come via the load balancer
 
 ## DNS
 
 Managed by Google Cloud DNS. The zone contains:
 
 - **A record**: Points the domain to the global static IP
-- **TXT record**: Google site verification
+- **TXT record**: Google site verification (default token is configured; set `google_site_verification_token = ""` to disable)
 
 Nameservers must be configured at the domain registrar.
 

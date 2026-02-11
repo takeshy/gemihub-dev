@@ -15,9 +15,11 @@ resource "google_dns_record_set" "a" {
 }
 
 resource "google_dns_record_set" "txt_verification" {
+  count = var.google_site_verification_token == "" ? 0 : 1
+
   name         = "${var.domain}."
   type         = "TXT"
   ttl          = 300
   managed_zone = google_dns_managed_zone.default.name
-  rrdatas      = ["\"google-site-verification=z_QgqT1jpyik9-fWNWwj6fXJQE5IhulrV2450T37djw\""]
+  rrdatas      = ["\"google-site-verification=${var.google_site_verification_token}\""]
 }

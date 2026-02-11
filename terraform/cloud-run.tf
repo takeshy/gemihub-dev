@@ -1,7 +1,7 @@
 resource "google_cloud_run_v2_service" "app" {
   name                = "gemini-hub"
   location            = var.region
-  ingress             = "INGRESS_TRAFFIC_ALL"
+  ingress             = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   deletion_protection = false
 
   template {
@@ -78,6 +78,9 @@ resource "google_cloud_run_v2_service" "app" {
     google_secret_manager_secret_version.google_client_id,
     google_secret_manager_secret_version.google_client_secret,
     google_secret_manager_secret_version.session_secret,
+    google_secret_manager_secret_iam_member.cloud_run_google_client_id,
+    google_secret_manager_secret_iam_member.cloud_run_google_client_secret,
+    google_secret_manager_secret_iam_member.cloud_run_session_secret,
   ]
 }
 
