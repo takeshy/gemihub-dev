@@ -651,20 +651,27 @@ function IDEContent({
   }, [mobileIndex, applyTransform]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!touchStartRef.current || swipeDirRef.current !== "horizontal") {
-      touchStartRef.current = null;
-      swipeDirRef.current = null;
-      return;
-    }
+    if (!touchStartRef.current) return;
     const touch = e.changedTouches[0];
     const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
     const elapsed = Date.now() - touchStartRef.current.time;
+    const wasTracking = swipeDirRef.current === "horizontal";
     touchStartRef.current = null;
     swipeDirRef.current = null;
 
-    const threshold = window.innerWidth * 0.25;
-    const velocity = Math.abs(deltaX) / elapsed; // px/ms
-    const shouldSwipe = Math.abs(deltaX) > threshold || (velocity > 0.3 && Math.abs(deltaX) > 30);
+    // Determine if swipe should trigger a panel change
+    let shouldSwipe = false;
+    if (wasTracking) {
+      // touchMove reached us: use threshold + velocity
+      const threshold = window.innerWidth * 0.25;
+      const velocity = Math.abs(deltaX) / elapsed;
+      shouldSwipe = Math.abs(deltaX) > threshold || (velocity > 0.3 && Math.abs(deltaX) > 30);
+    } else {
+      // touchMove was captured by inner element (e.g. editor):
+      // fallback to simple start/end delta detection
+      shouldSwipe = Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) && elapsed < 300;
+    }
 
     let nextIndex = mobileIndex;
     if (shouldSwipe) {
@@ -672,7 +679,10 @@ function IDEContent({
       if (deltaX < 0 && mobileIndex < MOBILE_PANEL_COUNT - 1) nextIndex = mobileIndex + 1;
     }
 
-    animateTo(nextIndex);
+    // Animate: snap back if tracking, or slide to next panel
+    if (wasTracking || nextIndex !== mobileIndex) {
+      animateTo(nextIndex);
+    }
 
     if (nextIndex !== mobileIndex) {
       if (nextIndex === 0) setMobileView("files");
@@ -861,7 +871,7 @@ function IDEContent({
         /* ---- Mobile layout ---- */
         <>
           <div
-            className="flex flex-1 overflow-hidden"
+            className="flex-1 overflow-hidden"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
