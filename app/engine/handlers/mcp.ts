@@ -1,10 +1,15 @@
 import type { WorkflowNode, ExecutionContext, ServiceContext } from "../types";
 import type { McpAppInfo } from "~/types/chat";
-import type { McpAppResult, McpAppUiResource } from "~/types/settings";
+import type { McpAppResult, McpAppUiResource, McpServerConfig } from "~/types/settings";
+import { deriveMcpServerId } from "~/types/settings";
 import { McpClient } from "~/services/mcp-client.server";
 import { getOrCreateClient } from "~/services/mcp-tools.server";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
 import { replaceVariables } from "./utils";
+
+function normalizeUrl(u: string): string {
+  return u.replace(/\/+$/, "");
+}
 
 // Handle MCP node - call remote MCP server tool via HTTP
 export async function handleMcpNode(
@@ -45,8 +50,9 @@ export async function handleMcpNode(
   }
 
   // Find matching server config from settings (for OAuth token injection/refresh)
+  const normalizedUrl = normalizeUrl(url);
   const matchedServer = serviceContext.settings?.mcpServers?.find(
-    (s) => s.url === url
+    (s) => normalizeUrl(s.url) === normalizedUrl
   );
 
   // If a matching server config exists, use getOrCreateClient for OAuth support;
@@ -111,12 +117,7 @@ export async function handleMcpNode(
         // UI resource fetch is non-fatal
       }
 
-      mcpAppInfo = {
-        serverUrl: url,
-        serverHeaders: Object.keys(headers).length > 0 ? headers : undefined,
-        toolResult,
-        uiResource,
-      };
+      mcpAppInfo = buildMcpAppInfo(matchedServer, url, headers, toolResult, uiResource);
     }
 
     return mcpAppInfo;
@@ -126,4 +127,35 @@ export async function handleMcpNode(
       await client.close();
     }
   }
+}
+
+/**
+ * Build McpAppInfo matching the chat path's pattern so that the client-side
+ * proxy (resource-read / tool-call) can resolve the server config correctly.
+ */
+function buildMcpAppInfo(
+  matchedServer: McpServerConfig | undefined,
+  url: string,
+  nodeHeaders: Record<string, string>,
+  toolResult: McpAppResult,
+  uiResource: McpAppUiResource | null,
+): McpAppInfo {
+  if (matchedServer) {
+    // Use serverId + server config headers so the proxy resolves via
+    // resolveMcpServerForProxy and getOrCreateClient injects OAuth tokens.
+    return {
+      serverId: deriveMcpServerId(matchedServer),
+      serverUrl: matchedServer.url,
+      serverHeaders: matchedServer.headers,
+      toolResult,
+      uiResource,
+    };
+  }
+  // No matching config — pass node headers as-is (backward compat)
+  return {
+    serverUrl: url,
+    serverHeaders: Object.keys(nodeHeaders).length > 0 ? nodeHeaders : undefined,
+    toolResult,
+    uiResource,
+  };
 }
