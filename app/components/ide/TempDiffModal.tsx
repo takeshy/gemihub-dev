@@ -48,11 +48,11 @@ export function TempDiffModal({
       <div className="mx-4 w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-          <div>
+          <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {t("tempDiff.title")}
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-md">
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-full">
               {fileName}
             </p>
           </div>
