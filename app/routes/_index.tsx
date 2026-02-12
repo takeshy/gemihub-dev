@@ -134,7 +134,18 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
       };
       return cachedLoaderData;
     }
-    // Never loaded online before — redirect to landing
+    // Never loaded online before — return minimal offline data instead of
+    // redirecting to /lp (which also fails offline and shows a blank page)
+    if (!navigator.onLine) {
+      cachedLoaderData = {
+        settings: DEFAULT_USER_SETTINGS as LoaderData["settings"],
+        hasGeminiApiKey: false,
+        hasEncryptedApiKey: false,
+        rootFolderId: "",
+        isOffline: true,
+      };
+      return cachedLoaderData;
+    }
     throw redirect("/lp");
   }
 }

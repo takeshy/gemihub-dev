@@ -41,7 +41,28 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `if("serviceWorker"in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){});})}`,
+            __html: [
+              // Register SW and warm cache on first activation.
+              // On the very first visit, the initial navigation request happens BEFORE the SW
+              // is active, so the HTML and assets are NOT cached. We detect this (no controller)
+              // and, once the new SW takes control, send it a list of URLs to pre-cache.
+              'if("serviceWorker"in navigator){window.addEventListener("load",function(){',
+              'navigator.serviceWorker.register("/sw.js").then(function(){',
+              'if(navigator.serviceWorker.controller)return;', // Already controlled → cache is warm
+              'navigator.serviceWorker.addEventListener("controllerchange",function cc(){',
+              'navigator.serviceWorker.removeEventListener("controllerchange",cc);',
+              'var urls=["/"];',
+              'if(window.location.pathname!=="/")urls.push(window.location.pathname);',
+              'document.querySelectorAll("link[href^=\\"/assets/\\"],script[src^=\\"/assets/\\"]").forEach(function(el){',
+              'var u=el.href||el.src;if(u)urls.push(new URL(u).pathname);',
+              '});',
+              'if(navigator.serviceWorker.controller){',
+              'navigator.serviceWorker.controller.postMessage({type:"warmup",urls:urls});',
+              '}',
+              '});',
+              '}).catch(function(){});',
+              '})}',
+            ].join(""),
           }}
         />
       </head>
