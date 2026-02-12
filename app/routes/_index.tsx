@@ -431,6 +431,15 @@ function IDELayout({
             const data = await res.json();
             workflowId = data.file.id;
             finalName = data.file.name;
+            // Cache content in IndexedDB so MainViewer can load it instantly
+            await setCachedFile({
+              fileId: data.file.id,
+              content: yamlContent,
+              md5Checksum: data.file.md5Checksum ?? "",
+              modifiedTime: data.file.modifiedTime ?? "",
+              cachedAt: Date.now(),
+              fileName: data.file.name,
+            });
             // Refresh file tree so the new file appears
             window.dispatchEvent(new Event("sync-complete"));
             handleSelectFile(data.file.id, data.file.name, "text/yaml");
