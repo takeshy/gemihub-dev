@@ -21,12 +21,28 @@ export function DiffView({ diff }: { diff: string }) {
           className = "text-blue-600 dark:text-blue-400";
         }
 
+        // Separate prefix from content so copy excludes prefix characters
+        const { prefix, rest } = getLinePrefix(line);
+
         return (
           <div key={i} className={className}>
-            {line}
+            {prefix ? <span className="select-none">{prefix}</span> : null}{rest}
           </div>
         );
       })}
     </pre>
   );
+}
+
+function getLinePrefix(line: string): { prefix: string; rest: string } {
+  if (line.startsWith("+++") || line.startsWith("---")) {
+    return { prefix: line, rest: "" };
+  }
+  if (line.startsWith("@@")) {
+    return { prefix: line, rest: "" };
+  }
+  if (line.startsWith("+") || line.startsWith("-")) {
+    return { prefix: line[0], rest: line.slice(1) };
+  }
+  return { prefix: "", rest: line };
 }

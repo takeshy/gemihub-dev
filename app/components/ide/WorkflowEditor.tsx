@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Code, Eye, Upload, Download } from "lucide-react";
+import { Code, Eye, Upload, Download, GitCompareArrows } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { UserSettings } from "~/types/settings";
 import { MermaidPreview } from "~/components/flow/MermaidPreview";
@@ -14,6 +14,7 @@ interface WorkflowEditorProps {
   initialContent: string;
   settings: UserSettings;
   saveToCache: (content: string) => Promise<void>;
+  onDiffClick?: () => void;
 }
 
 export function WorkflowEditor({
@@ -22,6 +23,7 @@ export function WorkflowEditor({
   initialContent,
   settings: _settings,
   saveToCache,
+  onDiffClick,
 }: WorkflowEditorProps) {
   const { t } = useI18n();
   const [viewMode, setViewMode] = useState<"visual" | "yaml">("visual");
@@ -206,6 +208,17 @@ export function WorkflowEditor({
               YAML
             </button>
           </div>
+
+          {onDiffClick && (
+            <button
+              onClick={onDiffClick}
+              className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              title={t("mainViewer.diff")}
+            >
+              <GitCompareArrows size={ICON.SM} />
+              {t("mainViewer.diff")}
+            </button>
+          )}
 
           {uploaded && (
             <span className="text-xs text-green-600 dark:text-green-400">

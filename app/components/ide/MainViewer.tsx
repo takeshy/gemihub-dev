@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
-import { FileText, Loader2, Eye, PenLine, Code, Upload, Download } from "lucide-react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
+import { FileText, Loader2, Eye, PenLine, Code, Upload, Download, GitCompareArrows, X } from "lucide-react";
+import { createTwoFilesPatch } from "diff";
 import { ICON } from "~/utils/icon-sizes";
 import type { UserSettings } from "~/types/settings";
 import { WorkflowEditor } from "./WorkflowEditor";
@@ -9,6 +10,9 @@ import { useFileWithCache } from "~/hooks/useFileWithCache";
 import { useI18n } from "~/i18n/context";
 import { useEditorContext, type SelectionInfo } from "~/contexts/EditorContext";
 import { TempDiffModal } from "./TempDiffModal";
+import { QuickOpenDialog } from "./QuickOpenDialog";
+import { DiffView } from "~/components/shared/DiffView";
+import { getCachedFile } from "~/services/indexeddb-cache";
 import { addCommitBoundary } from "~/services/edit-history-local";
 
 function WysiwygSelectionTracker({
@@ -176,7 +180,22 @@ function TextBasedViewer({
   const { t } = useI18n();
   const { content, loading, error, saveToCache, refresh, forceRefresh } =
     useFileWithCache(fileId, refreshKey, "MainViewer");
-  const { setActiveFileId, setActiveFileContent, setActiveFileName, setActiveSelection } = useEditorContext();
+  const editorCtx = useEditorContext();
+  const { setActiveFileId, setActiveFileContent, setActiveFileName, setActiveSelection } = editorCtx;
+
+  // Diff state
+  const [diffTarget, setDiffTarget] = useState<{ id: string; name: string } | null>(null);
+  const [showDiffPicker, setShowDiffPicker] = useState(false);
+
+  // Reset diff when file changes
+  useEffect(() => {
+    setDiffTarget(null);
+    setShowDiffPicker(false);
+  }, [fileId]);
+
+  const handleDiffClick = useCallback(() => {
+    setShowDiffPicker(true);
+  }, []);
 
   // Push content, file name, and file ID to EditorContext
   useEffect(() => {
@@ -231,22 +250,35 @@ function TextBasedViewer({
     );
   }
 
-  // Workflow YAML file
-  if (name.endsWith(".yaml") || name.endsWith(".yml")) {
-    return (
+  // Determine which editor to render
+  let editor: React.ReactNode;
+
+  if (diffTarget) {
+    // Diff mode: show DiffEditor instead of regular editor
+    editor = (
+      <DiffEditor
+        fileId={fileId}
+        fileName={name}
+        currentContent={content}
+        targetFileId={diffTarget.id}
+        targetFileName={diffTarget.name}
+        saveToCache={saveToCache}
+        onClose={() => setDiffTarget(null)}
+      />
+    );
+  } else if (name.endsWith(".yaml") || name.endsWith(".yml")) {
+    editor = (
       <WorkflowEditor
         fileId={fileId}
         fileName={name.replace(/\.ya?ml$/, "")}
         initialContent={content}
         settings={settings}
         saveToCache={saveToCache}
+        onDiffClick={handleDiffClick}
       />
     );
-  }
-
-  // Markdown file
-  if (name.endsWith(".md")) {
-    return (
+  } else if (name.endsWith(".md")) {
+    editor = (
       <MarkdownFileEditor
         fileId={fileId}
         fileName={name}
@@ -254,30 +286,47 @@ function TextBasedViewer({
         saveToCache={saveToCache}
         onFileSelect={onFileSelect}
         onImageChange={onImageChange}
+        onDiffClick={handleDiffClick}
       />
     );
-  }
-
-  // HTML file
-  if (name.endsWith(".html") || name.endsWith(".htm")) {
-    return (
+  } else if (name.endsWith(".html") || name.endsWith(".htm")) {
+    editor = (
       <HtmlFileEditor
         fileId={fileId}
         fileName={name}
         initialContent={content}
         saveToCache={saveToCache}
+        onDiffClick={handleDiffClick}
+      />
+    );
+  } else {
+    editor = (
+      <TextFileEditor
+        fileId={fileId}
+        fileName={name}
+        initialContent={content}
+        saveToCache={saveToCache}
+        onDiffClick={handleDiffClick}
       />
     );
   }
 
-  // Other text files
   return (
-    <TextFileEditor
-      fileId={fileId}
-      fileName={name}
-      initialContent={content}
-      saveToCache={saveToCache}
-    />
+    <>
+      {editor}
+      {showDiffPicker && (
+        <QuickOpenDialog
+          open={showDiffPicker}
+          onClose={() => setShowDiffPicker(false)}
+          fileList={editorCtx.fileList}
+          onSelectFile={(id, selectedName) => {
+            setDiffTarget({ id, name: selectedName });
+            setShowDiffPicker(false);
+          }}
+          zClass="z-[1001]"
+        />
+      )}
+    </>
   );
 }
 
@@ -295,6 +344,7 @@ function MarkdownFileEditor({
   saveToCache,
   onFileSelect,
   onImageChange,
+  onDiffClick,
 }: {
   fileId: string;
   fileName: string;
@@ -302,6 +352,7 @@ function MarkdownFileEditor({
   saveToCache: (content: string) => Promise<void>;
   onFileSelect?: () => Promise<string | null>;
   onImageChange?: (file: File) => Promise<string>;
+  onDiffClick?: () => void;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -472,8 +523,18 @@ function MarkdownFileEditor({
           ))}
         </div>
 
-        {/* Temp Upload / Download */}
+        {/* Diff / Temp Upload / Download */}
         <div className="flex items-center gap-2">
+          {onDiffClick && (
+            <button
+              onClick={onDiffClick}
+              className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              title={t("mainViewer.diff")}
+            >
+              <GitCompareArrows size={ICON.SM} />
+              {t("mainViewer.diff")}
+            </button>
+          )}
           {uploaded && (
             <span className="text-xs text-green-600 dark:text-green-400">
               {t("contextMenu.tempUploaded")}
@@ -565,11 +626,13 @@ function HtmlFileEditor({
   fileName,
   initialContent,
   saveToCache,
+  onDiffClick,
 }: {
   fileId: string;
   fileName: string;
   initialContent: string;
   saveToCache: (content: string) => Promise<void>;
+  onDiffClick?: () => void;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -719,8 +782,18 @@ function HtmlFileEditor({
           ))}
         </div>
 
-        {/* Temp Upload / Download */}
+        {/* Diff / Temp Upload / Download */}
         <div className="flex items-center gap-2">
+          {onDiffClick && (
+            <button
+              onClick={onDiffClick}
+              className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              title={t("mainViewer.diff")}
+            >
+              <GitCompareArrows size={ICON.SM} />
+              {t("mainViewer.diff")}
+            </button>
+          )}
           {uploaded && (
             <span className="text-xs text-green-600 dark:text-green-400">
               {t("contextMenu.tempUploaded")}
@@ -793,11 +866,13 @@ function TextFileEditor({
   fileName,
   initialContent,
   saveToCache,
+  onDiffClick,
 }: {
   fileId: string;
   fileName: string;
   initialContent: string;
   saveToCache: (content: string) => Promise<void>;
+  onDiffClick?: () => void;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -918,6 +993,16 @@ function TextFileEditor({
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
       <div className="flex items-center justify-end gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        {onDiffClick && (
+          <button
+            onClick={onDiffClick}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            title={t("mainViewer.diff")}
+          >
+            <GitCompareArrows size={ICON.SM} />
+            {t("mainViewer.diff")}
+          </button>
+        )}
         {uploaded && (
           <span className="text-xs text-green-600 dark:text-green-400">
             {t("contextMenu.tempUploaded")}
@@ -963,6 +1048,157 @@ function TextFileEditor({
           onReject={() => setTempDiffData(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Diff Editor (split view: editable textarea on top, diff on bottom)
+// ---------------------------------------------------------------------------
+
+interface DiffEditorProps {
+  fileId: string;
+  fileName: string;
+  currentContent: string;
+  targetFileId: string;
+  targetFileName: string;
+  saveToCache: (content: string) => Promise<void>;
+  onClose: () => void;
+}
+
+function DiffEditor({
+  fileId: _fileId,
+  fileName,
+  currentContent,
+  targetFileId,
+  targetFileName,
+  saveToCache,
+  onClose,
+}: DiffEditorProps) {
+  const { t } = useI18n();
+  const [content, setContent] = useState(currentContent);
+  const [targetContent, setTargetContent] = useState<string | null>(null);
+  const [loadingTarget, setLoadingTarget] = useState(true);
+
+  // Debounced auto-save
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const contentFromProps = useRef(true);
+  const pendingContentRef = useRef<string | null>(null);
+
+  const updateContent = useCallback((newContent: string) => {
+    contentFromProps.current = false;
+    setContent(newContent);
+  }, []);
+
+  // Sync content when parent's currentContent changes (e.g. external save)
+  useEffect(() => {
+    contentFromProps.current = true;
+    setContent(currentContent);
+  }, [currentContent]);
+
+  useEffect(() => {
+    if (contentFromProps.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    pendingContentRef.current = content;
+    debounceRef.current = setTimeout(() => {
+      saveToCache(content);
+      pendingContentRef.current = null;
+    }, 3000);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [content, saveToCache]);
+
+  // Flush pending content on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingContentRef.current !== null) {
+        saveToCache(pendingContentRef.current);
+        pendingContentRef.current = null;
+      }
+    };
+  }, [saveToCache]);
+
+  // Load target file content
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingTarget(true);
+
+    (async () => {
+      // Try IndexedDB cache first
+      const cached = await getCachedFile(targetFileId);
+      if (!cancelled && cached?.content != null) {
+        setTargetContent(cached.content);
+        setLoadingTarget(false);
+        return;
+      }
+      // Fallback: fetch via pullDirect
+      try {
+        const res = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "pullDirect", fileIds: [targetFileId] }),
+        });
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          const file = data.files?.[0];
+          setTargetContent(file?.content ?? "");
+        }
+      } catch {
+        if (!cancelled) setTargetContent("");
+      } finally {
+        if (!cancelled) setLoadingTarget(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [targetFileId]);
+
+  // Compute diff
+  const diff = useMemo(() => {
+    if (targetContent === null) return "";
+    return createTwoFilesPatch(targetFileName, fileName, targetContent, content);
+  }, [content, targetContent, fileName, targetFileName]);
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">
+          {fileName} vs {targetFileName}
+        </span>
+        <button
+          onClick={onClose}
+          className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+        >
+          <X size={ICON.SM} />
+          {t("editHistory.close")}
+        </button>
+      </div>
+
+      {/* Split view */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top: editable textarea */}
+        <div className="flex-1 min-h-0 p-4">
+          <textarea
+            value={content}
+            onChange={(e) => updateContent(e.target.value)}
+            className="w-full h-full font-mono text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
+            spellCheck={false}
+          />
+        </div>
+
+        {/* Bottom: diff view */}
+        <div className="flex-1 min-h-0 overflow-auto border-t border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900">
+          {loadingTarget ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={20} className="animate-spin text-gray-400" />
+            </div>
+          ) : (
+            <DiffView diff={diff} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

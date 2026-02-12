@@ -32,6 +32,8 @@ export interface TranslationStrings {
   "mainViewer.preview": string;
   "mainViewer.wysiwyg": string;
   "mainViewer.raw": string;
+  "mainViewer.diff": string;
+  "mainViewer.diffTarget": string;
 
   // ChatPanel
   "chat.newChat": string;
@@ -400,6 +402,8 @@ const en: TranslationStrings = {
   "mainViewer.preview": "Preview",
   "mainViewer.wysiwyg": "WYSIWYG",
   "mainViewer.raw": "Raw",
+  "mainViewer.diff": "Diff",
+  "mainViewer.diffTarget": "Select file to compare",
 
   // ChatPanel
   "chat.newChat": "New Chat",
@@ -769,6 +773,8 @@ const ja: TranslationStrings = {
   "mainViewer.preview": "プレビュー",
   "mainViewer.wysiwyg": "WYSIWYG",
   "mainViewer.raw": "Raw",
+  "mainViewer.diff": "差分",
+  "mainViewer.diffTarget": "比較するファイルを選択",
 
   // ChatPanel
   "chat.newChat": "新しいチャット",
