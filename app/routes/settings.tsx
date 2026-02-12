@@ -2065,7 +2065,6 @@ function McpTab({ settings }: { settings: UserSettings }) {
 
 function RagTab({ settings }: { settings: UserSettings }) {
   const fetcher = useFetcher();
-  const settingsFetcher = useFetcher();
   const { t } = useI18n();
 
   const [ragTopK, setRagTopK] = useState(settings.ragTopK);
@@ -2247,6 +2246,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
 
       const decoder = new TextDecoder();
       let buffer = "";
+      let completedRagSetting: RagSetting | null = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -2260,26 +2260,25 @@ function RagTab({ settings }: { settings: UserSettings }) {
           try {
             const evt = JSON.parse(raw);
             if (evt.message) setSyncMsg(evt.message);
+            if (evt.type === "complete" && evt.ragSetting) {
+              completedRagSetting = evt.ragSetting as RagSetting;
+            }
           } catch {
             // skip
           }
         }
       }
-      // Re-fetch settings to get updated file statuses
-      settingsFetcher.load("/settings");
+      // Update local state from SSE complete event directly
+      // (avoids re-fetch overwriting exclude patterns with stale loader data)
+      if (completedRagSetting) {
+        setRagSettings((prev) => ({ ...prev, [key]: completedRagSetting! }));
+      }
     } catch (err) {
       setSyncMsg(err instanceof Error ? err.message : "Sync error.");
     } finally {
       setSyncing(false);
     }
-  }, [ragSettings, ragTopK, settingsFetcher]);
-
-  useEffect(() => {
-    const d = settingsFetcher.data as { settings?: UserSettings } | undefined;
-    if (d?.settings?.ragSettings) {
-      setRagSettings(d.settings.ragSettings);
-    }
-  }, [settingsFetcher.data]);
+  }, [ragSettings, ragTopK]);
 
   const [ragFilesDialogKey, setRagFilesDialogKey] = useState<string | null>(null);
 
