@@ -18,6 +18,7 @@ export function MermaidPreview({ chart }: MermaidPreviewProps) {
     (async () => {
       if (!containerRef.current || !chart) return;
 
+      const id = `mermaid-${Date.now()}`;
       try {
         const mermaid = (await import("mermaid")).default;
         mermaid.initialize({
@@ -29,9 +30,9 @@ export function MermaidPreview({ chart }: MermaidPreviewProps) {
             curve: "basis",
           },
           securityLevel: "strict",
+          suppressErrorRendering: true,
         });
 
-        const id = `mermaid-${Date.now()}`;
         const { svg } = await mermaid.render(id, chart);
 
         if (!cancelled && containerRef.current) {
@@ -39,6 +40,8 @@ export function MermaidPreview({ chart }: MermaidPreviewProps) {
           setError(null);
         }
       } catch (e) {
+        // Clean up orphaned Mermaid error element created by failed render
+        document.getElementById(id)?.remove();
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Failed to render diagram");
         }

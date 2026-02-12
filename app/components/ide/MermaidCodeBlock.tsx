@@ -14,6 +14,7 @@ export function MermaidCodeBlock({ code }: { code: string }) {
     (async () => {
       if (!containerRef.current || !code) return;
 
+      const id = `mermaid-md-${Date.now()}`;
       try {
         const mermaid = (await import("mermaid")).default;
         mermaid.initialize({
@@ -21,9 +22,9 @@ export function MermaidCodeBlock({ code }: { code: string }) {
           theme: isDark ? "dark" : "default",
           flowchart: { useMaxWidth: true, htmlLabels: true, curve: "basis" },
           securityLevel: "strict",
+          suppressErrorRendering: true,
         });
 
-        const id = `mermaid-md-${Date.now()}`;
         const { svg } = await mermaid.render(id, code);
 
         if (!cancelled && containerRef.current) {
@@ -31,6 +32,8 @@ export function MermaidCodeBlock({ code }: { code: string }) {
           setError(null);
         }
       } catch (e) {
+        // Clean up orphaned Mermaid error element created by failed render
+        document.getElementById(id)?.remove();
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Failed to render diagram");
         }

@@ -487,26 +487,8 @@ function WorkflowNodeListView({
     );
   }
 
-  if (!workflow) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center px-4 py-8">
-        {(fileError || error) ? (
-          <p className="text-xs text-red-500 mb-2">{fileError || error}</p>
-        ) : (
-          <p className="text-xs text-gray-400 mb-2">Failed to parse workflow</p>
-        )}
-        <button
-          onClick={refresh}
-          className="text-xs text-blue-600 hover:underline"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  const nodeOrder = getNodeOrder(workflow);
-  const outgoingMap = buildOutgoingMap(workflow);
+  const nodeOrder = workflow ? getNodeOrder(workflow) : [];
+  const outgoingMap = workflow ? buildOutgoingMap(workflow) : new Map<string, Array<{ to: string; label?: string }>>();
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -526,19 +508,35 @@ function WorkflowNodeListView({
           >
             <RefreshCw size={ICON.SM} />
           </button>
-          <button
-            onClick={handleAddNode}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            title="Add Node"
-          >
-            <Plus size={ICON.MD} />
-          </button>
+          {workflow && (
+            <button
+              onClick={handleAddNode}
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              title="Add Node"
+            >
+              <Plus size={ICON.MD} />
+            </button>
+          )}
         </div>
       </div>
 
       {/* Node List */}
       <div className="flex-1 overflow-y-auto py-1">
-        {nodeOrder.length === 0 ? (
+        {!workflow ? (
+          <div className="flex flex-col items-center justify-center px-4 py-8">
+            {(fileError || error) ? (
+              <p className="text-xs text-red-500 mb-2">{fileError || error}</p>
+            ) : (
+              <p className="text-xs text-gray-400 mb-2">Failed to parse workflow</p>
+            )}
+            <button
+              onClick={refresh}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Retry
+            </button>
+          </div>
+        ) : nodeOrder.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-4 py-8">
             <GitBranch
               size={24}
@@ -762,9 +760,9 @@ function WorkflowNodeListView({
         ) : (
           <button
             onClick={startExecution}
-            disabled={hasLocalChanges}
+            disabled={hasLocalChanges || !workflow}
             className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${
-              hasLocalChanges
+              hasLocalChanges || !workflow
                 ? "bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500"
                 : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
@@ -826,7 +824,7 @@ function WorkflowNodeListView({
       </div>
 
       {/* Node Editor Modal */}
-      {editingNode !== null && (
+      {editingNode !== null && workflow && (
         <NodeEditorModal
           node={isNewNode ? editingNode : editingNode}
           existingNodeIds={Array.from(workflow.nodes.keys())}
