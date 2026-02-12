@@ -31,9 +31,17 @@ export function MarkdownEditor({
     const handler = () => {
       const isKeyboardOpen = vv.height < window.innerHeight * 0.75;
       setMobileMaxHeight(isKeyboardOpen ? vv.height * 0.9 : null);
+      // Prevent iOS from scrolling the body when keyboard is open
+      if (isKeyboardOpen) {
+        window.scrollTo(0, 0);
+      }
     };
     vv.addEventListener("resize", handler);
-    return () => vv.removeEventListener("resize", handler);
+    vv.addEventListener("scroll", handler);
+    return () => {
+      vv.removeEventListener("resize", handler);
+      vv.removeEventListener("scroll", handler);
+    };
   }, []);
 
   return (
