@@ -2,7 +2,7 @@ import type { WorkflowNode, ExecutionContext, ServiceContext, FileExplorerData, 
 import { replaceVariables } from "./utils";
 import * as driveService from "~/services/google-drive.server";
 import { saveEdit } from "~/services/edit-history.server";
-import { removeFileFromMeta } from "~/services/sync-meta.server";
+import { removeFileFromMeta, upsertFileInMeta } from "~/services/sync-meta.server";
 import { isEncryptedFile, decryptFileContent } from "~/services/crypto-core";
 
 const BINARY_MIME_PREFIXES = ["image/", "audio/", "video/"];
@@ -169,16 +169,22 @@ export async function handleDriveFileNode(
       "text/markdown",
       { signal: serviceContext.abortSignal }
     );
+    await upsertFileInMeta(accessToken, folderId, resultFile, { signal: serviceContext.abortSignal });
+    serviceContext.onDriveFileCreated?.({
+      fileId: resultFile.id,
+      fileName: resultFile.name,
+      content,
+      md5Checksum: resultFile.md5Checksum || "",
+      modifiedTime: resultFile.modifiedTime || "",
+    });
   } else if (mode === "append") {
     if (existingFile) {
       finalContent = oldContent + "\n" + content;
-      await driveService.updateFile(
-        accessToken,
-        existingFile.id,
-        finalContent,
-        "text/markdown",
-        { signal: serviceContext.abortSignal }
-      );
+      serviceContext.onDriveFileUpdated?.({
+        fileId: existingFile.id,
+        fileName: existingFile.name || fileName,
+        content: finalContent,
+      });
       resultFile = existingFile;
     } else {
       resultFile = await driveService.createFile(
@@ -189,17 +195,23 @@ export async function handleDriveFileNode(
         "text/markdown",
         { signal: serviceContext.abortSignal }
       );
+      await upsertFileInMeta(accessToken, folderId, resultFile, { signal: serviceContext.abortSignal });
+      serviceContext.onDriveFileCreated?.({
+        fileId: resultFile.id,
+        fileName: resultFile.name,
+        content,
+        md5Checksum: resultFile.md5Checksum || "",
+        modifiedTime: resultFile.modifiedTime || "",
+      });
     }
   } else {
     // overwrite
     if (existingFile) {
-      await driveService.updateFile(
-        accessToken,
-        existingFile.id,
+      serviceContext.onDriveFileUpdated?.({
+        fileId: existingFile.id,
+        fileName: existingFile.name || fileName,
         content,
-        "text/markdown",
-        { signal: serviceContext.abortSignal }
-      );
+      });
       resultFile = existingFile;
     } else {
       resultFile = await driveService.createFile(
@@ -210,6 +222,14 @@ export async function handleDriveFileNode(
         "text/markdown",
         { signal: serviceContext.abortSignal }
       );
+      await upsertFileInMeta(accessToken, folderId, resultFile, { signal: serviceContext.abortSignal });
+      serviceContext.onDriveFileCreated?.({
+        fileId: resultFile.id,
+        fileName: resultFile.name,
+        content,
+        md5Checksum: resultFile.md5Checksum || "",
+        modifiedTime: resultFile.modifiedTime || "",
+      });
     }
   }
 

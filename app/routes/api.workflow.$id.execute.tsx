@@ -23,6 +23,8 @@ import {
   setError,
   subscribe,
   requestPrompt,
+  broadcastDriveFileUpdated,
+  broadcastDriveFileCreated,
 } from "~/services/execution-store.server";
 import { saveExecutionRecord } from "~/services/workflow-history.server";
 import yaml from "js-yaml";
@@ -148,6 +150,8 @@ export async function action({ request, params }: Route.ActionArgs) {
         abortSignal: executionState.abortController.signal,
         editHistorySettings: settings?.editHistory,
         settings,
+        onDriveFileUpdated: (data) => broadcastDriveFileUpdated(executionId, data),
+        onDriveFileCreated: (data) => broadcastDriveFileCreated(executionId, data),
       };
 
       const onLog = (log: ExecutionLog) => {
