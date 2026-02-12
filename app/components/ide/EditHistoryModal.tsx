@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   X,
   Loader2,
@@ -6,18 +6,21 @@ import {
   ChevronRight,
   Trash2,
   Cloud,
+  Copy,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { EditHistoryEntry } from "~/services/edit-history.server";
 import { getEditHistoryForFile, getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
-import { restoreToHistoryEntry } from "~/services/edit-history-local";
+import { reverseApplyDiff, recordRestoreDiff } from "~/services/edit-history-local";
 import { useI18n } from "~/i18n/context";
 import { DiffView } from "~/components/shared/DiffView";
 
 interface EditHistoryModalProps {
   fileId: string;
   filePath: string;
+  fullFilePath: string;
   onClose: () => void;
+  onFileCreated?: (file: { id: string; name: string; mimeType: string }) => void;
 }
 
 type DisplayEntry = {
@@ -26,10 +29,33 @@ type DisplayEntry = {
   diff: string;
   stats: { additions: number; deletions: number };
   origin: "local" | "remote";
-  filteredIndex?: number;
 };
 
-export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModalProps) {
+/**
+ * Reconstruct file content at a specific index in the sorted entries array.
+ * Reverse-applies diffs from entries[0] (newest) through entries[targetIdx] (inclusive).
+ */
+function reconstructAtIndex(
+  currentContent: string,
+  sortedEntries: DisplayEntry[],
+  targetIdx: number
+): string | null {
+  let content = currentContent;
+  for (let i = 0; i <= targetIdx; i++) {
+    const reversed = reverseApplyDiff(content, sortedEntries[i].diff);
+    if (reversed === null) return null;
+    content = reversed;
+  }
+  return content;
+}
+
+export function EditHistoryModal({
+  fileId,
+  filePath,
+  fullFilePath,
+  onClose,
+  onFileCreated,
+}: EditHistoryModalProps) {
   const { t } = useI18n();
   const [localEntries, setLocalEntries] = useState<DisplayEntry[]>([]);
   const [remoteEntries, setRemoteEntries] = useState<DisplayEntry[]>([]);
@@ -37,6 +63,12 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
   const [loadingLocal, setLoadingLocal] = useState(true);
   const [loadingRemote, setLoadingRemote] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [saveAsDialog, setSaveAsDialog] = useState<{
+    open: boolean;
+    name: string;
+    content: string;
+  }>({ open: false, name: "", content: "" });
+  const [saving, setSaving] = useState(false);
 
   // Load local entries from IndexedDB
   useEffect(() => {
@@ -53,7 +85,6 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
                 diff: d.diff,
                 stats: d.stats,
                 origin: "local" as const,
-                filteredIndex: i,
               }))
           );
         }
@@ -106,23 +137,40 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
     }
   }, [filePath, t]);
 
+  const allEntries = useMemo(
+    () =>
+      [
+        ...localEntries,
+        ...(showRemote ? remoteEntries : []),
+      ].sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
+    [localEntries, remoteEntries, showRemote]
+  );
+
   const handleRestore = useCallback(
     async (entry: DisplayEntry) => {
-      if (entry.origin !== "local" || entry.filteredIndex == null) return;
+      const cached = await getCachedFile(fileId);
+      if (!cached) return;
 
+      const targetIdx = allEntries.indexOf(entry);
+      if (targetIdx < 0) return;
 
-      const restoredContent = await restoreToHistoryEntry(fileId, entry.filteredIndex);
-      if (restoredContent == null) return;
+      const restoredContent = reconstructAtIndex(cached.content, allEntries, targetIdx);
+      if (restoredContent == null) {
+        alert(t("editHistory.restoreFailed"));
+        return;
+      }
+
+      // Record the restore diff in local history
+      await recordRestoreDiff(fileId, cached.content, restoredContent);
 
       // Update IndexedDB cache
-      const cached = await getCachedFile(fileId);
       await setCachedFile({
         fileId,
         content: restoredContent,
-        md5Checksum: cached?.md5Checksum ?? "",
-        modifiedTime: cached?.modifiedTime ?? "",
+        md5Checksum: cached.md5Checksum ?? "",
+        modifiedTime: cached.modifiedTime ?? "",
         cachedAt: Date.now(),
-        fileName: cached?.fileName,
+        fileName: cached.fileName,
       });
 
       // Notify editor to update content
@@ -135,8 +183,58 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
 
       onClose();
     },
-    [fileId, onClose, t]
+    [fileId, onClose, allEntries, t]
   );
+
+  const handleCopy = useCallback(
+    async (entry: DisplayEntry) => {
+      const cached = await getCachedFile(fileId);
+      if (!cached) return;
+
+      const targetIdx = allEntries.indexOf(entry);
+      if (targetIdx < 0) return;
+
+      const restoredContent = reconstructAtIndex(cached.content, allEntries, targetIdx);
+      if (restoredContent == null) {
+        alert(t("editHistory.restoreFailed"));
+        return;
+      }
+
+      // Generate default name: "base (restored).ext"
+      const lastDot = fullFilePath.lastIndexOf(".");
+      const base = lastDot > 0 ? fullFilePath.slice(0, lastDot) : fullFilePath;
+      const ext = lastDot > 0 ? fullFilePath.slice(lastDot) : "";
+      const defaultName = `${base} (restored)${ext}`;
+
+      setSaveAsDialog({ open: true, name: defaultName, content: restoredContent });
+    },
+    [fileId, allEntries, fullFilePath, t]
+  );
+
+  const handleSaveAs = useCallback(async () => {
+    const name = saveAsDialog.name.trim();
+    if (!name) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch("/api/drive/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", name, content: saveAsDialog.content }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const file = data.file;
+        onFileCreated?.({ id: file.id, name: file.name, mimeType: file.mimeType });
+        setSaveAsDialog({ open: false, name: "", content: "" });
+        onClose();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setSaving(false);
+    }
+  }, [saveAsDialog, onFileCreated, onClose]);
 
   const toggleExpand = useCallback(
     (id: string) => {
@@ -144,11 +242,6 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
     },
     [expandedId]
   );
-
-  const allEntries = [
-    ...localEntries,
-    ...(showRemote ? remoteEntries : []),
-  ].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -214,7 +307,7 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
                           -{entry.stats.deletions}
                         </span>
                       </span>
-                      {entry.origin === "local" && (
+                      <span className="ml-auto flex items-center gap-1">
                         <span
                           role="button"
                           tabIndex={0}
@@ -225,11 +318,25 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
                           onKeyDown={(e) => {
                             if (e.key === "Enter") { e.stopPropagation(); handleRestore(entry); }
                           }}
-                          className="ml-auto rounded border border-gray-300 px-1.5 py-0.5 text-[10px] text-gray-500 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 dark:border-gray-600 dark:text-gray-400 dark:hover:border-blue-500 dark:hover:bg-blue-900/30 dark:hover:text-blue-400"
+                          className="rounded border border-gray-300 px-1.5 py-0.5 text-[10px] text-gray-500 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 dark:border-gray-600 dark:text-gray-400 dark:hover:border-blue-500 dark:hover:bg-blue-900/30 dark:hover:text-blue-400"
                         >
                           {t("editHistory.restore")}
                         </span>
-                      )}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopy(entry);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.stopPropagation(); handleCopy(entry); }
+                          }}
+                          className="rounded border border-gray-300 px-1.5 py-0.5 text-[10px] text-gray-500 hover:border-green-400 hover:bg-green-50 hover:text-green-600 dark:border-gray-600 dark:text-gray-400 dark:hover:border-green-500 dark:hover:bg-green-900/30 dark:hover:text-green-400"
+                        >
+                          <Copy size={10} className="inline -mt-0.5" />
+                        </span>
+                      </span>
                     </button>
 
                     {/* Expanded diff */}
@@ -280,6 +387,49 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
           </button>
         </div>
       </div>
+
+      {/* Save As dialog */}
+      {saveAsDialog.open && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50" onClick={() => setSaveAsDialog((prev) => ({ ...prev, open: false }))}>
+          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              {t("editHistory.saveAs")}
+            </h3>
+            <div className="mb-4">
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                {t("editHistory.saveAsName")}
+              </label>
+              <input
+                type="text"
+                value={saveAsDialog.name}
+                onChange={(e) => setSaveAsDialog((prev) => ({ ...prev, name: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveAs();
+                  if (e.key === "Escape") setSaveAsDialog((prev) => ({ ...prev, open: false }));
+                }}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setSaveAsDialog((prev) => ({ ...prev, open: false }))}
+                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                onClick={handleSaveAs}
+                disabled={!saveAsDialog.name.trim() || saving}
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                {saving && <Loader2 size={ICON.SM} className="animate-spin" />}
+                {t("editHistory.save")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -154,6 +154,10 @@ export interface TranslationStrings {
   "editHistory.confirmClearAll": string;
   "editHistory.confirmRestore": string;
   "editHistory.restore": string;
+  "editHistory.saveAs": string;
+  "editHistory.saveAsName": string;
+  "editHistory.save": string;
+  "editHistory.restoreFailed": string;
   "editHistory.showRemote": string;
 
   // Context menu
@@ -519,6 +523,10 @@ const en: TranslationStrings = {
   "editHistory.confirmClearAll": "Clear all history for this file?",
   "editHistory.confirmRestore": "Restore file to this point? Current content will be overwritten.",
   "editHistory.restore": "Restore",
+  "editHistory.saveAs": "Save As",
+  "editHistory.saveAsName": "File name",
+  "editHistory.save": "Save",
+  "editHistory.restoreFailed": "Failed to restore file.",
   "editHistory.showRemote": "Show Remote",
 
   // Context menu
@@ -884,6 +892,10 @@ const ja: TranslationStrings = {
   "editHistory.confirmClearAll": "このファイルの履歴をすべてクリアしますか？",
   "editHistory.confirmRestore": "この時点に復元しますか？現在の内容は上書きされます。",
   "editHistory.restore": "復元",
+  "editHistory.saveAs": "別名で保存",
+  "editHistory.saveAsName": "ファイル名",
+  "editHistory.save": "保存",
+  "editHistory.restoreFailed": "ファイルの復元に失敗しました。",
   "editHistory.showRemote": "リモートを表示",
 
   // Context menu

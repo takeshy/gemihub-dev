@@ -188,7 +188,7 @@ export function DriveFileTree({
   const [dragOverTree, setDragOverTree] = useState(false);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [draggingItem, setDraggingItem] = useState<{ id: string; parentId: string } | null>(null);
-  const [editHistoryFile, setEditHistoryFile] = useState<{ fileId: string; filePath: string } | null>(null);
+  const [editHistoryFile, setEditHistoryFile] = useState<{ fileId: string; filePath: string; fullPath: string } | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [cachedFiles, setCachedFiles] = useState<Set<string>>(new Set());
   const [modifiedFiles, setModifiedFiles] = useState<Set<string>>(new Set());
@@ -1384,7 +1384,10 @@ export function DriveFileTree({
         items.push({
           label: t("editHistory.menuLabel"),
           icon: <History size={ICON.MD} />,
-          onClick: () => setEditHistoryFile({ fileId: item.id, filePath: item.name }),
+          onClick: () => {
+            const fullPath = findFullFileName(item.id, treeItems, "") ?? item.name;
+            setEditHistoryFile({ fileId: item.id, filePath: item.name, fullPath });
+          },
         });
 
         items.push({
@@ -1482,7 +1485,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, cachedFiles, t]
+    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, cachedFiles, t, findFullFileName, treeItems]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
@@ -1715,7 +1718,42 @@ export function DriveFileTree({
         <EditHistoryModal
           fileId={editHistoryFile.fileId}
           filePath={editHistoryFile.filePath}
+          fullFilePath={editHistoryFile.fullPath}
           onClose={() => setEditHistoryFile(null)}
+          onFileCreated={(file) => {
+            const baseName = (file.name as string).split("/").pop()!;
+            const newNode: CachedTreeNode = {
+              id: file.id,
+              name: baseName,
+              mimeType: file.mimeType,
+              isFolder: false,
+              modifiedTime: new Date().toISOString(),
+            };
+            setTreeItems((prev) => {
+              const parts = (file.name as string).split("/");
+              if (parts.length <= 1) {
+                return [...prev, newNode].sort((a, b) => {
+                  if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+                  return a.name.localeCompare(b.name);
+                });
+              }
+              const parentPath = parts.slice(0, -1).join("/");
+              const parentId = `vfolder:${parentPath}`;
+              const insertInto = (nodes: CachedTreeNode[]): CachedTreeNode[] =>
+                nodes.map((n) => {
+                  if (n.id === parentId && n.children) {
+                    return { ...n, children: [...n.children, newNode].sort((a, b) => {
+                      if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+                      return a.name.localeCompare(b.name);
+                    }) };
+                  }
+                  if (n.children) return { ...n, children: insertInto(n.children) };
+                  return n;
+                });
+              return insertInto(prev);
+            });
+            onSelectFile(file.id, baseName, file.mimeType);
+          }}
         />
       )}
 

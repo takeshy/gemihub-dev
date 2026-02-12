@@ -107,37 +107,19 @@ export async function saveLocalEdit(
 }
 
 /**
- * Reverse-apply a unified diff to recover the base content.
- * Swaps +/- lines and hunk header counts, then applies.
+ * Record a restore operation as a diff entry in local history.
+ * Adds commit boundary + restore diff + commit boundary.
  */
-/**
- * Restore file content to the state at a specific history entry.
- * Reverse-applies diffs from the most recent back to the target,
- * then records the restore as a new diff entry (current → restored)
- * so that full history is preserved.
- */
-export async function restoreToHistoryEntry(
+export async function recordRestoreDiff(
   fileId: string,
-  targetFilteredIndex: number
-): Promise<string | null> {
-  const cached = await getCachedFile(fileId);
-  if (!cached) return null;
-
-  const entry = await getEditHistoryForFile(fileId);
-  if (!entry) return null;
-
-  const nonEmptyDiffs = entry.diffs.filter((d) => d.diff !== "");
-  if (targetFilteredIndex < 0 || targetFilteredIndex >= nonEmptyDiffs.length) return null;
-
-  // Reconstruct content at target entry
-  let restoredContent = cached.content;
-  for (let i = nonEmptyDiffs.length - 1; i >= targetFilteredIndex; i--) {
-    const reversed = reverseApplyDiff(restoredContent, nonEmptyDiffs[i].diff);
-    if (reversed === null) return null;
-    restoredContent = reversed;
+  currentContent: string,
+  restoredContent: string
+): Promise<void> {
+  let entry = await getEditHistoryForFile(fileId);
+  if (!entry) {
+    entry = { fileId, filePath: "", diffs: [] };
   }
 
-  // Record the restore as a new history entry: diff(current → restored)
   const now = new Date().toISOString();
   const lastDiff = entry.diffs[entry.diffs.length - 1];
 
@@ -147,7 +129,7 @@ export async function restoreToHistoryEntry(
   }
 
   // Add restore diff (from current content to restored content)
-  const { diff, stats } = createDiffStr(cached.content, restoredContent, 3);
+  const { diff, stats } = createDiffStr(currentContent, restoredContent, 3);
   if (diff) {
     entry.diffs.push({ timestamp: now, diff, stats });
     // Add commit boundary after restore
@@ -155,10 +137,9 @@ export async function restoreToHistoryEntry(
   }
 
   await setEditHistoryEntry(entry);
-  return restoredContent;
 }
 
-function reverseApplyDiff(content: string, diffStr: string): string | null {
+export function reverseApplyDiff(content: string, diffStr: string): string | null {
   const lines = diffStr.split("\n");
   const reversed: string[] = [];
 
