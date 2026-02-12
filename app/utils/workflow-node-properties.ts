@@ -68,7 +68,7 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
       ];
     case "drive-file":
       return [
-        { key: "path", label: "Path", required: true, placeholder: "notes/output.md" },
+        { key: "path", label: "Path", required: true, placeholder: "temporaries/output.md" },
         { key: "content", label: "Content", required: false, multiline: true, placeholder: "{{result}}" },
         { key: "mode", label: "Mode", required: false, options: ["create", "append", "overwrite"], defaultValue: "overwrite" },
         { key: "confirm", label: "Confirm", required: false, options: ["true", "false"], defaultValue: "true" },

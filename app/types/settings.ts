@@ -425,7 +425,7 @@ export const DEFAULT_RAG_SETTING: RagSetting = {
   storeName: null,
   isExternal: false,
   targetFolders: [],
-  excludePatterns: [],
+  excludePatterns: ["^temporaries/"],
   files: {},
   lastFullSync: null,
 };

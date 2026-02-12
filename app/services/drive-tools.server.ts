@@ -115,13 +115,13 @@ export const DRIVE_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: "create_drive_file",
-    description: "Create a new file in Google Drive. Use path separators in the name to place it in a virtual folder (e.g. 'notes/todo.md')",
+    description: "Create a new file in Google Drive under the 'temporaries/' folder. The 'temporaries/' prefix is automatically added if omitted. You can add sub-paths (e.g. 'report.md' becomes 'temporaries/report.md', 'drafts/note.md' becomes 'temporaries/drafts/note.md')",
     parameters: {
       type: "object",
       properties: {
         name: {
           type: "string",
-          description: "The file name, optionally including virtual folder path (e.g. 'notes/todo.md')",
+          description: "The file name, optionally including sub-folder path (e.g. 'report.md' or 'drafts/note.md'). The 'temporaries/' prefix is added automatically",
         },
         content: {
           type: "string",
@@ -256,14 +256,15 @@ export async function executeDriveTool(
     }
 
     case "create_drive_file": {
-      const name = args.name;
+      const rawName = args.name;
       const content = args.content;
-      if (typeof name !== "string" || !name) {
+      if (typeof rawName !== "string" || !rawName) {
         return { error: "create_drive_file: 'name' must be a non-empty string" };
       }
       if (typeof content !== "string") {
         return { error: "create_drive_file: 'content' must be a string" };
       }
+      const name = rawName.startsWith("temporaries/") ? rawName : `temporaries/${rawName}`;
       const file = await createFile(accessToken, name, content, rootFolderId, "text/plain", { signal: abortSignal });
       await upsertFileInMeta(accessToken, rootFolderId, file, { signal: abortSignal });
       return {
