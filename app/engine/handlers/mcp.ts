@@ -2,6 +2,7 @@ import type { WorkflowNode, ExecutionContext, ServiceContext } from "../types";
 import type { McpAppInfo } from "~/types/chat";
 import type { McpAppResult, McpAppUiResource } from "~/types/settings";
 import { McpClient } from "~/services/mcp-client.server";
+import { getOrCreateClient } from "~/services/mcp-tools.server";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
 import { replaceVariables } from "./utils";
 
@@ -43,8 +44,26 @@ export async function handleMcpNode(
     }
   }
 
-  // Use McpClient for proper MCP lifecycle (initialize → tools/call → close)
-  const client = new McpClient({ name: "workflow", url, headers });
+  // Find matching server config from settings (for OAuth token injection/refresh)
+  const matchedServer = serviceContext.settings?.mcpServers?.find(
+    (s) => s.url === url
+  );
+
+  // If a matching server config exists, use getOrCreateClient for OAuth support;
+  // otherwise fall back to a direct McpClient (backward compat)
+  let client: McpClient;
+  let isSharedClient = false;
+  if (matchedServer) {
+    // Merge workflow node headers into the server config
+    const configWithHeaders = Object.keys(headers).length > 0
+      ? { ...matchedServer, headers: { ...matchedServer.headers, ...headers } }
+      : matchedServer;
+    client = await getOrCreateClient(configWithHeaders);
+    isSharedClient = true;
+  } else {
+    client = new McpClient({ name: "workflow", url, headers });
+  }
+
   try {
     await client.initialize(serviceContext.abortSignal);
     const callResult = await client.callToolWithUi(
@@ -102,6 +121,9 @@ export async function handleMcpNode(
 
     return mcpAppInfo;
   } finally {
-    await client.close();
+    // Only close if we created the client ourselves; shared clients are cached
+    if (!isSharedClient) {
+      await client.close();
+    }
   }
 }
