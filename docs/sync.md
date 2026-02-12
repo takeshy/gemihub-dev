@@ -278,6 +278,52 @@ Temp files can be managed from Settings → Sync → Temporary Files.
 
 ---
 
+## Chat-Initiated File Operations
+
+When Gemini AI uses `update_drive_file` or `create_drive_file` tools in chat, file operations follow a local-first pattern to stay consistent with push/pull sync.
+
+### update_drive_file (Local-First)
+
+The server does **not** write to Drive. Instead, it reads file metadata only and returns the new content to the client via an SSE `drive_file_updated` chunk.
+
+```
+Chat → Server (getFileMetadata only, no Drive write)
+     → SSE: drive_file_updated { fileId, fileName, content }
+     → Client:
+         1. addCommitBoundary(fileId)         — separate previous session
+         2. saveLocalEdit(fileId, content)     — record diff in editHistory
+         3. setCachedFile(content, old md5)    — update cache, keep last-synced md5
+         4. addCommitBoundary(fileId)          — isolate chat edit as own session
+         5. dispatch "file-modified"           — update sync badge count
+         6. dispatch "file-restored"           — refresh editor if file is open
+```
+
+**Sync behavior after update:**
+- `localMeta.md5` = old value (unchanged), `remoteMeta.md5` = old value (Drive untouched)
+- `editHistory` has the fileId → `locallyModifiedFileIds` includes it
+- Diff result: `localChanged = true`, `remoteChanged = false` → **toPush**
+- Normal push uploads the new content to Drive
+
+### create_drive_file (Drive + Local Seed)
+
+The server creates the file on Drive (an ID is needed) and returns content + metadata via an SSE `drive_file_created` chunk.
+
+```
+Chat → Server (createFile on Drive + upsertFileInMeta)
+     → SSE: drive_file_created { fileId, fileName, content, md5Checksum, modifiedTime }
+     → Client:
+         1. setCachedFile(content, Drive md5)  — seed cache with Drive checksum
+         2. setLocalSyncMeta(fileId, Drive md5) — local meta matches remote
+         3. dispatch "sync-complete"            — refresh file tree
+```
+
+**Sync behavior after create:**
+- `localMeta.md5` = Drive value, `remoteMeta.md5` = same Drive value
+- Diff result: `localChanged = false`, `remoteChanged = false` → **already synced**
+- No push needed
+
+---
+
 ## File Recovery
 
 ### Scenario 1: Conflict — Need Both Versions

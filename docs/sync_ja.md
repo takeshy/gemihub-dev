@@ -277,6 +277,52 @@ Drive API のリアルタイム一覧は不要: `drive.file` スコープによ�
 
 ---
 
+## チャット経由のファイル操作
+
+Gemini AI がチャットで `update_drive_file` または `create_drive_file` ツールを使用する場合、Push/Pull 同期との整合性を保つためにローカルファーストのパターンに従います。
+
+### update_drive_file（ローカルファースト）
+
+サーバーは Drive に**書き込みません**。ファイルのメタデータのみ取得し、新しいコンテンツを SSE の `drive_file_updated` チャンクでクライアントに返します。
+
+```
+Chat → サーバー（getFileMetadata のみ、Drive 書き込みなし）
+     → SSE: drive_file_updated { fileId, fileName, content }
+     → クライアント:
+         1. addCommitBoundary(fileId)         — 前のセッションを区切り
+         2. saveLocalEdit(fileId, content)     — editHistory に差分を記録
+         3. setCachedFile(content, 旧 md5)    — キャッシュ更新、md5 は最終同期時のまま
+         4. addCommitBoundary(fileId)          — チャット編集を独立セッションとして区切り
+         5. dispatch "file-modified"           — 同期バッジの変更数を更新
+         6. dispatch "file-restored"           — ファイルが開いていればエディタを更新
+```
+
+**更新後の同期動作:**
+- `localMeta.md5` = 旧値（変更なし）、`remoteMeta.md5` = 旧値（Drive 未更新）
+- `editHistory` に fileId あり → `locallyModifiedFileIds` に含まれる
+- Diff 結果: `localChanged = true`, `remoteChanged = false` → **toPush**
+- 通常の Push で新しいコンテンツが Drive にアップロードされる
+
+### create_drive_file（Drive 作成 + ローカルシード）
+
+サーバーは Drive にファイルを作成し（ID が必要なため）、コンテンツ + メタデータを SSE の `drive_file_created` チャンクでクライアントに返します。
+
+```
+Chat → サーバー（Drive にファイル作成 + upsertFileInMeta）
+     → SSE: drive_file_created { fileId, fileName, content, md5Checksum, modifiedTime }
+     → クライアント:
+         1. setCachedFile(content, Drive の md5)  — Drive のチェックサムでキャッシュをシード
+         2. setLocalSyncMeta(fileId, Drive の md5) — ローカルメタがリモートと一致
+         3. dispatch "sync-complete"               — ファイルツリーを更新
+```
+
+**作成後の同期動作:**
+- `localMeta.md5` = Drive の値、`remoteMeta.md5` = 同じ Drive の値
+- Diff 結果: `localChanged = false`, `remoteChanged = false` → **同期済み**
+- Push は不要
+
+---
+
 ## ファイルリカバリ
 
 ### シナリオ 1: コンフリクト — 両方のバージョンが必要
