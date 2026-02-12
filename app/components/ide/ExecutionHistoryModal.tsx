@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Loader2,
@@ -44,7 +45,7 @@ export function ExecutionHistoryModal({
 }: ExecutionHistoryModalProps) {
   const [activeTab, setActiveTab] = useState<TabId>("execution");
 
-  return (
+  const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="mx-4 w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col">
         {/* Header */}
@@ -95,6 +96,11 @@ export function ExecutionHistoryModal({
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modal, document.body);
+  }
+  return modal;
 }
 
 // ---------------------------------------------------------------------------
