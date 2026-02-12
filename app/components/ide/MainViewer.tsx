@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
-import { FileText, Loader2, Eye, PenLine, Code, Upload, Download, GitCompareArrows, X } from "lucide-react";
+import { FileText, Loader2, Eye, PenLine, Code, X } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
 import { ICON } from "~/utils/icon-sizes";
 import type { UserSettings } from "~/types/settings";
@@ -14,6 +14,8 @@ import { QuickOpenDialog } from "./QuickOpenDialog";
 import { DiffView } from "~/components/shared/DiffView";
 import { getCachedFile } from "~/services/indexeddb-cache";
 import { addCommitBoundary } from "~/services/edit-history-local";
+import { EditHistoryModal } from "./EditHistoryModal";
+import { EditorToolbarActions } from "./EditorToolbarActions";
 
 function WysiwygSelectionTracker({
   setActiveSelection,
@@ -187,6 +189,9 @@ function TextBasedViewer({
   const [diffTarget, setDiffTarget] = useState<{ id: string; name: string } | null>(null);
   const [showDiffPicker, setShowDiffPicker] = useState(false);
 
+  // Edit history state
+  const [editHistoryFile, setEditHistoryFile] = useState<{ fileId: string; filePath: string; fullPath: string } | null>(null);
+
   // Reset diff when file changes
   useEffect(() => {
     setDiffTarget(null);
@@ -236,9 +241,15 @@ function TextBasedViewer({
 
   const name = fileName || "";
 
-  // Encrypted file: check extension OR content format
+  const handleHistoryClick = () => {
+    setEditHistoryFile({ fileId, filePath: name, fullPath: name });
+  };
+
+  // Determine which editor to render
+  let editor: React.ReactNode;
+
   if (name.endsWith(".encrypted") || isEncryptedFile(content)) {
-    return (
+    editor = (
       <EncryptedFileViewer
         fileId={fileId}
         fileName={name}
@@ -246,14 +257,10 @@ function TextBasedViewer({
         encryptionSettings={settings.encryption}
         saveToCache={saveToCache}
         forceRefresh={forceRefresh}
+        onHistoryClick={handleHistoryClick}
       />
     );
-  }
-
-  // Determine which editor to render
-  let editor: React.ReactNode;
-
-  if (diffTarget) {
+  } else if (diffTarget) {
     // Diff mode: show DiffEditor instead of regular editor
     editor = (
       <DiffEditor
@@ -275,6 +282,7 @@ function TextBasedViewer({
         settings={settings}
         saveToCache={saveToCache}
         onDiffClick={handleDiffClick}
+        onHistoryClick={handleHistoryClick}
       />
     );
   } else if (name.endsWith(".md")) {
@@ -287,6 +295,7 @@ function TextBasedViewer({
         onFileSelect={onFileSelect}
         onImageChange={onImageChange}
         onDiffClick={handleDiffClick}
+        onHistoryClick={handleHistoryClick}
       />
     );
   } else if (name.endsWith(".html") || name.endsWith(".htm")) {
@@ -297,6 +306,7 @@ function TextBasedViewer({
         initialContent={content}
         saveToCache={saveToCache}
         onDiffClick={handleDiffClick}
+        onHistoryClick={handleHistoryClick}
       />
     );
   } else {
@@ -307,6 +317,7 @@ function TextBasedViewer({
         initialContent={content}
         saveToCache={saveToCache}
         onDiffClick={handleDiffClick}
+        onHistoryClick={handleHistoryClick}
       />
     );
   }
@@ -324,6 +335,14 @@ function TextBasedViewer({
             setShowDiffPicker(false);
           }}
           zClass="z-[1001]"
+        />
+      )}
+      {editHistoryFile && (
+        <EditHistoryModal
+          fileId={editHistoryFile.fileId}
+          filePath={editHistoryFile.filePath}
+          fullFilePath={editHistoryFile.fullPath}
+          onClose={() => setEditHistoryFile(null)}
         />
       )}
     </>
@@ -345,6 +364,7 @@ function MarkdownFileEditor({
   onFileSelect,
   onImageChange,
   onDiffClick,
+  onHistoryClick,
 }: {
   fileId: string;
   fileName: string;
@@ -353,6 +373,7 @@ function MarkdownFileEditor({
   onFileSelect?: () => Promise<string | null>;
   onImageChange?: (file: File) => Promise<string>;
   onDiffClick?: () => void;
+  onHistoryClick?: () => void;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -523,41 +544,14 @@ function MarkdownFileEditor({
           ))}
         </div>
 
-        {/* Diff / Temp Upload / Download */}
-        <div className="flex items-center gap-2">
-          {onDiffClick && (
-            <button
-              onClick={onDiffClick}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-              title={t("mainViewer.diff")}
-            >
-              <GitCompareArrows size={ICON.SM} />
-              {t("mainViewer.diff")}
-            </button>
-          )}
-          {uploaded && (
-            <span className="text-xs text-green-600 dark:text-green-400">
-              {t("contextMenu.tempUploaded")}
-            </span>
-          )}
-          <button
-            onClick={handleTempUpload}
-            disabled={uploading}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
-            title={t("contextMenu.tempUpload")}
-          >
-            <Upload size={ICON.SM} />
-            {t("contextMenu.tempUpload")}
-          </button>
-          <button
-            onClick={handleTempDownload}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-            title={t("contextMenu.tempDownload")}
-          >
-            <Download size={ICON.SM} />
-            {t("contextMenu.tempDownload")}
-          </button>
-        </div>
+        <EditorToolbarActions
+          onDiffClick={onDiffClick}
+          onHistoryClick={onHistoryClick}
+          onTempUpload={handleTempUpload}
+          onTempDownload={handleTempDownload}
+          uploading={uploading}
+          uploaded={uploaded}
+        />
       </div>
 
       {/* Content area */}
@@ -627,12 +621,14 @@ function HtmlFileEditor({
   initialContent,
   saveToCache,
   onDiffClick,
+  onHistoryClick,
 }: {
   fileId: string;
   fileName: string;
   initialContent: string;
   saveToCache: (content: string) => Promise<void>;
   onDiffClick?: () => void;
+  onHistoryClick?: () => void;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -782,41 +778,14 @@ function HtmlFileEditor({
           ))}
         </div>
 
-        {/* Diff / Temp Upload / Download */}
-        <div className="flex items-center gap-2">
-          {onDiffClick && (
-            <button
-              onClick={onDiffClick}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-              title={t("mainViewer.diff")}
-            >
-              <GitCompareArrows size={ICON.SM} />
-              {t("mainViewer.diff")}
-            </button>
-          )}
-          {uploaded && (
-            <span className="text-xs text-green-600 dark:text-green-400">
-              {t("contextMenu.tempUploaded")}
-            </span>
-          )}
-          <button
-            onClick={handleTempUpload}
-            disabled={uploading}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
-            title={t("contextMenu.tempUpload")}
-          >
-            <Upload size={ICON.SM} />
-            {t("contextMenu.tempUpload")}
-          </button>
-          <button
-            onClick={handleTempDownload}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-            title={t("contextMenu.tempDownload")}
-          >
-            <Download size={ICON.SM} />
-            {t("contextMenu.tempDownload")}
-          </button>
-        </div>
+        <EditorToolbarActions
+          onDiffClick={onDiffClick}
+          onHistoryClick={onHistoryClick}
+          onTempUpload={handleTempUpload}
+          onTempDownload={handleTempDownload}
+          uploading={uploading}
+          uploaded={uploaded}
+        />
       </div>
 
       {/* Content area */}
@@ -867,12 +836,14 @@ function TextFileEditor({
   initialContent,
   saveToCache,
   onDiffClick,
+  onHistoryClick,
 }: {
   fileId: string;
   fileName: string;
   initialContent: string;
   saveToCache: (content: string) => Promise<void>;
   onDiffClick?: () => void;
+  onHistoryClick?: () => void;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -992,39 +963,15 @@ function TextFileEditor({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
-      <div className="flex items-center justify-end gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-        {onDiffClick && (
-          <button
-            onClick={onDiffClick}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-            title={t("mainViewer.diff")}
-          >
-            <GitCompareArrows size={ICON.SM} />
-            {t("mainViewer.diff")}
-          </button>
-        )}
-        {uploaded && (
-          <span className="text-xs text-green-600 dark:text-green-400">
-            {t("contextMenu.tempUploaded")}
-          </span>
-        )}
-        <button
-          onClick={handleTempUpload}
-          disabled={uploading}
-          className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
-          title={t("contextMenu.tempUpload")}
-        >
-          <Upload size={ICON.SM} />
-          {t("contextMenu.tempUpload")}
-        </button>
-        <button
-          onClick={handleTempDownload}
-          className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-          title={t("contextMenu.tempDownload")}
-        >
-          <Download size={ICON.SM} />
-          {t("contextMenu.tempDownload")}
-        </button>
+      <div className="flex items-center justify-end px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <EditorToolbarActions
+          onDiffClick={onDiffClick}
+          onHistoryClick={onHistoryClick}
+          onTempUpload={handleTempUpload}
+          onTempDownload={handleTempDownload}
+          uploading={uploading}
+          uploaded={uploaded}
+        />
       </div>
       <div className="flex-1 p-4">
         <textarea

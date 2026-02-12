@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Lock, Unlock, Loader2, Upload, Download, ShieldOff } from "lucide-react";
+import { Lock, Unlock, Loader2, ShieldOff } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { EncryptionSettings } from "~/types/settings";
 import { useI18n } from "~/i18n/context";
@@ -13,6 +13,7 @@ import {
 } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
 import { TempDiffModal } from "./TempDiffModal";
+import { EditorToolbarActions } from "./EditorToolbarActions";
 
 interface EncryptedFileViewerProps {
   fileId: string;
@@ -21,6 +22,7 @@ interface EncryptedFileViewerProps {
   encryptionSettings: EncryptionSettings;
   saveToCache: (content: string) => Promise<void>;
   forceRefresh: () => Promise<void>;
+  onHistoryClick?: () => void;
 }
 
 export function EncryptedFileViewer({
@@ -30,6 +32,7 @@ export function EncryptedFileViewer({
   encryptionSettings,
   saveToCache,
   forceRefresh,
+  onHistoryClick,
 }: EncryptedFileViewerProps) {
   const { t } = useI18n();
   const { setActiveFileContent, setActiveFileName, setActiveSelection } = useEditorContext();
@@ -357,34 +360,25 @@ export function EncryptedFileViewer({
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center justify-end gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-        <button
-          onClick={handleTempUpload}
-          disabled={uploading}
-          className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
-          title={t("contextMenu.tempUpload")}
-        >
-          <Upload size={ICON.SM} />
-          {t("contextMenu.tempUpload")}
-        </button>
-        <button
-          onClick={handleTempDownload}
-          disabled={uploading}
-          className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
-          title={t("contextMenu.tempDownload")}
-        >
-          <Download size={ICON.SM} />
-          {t("contextMenu.tempDownload")}
-        </button>
-        <button
-          onClick={handlePermanentDecrypt}
-          disabled={uploading || decryptingPermanent}
-          className="flex items-center gap-1 px-2 py-1 text-xs text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-600 rounded hover:bg-orange-50 dark:hover:bg-orange-900/30 disabled:opacity-50"
-          title={t("crypt.decrypt")}
-        >
-          {decryptingPermanent ? <Loader2 size={ICON.SM} className="animate-spin" /> : <ShieldOff size={ICON.SM} />}
-          {t("crypt.decrypt")}
-        </button>
+      <div className="flex items-center justify-end px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <EditorToolbarActions
+            onHistoryClick={onHistoryClick}
+            onTempUpload={handleTempUpload}
+            onTempDownload={handleTempDownload}
+            uploading={uploading}
+            uploaded={false}
+          />
+          <button
+            onClick={handlePermanentDecrypt}
+            disabled={uploading || decryptingPermanent}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-600 rounded hover:bg-orange-50 dark:hover:bg-orange-900/30 disabled:opacity-50"
+            title={t("crypt.decrypt")}
+          >
+            {decryptingPermanent ? <Loader2 size={ICON.SM} className="animate-spin" /> : <ShieldOff size={ICON.SM} />}
+            <span className="hidden sm:inline">{t("crypt.decrypt")}</span>
+          </button>
+        </div>
       </div>
 
       {/* Text editor */}

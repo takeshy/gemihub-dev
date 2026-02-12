@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Code, Eye, Upload, Download, GitCompareArrows } from "lucide-react";
+import { Code, Eye } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { UserSettings } from "~/types/settings";
 import { MermaidPreview } from "~/components/flow/MermaidPreview";
 import { useI18n } from "~/i18n/context";
 import { TempDiffModal } from "./TempDiffModal";
+import { EditorToolbarActions } from "./EditorToolbarActions";
 import { addCommitBoundary } from "~/services/edit-history-local";
 
 
@@ -15,6 +16,7 @@ interface WorkflowEditorProps {
   settings: UserSettings;
   saveToCache: (content: string) => Promise<void>;
   onDiffClick?: () => void;
+  onHistoryClick?: () => void;
 }
 
 export function WorkflowEditor({
@@ -24,6 +26,7 @@ export function WorkflowEditor({
   settings: _settings,
   saveToCache,
   onDiffClick,
+  onHistoryClick,
 }: WorkflowEditorProps) {
   const { t } = useI18n();
   const [viewMode, setViewMode] = useState<"visual" | "yaml">("visual");
@@ -182,7 +185,7 @@ export function WorkflowEditor({
         <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
           {fileName}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           {/* View mode toggle */}
           <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-md">
             <button
@@ -209,41 +212,14 @@ export function WorkflowEditor({
             </button>
           </div>
 
-          {onDiffClick && (
-            <button
-              onClick={onDiffClick}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-              title={t("mainViewer.diff")}
-            >
-              <GitCompareArrows size={ICON.SM} />
-              {t("mainViewer.diff")}
-            </button>
-          )}
-
-          {uploaded && (
-            <span className="text-xs text-green-600 dark:text-green-400">
-              {t("contextMenu.tempUploaded")}
-            </span>
-          )}
-
-          <button
-            onClick={handleTempUpload}
-            disabled={uploading}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
-            title={t("contextMenu.tempUpload")}
-          >
-            <Upload size={ICON.SM} />
-            {t("contextMenu.tempUpload")}
-          </button>
-          <button
-            onClick={handleTempDownload}
-            disabled={uploading}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
-            title={t("contextMenu.tempDownload")}
-          >
-            <Download size={ICON.SM} />
-            {t("contextMenu.tempDownload")}
-          </button>
+          <EditorToolbarActions
+            onDiffClick={onDiffClick}
+            onHistoryClick={onHistoryClick}
+            onTempUpload={handleTempUpload}
+            onTempDownload={handleTempDownload}
+            uploading={uploading}
+            uploaded={uploaded}
+          />
         </div>
       </div>
 

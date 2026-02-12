@@ -4,6 +4,7 @@ import { handleRagAction } from "~/services/sync-rag.server";
 import { DEFAULT_RAG_SETTING, DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 
 test("ragRegister -> ragSave -> ragRetryPending uses bytes", async () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const settings: any = {
     ragRegistrationOnPush: true,
     ragSettings: {},
@@ -14,6 +15,7 @@ test("ragRegister -> ragSave -> ragRetryPending uses bytes", async () => {
   const capturedContents: Array<unknown> = [];
   const deps = {
     getSettings: async () => settings,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     saveSettings: async (_accessToken: string, _rootFolderId: string, next: any) => {
       Object.assign(settings, next);
     },

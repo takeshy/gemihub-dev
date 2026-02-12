@@ -773,7 +773,7 @@ const ja: TranslationStrings = {
   "mainViewer.preview": "プレビュー",
   "mainViewer.wysiwyg": "WYSIWYG",
   "mainViewer.raw": "Raw",
-  "mainViewer.diff": "差分",
+  "mainViewer.diff": "比較",
   "mainViewer.diffTarget": "比較するファイルを選択",
 
   // ChatPanel
