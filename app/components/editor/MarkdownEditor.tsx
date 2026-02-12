@@ -30,7 +30,7 @@ export function MarkdownEditor({
     if (!vv) return;
     const handler = () => {
       const isKeyboardOpen = vv.height < window.innerHeight * 0.75;
-      setMobileMaxHeight(isKeyboardOpen ? vv.height * 0.7 : null);
+      setMobileMaxHeight(isKeyboardOpen ? vv.height * 0.9 : null);
     };
     vv.addEventListener("resize", handler);
     return () => vv.removeEventListener("resize", handler);
