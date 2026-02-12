@@ -100,42 +100,49 @@ self.addEventListener("fetch", (event) => {
 
   // --- Navigation requests (HTML pages) → network-first, cache fallback ---
   if (request.mode === "navigate") {
+    // Serve cached page when offline (or network unreachable).
+    const serveCached = () =>
+      caches
+        .match(request, { ignoreVary: true })
+        .then(
+          (cached) =>
+            cached ||
+            caches.match(request, { ignoreSearch: true, ignoreVary: true })
+        )
+        .then((cached) => cached || caches.match("/", { ignoreVary: true }))
+        .then(
+          (cached) =>
+            cached ||
+            new Response("Offline — please reconnect and reload.", {
+              status: 503,
+              headers: { "Content-Type": "text/plain" },
+            })
+        );
+
+    // Skip network entirely when definitely offline.
+    if (!navigator.onLine) {
+      event.respondWith(serveCached());
+      return;
+    }
+
+    // Online (or uncertain) — try network with a timeout fallback.
+    // Some networks report online but hang for 15s+, so abort after 3s.
+    const ac = new AbortController();
+    const tid = setTimeout(() => ac.abort(), 3000);
     event.respondWith(
-      fetch(request)
+      fetch(request, { signal: ac.signal })
         .then((response) => {
-          // Only cache successful (non-redirect) HTML responses
+          clearTimeout(tid);
           if (response.ok) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((c) => c.put(request, clone));
           }
           return response;
         })
-        .catch(() =>
-          // Network unreachable — serve cached page.
-          // 1. Exact URL match (ignoreVary for warmup-cached responses with different Accept)
-          // 2. Same path ignoring query params (/?file=xxx → cached /)
-          // 3. Explicit "/" fallback
-          // 4. Offline error
-          caches
-            .match(request, { ignoreVary: true })
-            .then(
-              (cached) =>
-                cached ||
-                caches.match(request, { ignoreSearch: true, ignoreVary: true })
-            )
-            .then(
-              (cached) =>
-                cached || caches.match("/", { ignoreVary: true })
-            )
-            .then(
-              (cached) =>
-                cached ||
-                new Response("Offline — please reconnect and reload.", {
-                  status: 503,
-                  headers: { "Content-Type": "text/plain" },
-                })
-            )
-        )
+        .catch(() => {
+          clearTimeout(tid);
+          return serveCached();
+        })
     );
     return;
   }

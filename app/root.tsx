@@ -42,13 +42,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <script
           dangerouslySetInnerHTML={{
             __html: [
-              // Register SW and warm cache on first activation.
+              // Register SW and warm cache on every activation (first install AND updates).
               // On the very first visit, the initial navigation request happens BEFORE the SW
-              // is active, so the HTML and assets are NOT cached. We detect this (no controller)
-              // and, once the new SW takes control, send it a list of URLs to pre-cache.
+              // is active, so the HTML and assets are NOT cached. On SW updates, skipWaiting +
+              // clients.claim cause controllerchange to fire, so we always listen for it.
               'if("serviceWorker"in navigator){window.addEventListener("load",function(){',
               'navigator.serviceWorker.register("/sw.js").then(function(){',
-              'if(navigator.serviceWorker.controller)return;', // Already controlled → cache is warm
               'navigator.serviceWorker.addEventListener("controllerchange",function cc(){',
               'navigator.serviceWorker.removeEventListener("controllerchange",cc);',
               'var urls=["/"];',
