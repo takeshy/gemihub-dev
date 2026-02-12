@@ -689,6 +689,7 @@ Execute GemiHub file operations (encrypt, publish, rename, etc.) as workflow nod
 | `unpublish` | — | `"ok"` |
 | `duplicate` | Custom name (optional; default: `"name (copy).ext"`) | New file name |
 | `convert-to-pdf` | — | PDF file name (saved to `temporaries/`) |
+| `convert-to-html` | — | HTML file name (saved to `temporaries/`) |
 | `rename` | New name (**required**) | New file name |
 
 **Path resolution** follows the same pattern as `drive-read`:
@@ -732,6 +733,13 @@ Execute GemiHub file operations (encrypt, publish, rename, etc.) as workflow nod
   command: convert-to-pdf
   path: "notes/report.md"
   saveTo: pdfName
+
+# Convert markdown to HTML
+- id: html
+  type: gemihub-command
+  command: convert-to-html
+  path: "notes/report.md"
+  saveTo: htmlName
 ```
 
 ---
