@@ -2,11 +2,19 @@
 // Intentionally does NOT register a full PWA manifest (no display:standalone)
 // so browsers will not show an install prompt.
 
-const CACHE_NAME = "gemihub-sw-v1";
+const CACHE_NAME = "gemihub-sw-v2";
 
 // ---- Install ----
-self.addEventListener("install", () => {
-  // Activate immediately — no precache needed (runtime caching handles it)
+self.addEventListener("install", (event) => {
+  // Precache the index page so the app is available offline immediately
+  // (the first navigation occurs before the SW takes control, so it won't
+  // be runtime-cached without this).
+  event.waitUntil(
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.add("/"))
+      .catch(() => {}) // don't block install if precache fails
+  );
   self.skipWaiting();
 });
 
@@ -36,6 +44,12 @@ self.addEventListener("fetch", (event) => {
 
   // Skip API and auth routes — API data is managed by IndexedDB on the client
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) {
+    return;
+  }
+
+  // Skip React Router single-fetch data requests (e.g. "/.data") —
+  // the clientLoader handles offline fallback via IndexedDB.
+  if (url.pathname.endsWith(".data")) {
     return;
   }
 
@@ -73,10 +87,14 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() =>
-          // Network unreachable — serve cached page, fallback to cached "/"
+          // Network unreachable — serve cached page.
+          // 1. Exact URL match  2. Same path ignoring query params  3. Offline fallback
           caches
             .match(request)
-            .then((cached) => cached || caches.match("/"))
+            .then(
+              (cached) =>
+                cached || caches.match(request, { ignoreSearch: true })
+            )
             .then(
               (cached) =>
                 cached ||
@@ -101,7 +119,11 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => cached);
+        .catch(
+          () =>
+            cached ||
+            new Response("", { status: 503, statusText: "Service Unavailable" })
+        );
 
       return cached || networkFetch;
     })
