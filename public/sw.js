@@ -86,6 +86,8 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       caches.match(request).then((cached) => {
         if (cached) return cached;
+        if (!navigator.onLine)
+          return new Response("", { status: 503, statusText: "Service Unavailable" });
         return fetch(request).then((response) => {
           if (response.ok) {
             const clone = response.clone();
@@ -150,6 +152,11 @@ self.addEventListener("fetch", (event) => {
   // --- Other sub-resources (fonts, images, etc.) → stale-while-revalidate ---
   event.respondWith(
     caches.match(request).then((cached) => {
+      // When offline, return cached immediately or fail fast (don't hang on fetch).
+      // Render-blocking resources like Google Fonts CSS would block page paint otherwise.
+      if (!navigator.onLine)
+        return cached || new Response("", { status: 503, statusText: "Service Unavailable" });
+
       const networkFetch = fetch(request)
         .then((response) => {
           if (response.ok) {
