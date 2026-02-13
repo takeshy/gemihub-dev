@@ -93,7 +93,7 @@ export function useSync() {
         if (trackedRemote[id] || trackedLocal[id]) {
           // Check if fileName is known and not excluded
           const cached = await getCachedFile(id);
-          const name = cached?.fileName || trackedRemote[id]?.name || trackedLocal[id]?.name;
+          const name = cached?.fileName || trackedRemote[id]?.name;
           if (name && isSyncExcludedPath(name)) continue;
           count++;
         }

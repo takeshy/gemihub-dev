@@ -76,7 +76,7 @@ export function SyncStatusBar({
     try {
       const remoteMeta = await getCachedRemoteMeta();
       const localMeta = await getLocalSyncMeta();
-      const diff = computeSyncDiff(localMeta, remoteMeta ? { lastUpdatedAt: remoteMeta.lastUpdatedAt, files: remoteMeta.files } : null, await getLocallyModifiedFileIds());
+      const diff = computeSyncDiff(localMeta ?? null, remoteMeta ? { lastUpdatedAt: remoteMeta.lastUpdatedAt, files: remoteMeta.files } : null, await getLocallyModifiedFileIds());
 
       if (type === "push") {
         const files: FileListItem[] = [];
@@ -84,14 +84,12 @@ export function SyncStatusBar({
         const localFiles = localMeta?.files ?? {};
 
         for (const id of diff.toPush) {
-          const name = remoteFiles[id]?.name || localFiles[id]?.name;
-          if (name) {
-            files.push({ id, name, type: localFiles[id] ? "modified" : "new" });
+          const remoteName = remoteFiles[id]?.name;
+          if (remoteName) {
+            files.push({ id, name: remoteName, type: localFiles[id] ? "modified" : "new" });
           } else {
             const cached = await getCachedFile(id);
-            if (cached) {
-              files.push({ id, name: cached.fileName || id, type: "new" });
-            }
+            files.push({ id, name: cached?.fileName || id, type: "new" });
           }
         }
         files.sort((a, b) => a.name.localeCompare(b.name));
@@ -109,9 +107,9 @@ export function SyncStatusBar({
           files.push({ id, name: remoteFiles[id]?.name || id, type: "modified" });
         }
         // Locally-only files (deleted on remote)
-        const localFiles = localMeta?.files ?? {};
         for (const id of diff.localOnly) {
-          files.push({ id, name: localFiles[id]?.name || id, type: "deleted" });
+          const cached = await getCachedFile(id);
+          files.push({ id, name: cached?.fileName || id, type: "deleted" });
         }
 
         files.sort((a, b) => a.name.localeCompare(b.name));
