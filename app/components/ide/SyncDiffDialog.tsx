@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { X, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Loader2, ExternalLink } from "lucide-react";
+import { X, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Loader2, ExternalLink, ArrowUp, ArrowDown } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
 import { DiffView } from "~/components/shared/DiffView";
 import { useI18n } from "~/i18n/context";
@@ -18,6 +18,8 @@ interface SyncDiffDialogProps {
   type: "push" | "pull";
   onClose: () => void;
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
+  onSync?: () => void;
+  syncDisabled?: boolean;
 }
 
 interface DiffState {
@@ -50,6 +52,8 @@ export function SyncDiffDialog({
   type,
   onClose,
   onSelectFile,
+  onSync,
+  syncDisabled,
 }: SyncDiffDialogProps) {
   const { t } = useI18n();
   const [diffStates, setDiffStates] = useState<Record<string, DiffState>>({});
@@ -238,12 +242,24 @@ export function SyncDiffDialog({
           <span className="text-xs text-gray-400">
             {type === "push" ? "Local \u2192 Remote" : "Remote \u2192 Local"}
           </span>
-          <button
-            onClick={onClose}
-            className="rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-          >
-            {t("conflict.close")}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+            >
+              {t("conflict.close")}
+            </button>
+            {onSync && (
+              <button
+                onClick={() => { onClose(); onSync(); }}
+                disabled={syncDisabled}
+                className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {type === "push" ? <ArrowUp size={ICON.SM} /> : <ArrowDown size={ICON.SM} />}
+                {type === "push" ? "Push" : "Pull"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -194,6 +194,8 @@ export function SyncStatusBar({
           type={dialogType}
           onClose={() => setDialogType(null)}
           onSelectFile={onSelectFile}
+          onSync={dialogType === "push" ? onPush : onPull}
+          syncDisabled={isBusy}
         />
       )}
       {dialogType && dialogLoading && (
