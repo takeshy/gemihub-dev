@@ -61,9 +61,9 @@ export function SyncDiffDialog({
   useEffect(() => { diffStatesRef.current = diffStates; }, [diffStates]);
 
   // createTwoFilesPatch(old, new) — labels must match which content is old vs new
-  // Push: old=remote, new=local; Pull: old=local, new=remote
-  const oldLabel = type === "push" ? "Remote" : "Local";
-  const newLabel = type === "push" ? "Local" : "Remote";
+  // Push: old=Drive, new=local; Pull: old=local, new=Drive
+  const oldLabel = type === "push" ? "Drive" : "Local";
+  const newLabel = type === "push" ? "Local" : "Drive";
 
   const handleDiffToggle = useCallback(async (fileId: string, fileName: string, fileType: "new" | "modified" | "deleted") => {
     const current = diffStatesRef.current[fileId];
