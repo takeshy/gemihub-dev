@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { X, Loader2, Trash2, Download } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
-import { setCachedFile } from "~/services/indexeddb-cache";
+import { getCachedFile, setCachedFile, getLocalSyncMeta, setLocalSyncMeta, getCachedRemoteMeta, setCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { saveLocalEdit } from "~/services/edit-history-local";
+import { isBinaryMimeType, looksLikeBinary, isImageFileName, applyBinaryTempFile } from "~/services/sync-client-utils";
 
 interface TempFileItem {
   tempFileId: string;
@@ -25,6 +27,8 @@ export function TempFilesDialog({ onClose }: TempFilesDialogProps) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState(false);
+  const [binaryConfirmFiles, setBinaryConfirmFiles] = useState<Array<{ fileName: string; content: string; mimeType?: string }> | null>(null);
+  const [pendingProcessFiles, setPendingProcessFiles] = useState<TempFileItem[] | null>(null);
 
   const fetchFiles = useCallback(async () => {
     setLoading(true);
@@ -66,26 +70,85 @@ export function TempFilesDialog({ onClose }: TempFilesDialogProps) {
     });
   }, [files]);
 
-  const handleDownloadSelected = useCallback(async () => {
+  const processFiles = useCallback(async (filesToProcess: TempFileItem[]) => {
     setProcessing(true);
     try {
-      for (const file of files) {
-        if (!selected.has(file.tempFileId)) continue;
-        await setCachedFile({
-          fileId: file.payload.fileId,
-          content: file.payload.content,
-          md5Checksum: "",
-          modifiedTime: file.payload.savedAt,
-          cachedAt: Date.now(),
-          fileName: file.fileName,
-        });
+      const remoteMeta = await getCachedRemoteMeta();
+      const localMeta = await getLocalSyncMeta();
+
+      for (const file of filesToProcess) {
+        const { fileId } = file.payload;
+        const fileMeta = remoteMeta?.files?.[fileId];
+        const cachedFile = await getCachedFile(fileId);
+        const isBinary = isBinaryMimeType(fileMeta?.mimeType)
+          || cachedFile?.encoding === "base64"
+          || looksLikeBinary(file.payload.content);
+
+        if (isBinary) {
+          await applyBinaryTempFile(fileId, file.payload.content, file.fileName, localMeta, remoteMeta);
+        } else {
+          await saveLocalEdit(fileId, file.fileName, file.payload.content);
+          await setCachedFile({
+            fileId,
+            content: file.payload.content,
+            md5Checksum: cachedFile?.md5Checksum ?? "",
+            modifiedTime: file.payload.savedAt,
+            cachedAt: Date.now(),
+            fileName: file.fileName,
+          });
+          window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId } }));
+        }
       }
+
+      if (localMeta) await setLocalSyncMeta(localMeta);
+      if (remoteMeta) await setCachedRemoteMeta(remoteMeta);
     } catch {
       // ignore
     } finally {
       setProcessing(false);
     }
-  }, [files, selected]);
+  }, []);
+
+  const handleDownloadSelected = useCallback(async () => {
+    const selectedFiles = files.filter((f) => selected.has(f.tempFileId));
+    if (selectedFiles.length === 0) return;
+
+    // Scan for binary files
+    const binaryEntries: Array<{ fileName: string; content: string; mimeType?: string }> = [];
+    const remoteMeta = await getCachedRemoteMeta();
+    for (const file of selectedFiles) {
+      const { fileId } = file.payload;
+      const fileMeta = remoteMeta?.files?.[fileId];
+      const cachedFile = await getCachedFile(fileId);
+      const isBinary = isBinaryMimeType(fileMeta?.mimeType)
+        || cachedFile?.encoding === "base64"
+        || looksLikeBinary(file.payload.content);
+      if (isBinary) {
+        binaryEntries.push({ fileName: file.fileName, content: file.payload.content, mimeType: fileMeta?.mimeType });
+      }
+    }
+
+    if (binaryEntries.length > 0) {
+      setBinaryConfirmFiles(binaryEntries);
+      setPendingProcessFiles(selectedFiles);
+      return;
+    }
+
+    await processFiles(selectedFiles);
+  }, [files, selected, processFiles]);
+
+  const handleBinaryConfirm = useCallback(async () => {
+    if (pendingProcessFiles) {
+      await processFiles(pendingProcessFiles);
+    }
+    setBinaryConfirmFiles(null);
+    setPendingProcessFiles(null);
+  }, [pendingProcessFiles, processFiles]);
+
+  const handleBinaryCancel = useCallback(() => {
+    setBinaryConfirmFiles(null);
+    setPendingProcessFiles(null);
+  }, []);
 
   const handleDeleteSelected = useCallback(async () => {
     if (!confirm(t("tempFiles.confirmDelete"))) return;
@@ -201,6 +264,125 @@ export function TempFilesDialog({ onClose }: TempFilesDialogProps) {
             className="rounded px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
           >
             {t("editHistory.close")}
+          </button>
+        </div>
+      </div>
+
+      {binaryConfirmFiles && (
+        <BinaryConfirmDialog
+          files={binaryConfirmFiles}
+          onConfirm={handleBinaryConfirm}
+          onCancel={handleBinaryCancel}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BinaryConfirmDialog
+// ---------------------------------------------------------------------------
+
+function BinaryConfirmDialog({
+  files,
+  onConfirm,
+  onCancel,
+}: {
+  files: Array<{ fileName: string; content: string; mimeType?: string }>;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const { t } = useI18n();
+  const blobUrlsRef = useRef<string[]>([]);
+
+  // Build blob URLs for image thumbnails (memoised to avoid leaking on re-render)
+  const items = useMemo(() => {
+    // Revoke previous blob URLs before creating new ones
+    for (const url of blobUrlsRef.current) {
+      URL.revokeObjectURL(url);
+    }
+    blobUrlsRef.current = [];
+
+    return files.map((f) => {
+      let thumbnailUrl: string | undefined;
+      if (isImageFileName(f.fileName) && f.content) {
+        try {
+          const byteString = atob(f.content);
+          const bytes = new Uint8Array(byteString.length);
+          for (let i = 0; i < byteString.length; i++) {
+            bytes[i] = byteString.charCodeAt(i);
+          }
+          const mime = f.mimeType || "application/octet-stream";
+          const blob = new Blob([bytes], { type: mime });
+          thumbnailUrl = URL.createObjectURL(blob);
+          blobUrlsRef.current.push(thumbnailUrl);
+        } catch {
+          // ignore decode errors
+        }
+      }
+      return { fileName: f.fileName, thumbnailUrl };
+    });
+  }, [files]);
+
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      for (const url of blobUrlsRef.current) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+      <div className="mx-4 w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-900 flex flex-col">
+        {/* Header */}
+        <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {t("tempFiles.binaryConfirmTitle")}
+          </h3>
+        </div>
+
+        {/* Body */}
+        <div className="px-4 py-3">
+          <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+            {t("tempFiles.binaryConfirmMessage")}
+          </p>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {items.map((item, i) => (
+              <div key={i} className="flex items-center gap-2">
+                {item.thumbnailUrl ? (
+                  <img
+                    src={item.thumbnailUrl}
+                    alt={item.fileName}
+                    className="h-8 w-8 rounded border border-gray-200 dark:border-gray-700 object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded border border-gray-200 dark:border-gray-700 flex items-center justify-center bg-gray-100 dark:bg-gray-800 flex-shrink-0">
+                    <span className="text-[10px] text-gray-400">BIN</span>
+                  </div>
+                )}
+                <span className="text-sm text-gray-900 dark:text-gray-100 truncate">
+                  {item.fileName}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+          <button
+            onClick={onCancel}
+            className="rounded px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            {t("tempFiles.binaryConfirmCancel")}
+          </button>
+          <button
+            onClick={onConfirm}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            {t("tempFiles.binaryConfirmApply")}
           </button>
         </div>
       </div>

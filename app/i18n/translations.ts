@@ -252,6 +252,10 @@ export interface TranslationStrings {
   "tempFiles.deleteSelected": string;
   "tempFiles.confirmDelete": string;
   "tempFiles.savedAt": string;
+  "tempFiles.binaryConfirmTitle": string;
+  "tempFiles.binaryConfirmMessage": string;
+  "tempFiles.binaryConfirmApply": string;
+  "tempFiles.binaryConfirmCancel": string;
 
   // Encrypted file viewer
   "crypt.enterPassword": string;
@@ -649,6 +653,10 @@ const en: TranslationStrings = {
   "tempFiles.deleteSelected": "Delete Selected",
   "tempFiles.confirmDelete": "Delete the selected temporary files?",
   "tempFiles.savedAt": "Saved at",
+  "tempFiles.binaryConfirmTitle": "Binary File Update",
+  "tempFiles.binaryConfirmMessage": "This will directly update the file on Google Drive. Continue?",
+  "tempFiles.binaryConfirmApply": "Update Drive",
+  "tempFiles.binaryConfirmCancel": "Cancel",
 
   // Encrypted file viewer
   "crypt.enterPassword": "Enter Password",
@@ -1046,6 +1054,10 @@ const ja: TranslationStrings = {
   "tempFiles.deleteSelected": "選択を削除",
   "tempFiles.confirmDelete": "選択した一時ファイルを削除しますか？",
   "tempFiles.savedAt": "保存日時",
+  "tempFiles.binaryConfirmTitle": "バイナリファイルの更新",
+  "tempFiles.binaryConfirmMessage": "このデータでGoogle Driveのファイルが直接更新されます。続行しますか？",
+  "tempFiles.binaryConfirmApply": "Driveを更新",
+  "tempFiles.binaryConfirmCancel": "キャンセル",
 
   // Encrypted file viewer
   "crypt.enterPassword": "パスワードを入力",

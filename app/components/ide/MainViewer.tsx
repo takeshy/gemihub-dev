@@ -12,7 +12,8 @@ import { useEditorContext, type SelectionInfo } from "~/contexts/EditorContext";
 import { TempDiffModal } from "./TempDiffModal";
 import { QuickOpenDialog } from "./QuickOpenDialog";
 import { DiffView } from "~/components/shared/DiffView";
-import { getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
+import { getCachedFile, setCachedFile, getLocalSyncMeta, setLocalSyncMeta, getCachedRemoteMeta, setCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { applyBinaryTempFile } from "~/services/sync-client-utils";
 import { addCommitBoundary } from "~/services/edit-history-local";
 import { EditHistoryModal } from "./EditHistoryModal";
 import { EditorToolbarActions } from "./EditorToolbarActions";
@@ -305,11 +306,13 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
         return;
       }
       const { payload } = data.tempFile;
-      const cached = await getCachedFile(fileId);
-      if (cached) {
-        await setCachedFile({ ...cached, content: payload.content, cachedAt: Date.now() });
-        window.location.reload();
-      }
+      const localMeta = await getLocalSyncMeta();
+      const remoteMeta = await getCachedRemoteMeta();
+      const ok = await applyBinaryTempFile(fileId, payload.content, fileName, localMeta, remoteMeta);
+      if (!ok) return;
+      if (localMeta) await setLocalSyncMeta(localMeta);
+      if (remoteMeta) await setCachedRemoteMeta(remoteMeta);
+      window.location.reload();
     } catch { /* ignore */ }
   }, [fileName, fileId, t]);
 
