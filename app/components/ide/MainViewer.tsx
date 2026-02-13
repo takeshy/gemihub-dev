@@ -195,32 +195,15 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
   const [tempPreview, setTempPreview] = useState<{ content: string; savedAt: string } | null>(null);
   const [tempPreviewUrl, setTempPreviewUrl] = useState<string | null>(null);
 
-  // Build / cleanup temp preview blob URL when tempPreview changes
+  // Cleanup temp preview blob URL on unmount
   useEffect(() => {
-    if (!tempPreview) {
-      setTempPreviewUrl(null);
-      return;
-    }
-    let url: string | null = null;
-    if (isImageFileName(fileName) && tempPreview.content) {
-      try {
-        const byteString = atob(tempPreview.content);
-        const bytes = new Uint8Array(byteString.length);
-        for (let i = 0; i < byteString.length; i++) {
-          bytes[i] = byteString.charCodeAt(i);
-        }
-        const mime = fileMimeType || guessMimeType(fileName);
-        const blob = new Blob([bytes], { type: mime });
-        url = URL.createObjectURL(blob);
-      } catch {
-        // ignore decode errors
-      }
-    }
-    setTempPreviewUrl(url);
     return () => {
-      if (url) URL.revokeObjectURL(url);
+      setTempPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
     };
-  }, [tempPreview, fileName, fileMimeType]);
+  }, []);
 
   useEffect(() => {
     // Revoke previous blob URL
@@ -337,10 +320,40 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
         return;
       }
       const { payload } = data.tempFile;
+
+      // Build blob URL for image preview synchronously before setting state
+      let previewUrl: string | null = null;
+      if (isImageFileName(fileName) && payload.content) {
+        try {
+          const byteString = atob(payload.content);
+          const bytes = new Uint8Array(byteString.length);
+          for (let i = 0; i < byteString.length; i++) {
+            bytes[i] = byteString.charCodeAt(i);
+          }
+          const mime = fileMimeType || guessMimeType(fileName);
+          const blob = new Blob([bytes], { type: mime });
+          previewUrl = URL.createObjectURL(blob);
+        } catch {
+          // ignore decode errors
+        }
+      }
+      // Revoke previous preview URL if any (guard against strict mode double-invoke)
+      setTempPreviewUrl((prev) => {
+        if (prev && prev !== previewUrl) URL.revokeObjectURL(prev);
+        return previewUrl;
+      });
       setTempPreview({ content: payload.content, savedAt: payload.savedAt });
     } catch { /* ignore */ }
     finally { setDownloading(false); }
-  }, [fileName, t]);
+  }, [fileName, fileMimeType, t]);
+
+  const closeTempPreview = useCallback(() => {
+    setTempPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setTempPreview(null);
+  }, []);
 
   const handleTempPreviewAccept = useCallback(async () => {
     if (!tempPreview) return;
@@ -351,14 +364,10 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
       if (!ok) return;
       if (localMeta) await setLocalSyncMeta(localMeta);
       if (remoteMeta) await setCachedRemoteMeta(remoteMeta);
-      setTempPreview(null);
+      closeTempPreview();
       window.location.reload();
     } catch { /* ignore */ }
-  }, [tempPreview, fileId, fileName]);
-
-  const handleTempPreviewCancel = useCallback(() => {
-    setTempPreview(null);
-  }, []);
+  }, [tempPreview, fileId, fileName, closeTempPreview]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
@@ -459,7 +468,7 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
             {/* Footer */}
             <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
               <button
-                onClick={handleTempPreviewCancel}
+                onClick={closeTempPreview}
                 className="rounded px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
               >
                 {t("tempFiles.binaryConfirmCancel")}
