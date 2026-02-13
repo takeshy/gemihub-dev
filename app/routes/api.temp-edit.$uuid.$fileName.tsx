@@ -13,21 +13,42 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function guessContentType(name: string): string {
   const ext = name.split(".").pop()?.toLowerCase();
   const map: Record<string, string> = {
+    html: "text/html; charset=utf-8",
+    htm: "text/html; charset=utf-8",
     css: "text/css; charset=utf-8",
     js: "application/javascript; charset=utf-8",
+    mjs: "application/javascript; charset=utf-8",
     json: "application/json; charset=utf-8",
     md: "text/markdown; charset=utf-8",
     txt: "text/plain; charset=utf-8",
     xml: "application/xml; charset=utf-8",
+    svg: "image/svg+xml; charset=utf-8",
     yaml: "text/yaml; charset=utf-8",
     yml: "text/yaml; charset=utf-8",
     csv: "text/csv; charset=utf-8",
+    pdf: "application/pdf",
+    ts: "text/plain; charset=utf-8",
+    tsx: "text/plain; charset=utf-8",
+    jsx: "text/plain; charset=utf-8",
   };
-  // Serve all content as text/plain by default to prevent XSS (including html)
   return (ext && map[ext]) || "text/plain; charset=utf-8";
 }
 
-const SAFE_HEADERS = {
+function getSafeHeaders(contentType: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "X-Content-Type-Options": "nosniff",
+  };
+  if (contentType.startsWith("text/html")) {
+    // Allow HTML rendering with inline styles/images, but sandbox to prevent navigation
+    headers["Content-Security-Policy"] =
+      "default-src 'none'; style-src 'unsafe-inline'; img-src data: blob: https:; font-src data:; sandbox";
+  } else {
+    headers["Content-Security-Policy"] = "default-src 'none'; sandbox";
+  }
+  return headers;
+}
+
+const ERROR_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "Content-Security-Policy": "default-src 'none'; sandbox",
 };
@@ -40,25 +61,25 @@ export async function loader({ params }: Route.LoaderArgs) {
 
   const entry = readTempEditFile(uuid);
   if (!entry) {
-    return new Response("Not found", { status: 404, headers: SAFE_HEADERS });
+    return new Response("Not found", { status: 404, headers: ERROR_HEADERS });
   }
 
   // Validate fileName matches stored entry
   if (entry.fileName !== fileName) {
-    return new Response("Not found", { status: 404, headers: SAFE_HEADERS });
+    return new Response("Not found", { status: 404, headers: ERROR_HEADERS });
   }
 
   const age = Date.now() - new Date(entry.createdAt).getTime();
   if (age > GET_EXPIRY_MS) {
     return new Response("Gone — edit URL expired (30 min limit for GET)", {
       status: 410,
-      headers: SAFE_HEADERS,
+      headers: ERROR_HEADERS,
     });
   }
 
   const contentType = guessContentType(fileName);
   return new Response(entry.content, {
-    headers: { "Content-Type": contentType, ...SAFE_HEADERS },
+    headers: { "Content-Type": contentType, ...getSafeHeaders(contentType) },
   });
 }
 
