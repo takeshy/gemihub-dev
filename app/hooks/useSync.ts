@@ -145,8 +145,10 @@ export function useSync() {
       }
 
       const localMeta = await getLocalSyncMeta();
-      const diff = computeSyncDiff(localMeta ?? null, remoteMeta);
+      const locallyModifiedIds = await getLocallyModifiedFileIds();
+      const diff = computeSyncDiff(localMeta ?? null, remoteMeta, locallyModifiedIds);
       // Include localOnly (remotely deleted) in the count so user knows a sync is needed
+      // Exclude conflicts — they are shown in the conflict dialog, not pull
       setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + diff.localOnly.length);
     } catch {
       // ignore network errors
@@ -519,7 +521,8 @@ export function useSync() {
         if (data.remoteMeta) {
           const updatedLocalMeta = (await getLocalSyncMeta()) ?? null;
           const rMeta = data.remoteMeta as SyncMeta;
-          const newDiff = computeSyncDiff(updatedLocalMeta, rMeta);
+          const remainingModifiedIds = await getLocallyModifiedFileIds();
+          const newDiff = computeSyncDiff(updatedLocalMeta, rMeta, remainingModifiedIds);
           setRemoteModifiedCount(newDiff.toPull.length + newDiff.remoteOnly.length + newDiff.localOnly.length);
         }
 
