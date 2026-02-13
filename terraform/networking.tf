@@ -27,6 +27,13 @@ resource "google_compute_backend_service" "default" {
   backend {
     group = google_compute_region_network_endpoint_group.cloud_run.id
   }
+
+  enable_cdn = true
+
+  cdn_policy {
+    cache_mode                   = "USE_ORIGIN_HEADERS"
+    signed_url_cache_max_age_sec = 0
+  }
 }
 
 # HTTPS URL map

@@ -3,6 +3,12 @@ import { useLocation } from "react-router";
 import type { Language } from "~/types/settings";
 import { LanguageSwitcher } from "~/components/LanguageSwitcher";
 
+export function headers() {
+  return {
+    "Cache-Control": "public, s-maxage=86400, max-age=3600",
+  };
+}
+
 export default function Terms() {
   const { pathname } = useLocation();
   const lang: Language = pathname.endsWith("/ja") ? "ja" : "en";
