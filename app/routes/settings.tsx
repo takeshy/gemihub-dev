@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { data, Link, useLoaderData, useFetcher } from "react-router";
+import { data, useLoaderData, useFetcher } from "react-router";
 import type { Route } from "./+types/settings";
 import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
@@ -453,12 +453,12 @@ function SettingsInner({
       {/* Header */}
       <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Link
-            to="/"
+          <button
+            onClick={() => window.history.length > 1 ? window.history.back() : (window.location.href = "/")}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             <ArrowLeft size={20} />
-          </Link>
+          </button>
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t("settings.title")}</h1>
         </div>
       </header>

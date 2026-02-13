@@ -203,18 +203,25 @@ function IDELayout({
   const [searchParams] = useSearchParams();
 
   // Active file state — use local state to avoid React Router navigation on file switch
-  const [activeFileId, setActiveFileId] = useState<string | null>(() => {
-    const fromUrl = searchParams.get("file");
-    if (fromUrl) return fromUrl;
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("gemihub:lastFileId");
-    }
-    return null;
-  });
+  const [activeFileId, setActiveFileId] = useState<string | null>(
+    () => searchParams.get("file")
+  );
   const [activeFileName, setActiveFileName] = useState<string | null>(null);
   const [activeFileMimeType, setActiveFileMimeType] = useState<string | null>(
     null
   );
+
+  // Sync active file with browser back/forward navigation
+  useEffect(() => {
+    const handler = () => {
+      const fileId = new URL(window.location.href).searchParams.get("file");
+      setActiveFileId(fileId);
+      setActiveFileName(null);
+      setActiveFileMimeType(null);
+    };
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
 
   // Right panel state — supports "chat", "workflow", or "plugin:{viewId}" for plugin sidebar views
   const [rightPanel, setRightPanel] = useState<RightPanelId>("chat");
@@ -331,8 +338,6 @@ function IDELayout({
       setActiveFileId(fileId);
       setActiveFileName(fileName);
       setActiveFileMimeType(mimeType);
-      // Remember last opened file for next visit
-      localStorage.setItem("gemihub:lastFileId", fileId);
       // Auto-switch right panel based on file type, but keep plugin views open
       if (!rightPanel.startsWith("plugin:") && !rightPanel.startsWith("main-plugin:")) {
         if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
@@ -344,7 +349,7 @@ function IDELayout({
       // Update URL without triggering React Router navigation/loader
       const url = new URL(window.location.href);
       url.searchParams.set("file", fileId);
-      window.history.replaceState({}, "", url.toString());
+      window.history.pushState({}, "", url.toString());
     },
     [rightPanel]
   );
