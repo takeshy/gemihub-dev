@@ -20,6 +20,7 @@ export interface PluginView {
   name: string;
   icon?: string;
   location: "sidebar" | "main";
+  extensions?: string[];
   component: React.ComponentType<{ api: PluginAPI }>;
 }
 
@@ -48,6 +49,7 @@ export interface PluginAPI {
     name: string;
     icon?: string;
     location: "sidebar" | "main";
+    extensions?: string[];
     component: React.ComponentType<{ api: PluginAPI }>;
   }): void;
   registerSlashCommand(cmd: {

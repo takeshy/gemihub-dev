@@ -29,6 +29,7 @@ export function createPluginAPI(
         name: view.name,
         icon: view.icon,
         location: view.location,
+        extensions: view.extensions,
         component: view.component,
       });
     },
