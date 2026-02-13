@@ -84,13 +84,19 @@ export function SyncStatusBar({
         const localFiles = localMeta?.files ?? {};
 
         for (const id of diff.toPush) {
-          const remoteName = remoteFiles[id]?.name;
-          if (remoteName) {
-            files.push({ id, name: remoteName, type: localFiles[id] ? "modified" : "new" });
+          const name = remoteFiles[id]?.name;
+          // Not in localMeta (last sync snapshot) = new file since last sync
+          const isNew = !localFiles[id];
+          if (name) {
+            files.push({ id, name, type: isNew ? "new" : "modified" });
           } else {
             const cached = await getCachedFile(id);
-            files.push({ id, name: cached?.fileName || id, type: "new" });
+            files.push({ id, name: cached?.fileName || id, type: isNew ? "new" : "modified" });
           }
+        }
+        for (const id of diff.localOnly) {
+          const cached = await getCachedFile(id);
+          files.push({ id, name: cached?.fileName || id, type: "new" });
         }
         files.sort((a, b) => a.name.localeCompare(b.name));
         setListFiles(files);

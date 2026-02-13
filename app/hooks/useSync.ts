@@ -82,21 +82,22 @@ export function useSync() {
         return;
       }
 
-      // Filter to only sync-eligible files (tracked in meta and not excluded)
+      // Use sync diff to count push-eligible files (modified + new local)
       const remoteMeta = await getCachedRemoteMeta();
       const localMeta = await getLocalSyncMeta();
-      const trackedRemote = remoteMeta?.files ?? {};
-      const trackedLocal = localMeta?.files ?? {};
+      const diff = computeSyncDiff(
+        localMeta ?? null,
+        remoteMeta ? { lastUpdatedAt: remoteMeta.lastUpdatedAt, files: remoteMeta.files } : null,
+        ids
+      );
+      const remoteFiles = remoteMeta?.files ?? {};
 
       let count = 0;
-      for (const id of ids) {
-        if (trackedRemote[id] || trackedLocal[id]) {
-          // Check if fileName is known and not excluded
-          const cached = await getCachedFile(id);
-          const name = cached?.fileName || trackedRemote[id]?.name;
-          if (name && isSyncExcludedPath(name)) continue;
-          count++;
-        }
+      for (const id of [...diff.toPush, ...diff.localOnly]) {
+        const cached = await getCachedFile(id);
+        const name = cached?.fileName || remoteFiles[id]?.name;
+        if (name && isSyncExcludedPath(name)) continue;
+        count++;
       }
       setLocalModifiedCount(count);
     } catch {
