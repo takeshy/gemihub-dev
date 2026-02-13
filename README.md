@@ -75,7 +75,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 - **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, and settings panels
 - **Google Drive Integration** — All data stored in your own Drive, no external database
 - **Rich Markdown Editor** — WYSIWYG file editing powered by wysimark-lite
-- **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup. Soft delete with trash recovery
+- **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup. Soft delete with trash recovery. Temp UP/DL lets you preserve specific files across a Pull — upload before pulling, then download to restore
 - **Encryption** — Optional hybrid RSA + AES encryption for individual files, chat history, and workflow logs
 - **Edit History** — Unified diff-based change tracking for workflows and Drive files
 - **Multi-Model Support** — Gemini 3, 2.5, Flash, Pro, Lite, Gemma; paid and free plan model lists

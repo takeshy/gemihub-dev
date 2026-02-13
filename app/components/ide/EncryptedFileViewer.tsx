@@ -458,7 +458,6 @@ export function EncryptedFileViewer({
             onTempUpload={handleTempUpload}
             onTempDownload={handleTempDownload}
             uploading={uploading}
-            uploaded={false}
           />
           <button
             onClick={handlePermanentDecrypt}

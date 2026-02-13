@@ -18,6 +18,7 @@ import { applyBinaryTempFile, isImageFileName } from "~/services/sync-client-uti
 import { addCommitBoundary } from "~/services/edit-history-local";
 import { EditHistoryModal } from "./EditHistoryModal";
 import { EditorToolbarActions } from "./EditorToolbarActions";
+import { performTempUpload } from "~/services/temp-upload";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { usePlugins } from "~/contexts/PluginContext";
 
@@ -192,7 +193,7 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
   const blobUrlRef = useRef<string | null>(null);
   const { t } = useI18n();
   const [uploading, setUploading] = useState(false);
-  const [uploaded, setUploaded] = useState(false);
+  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const [tempPreview, setTempPreview] = useState<{ content: string; savedAt: string } | null>(null);
   const [tempPreviewUrl, setTempPreviewUrl] = useState<string | null>(null);
 
@@ -283,26 +284,16 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
 
   const handleTempUpload = useCallback(async () => {
     setUploading(true);
-    setUploaded(false);
+    setUploadFeedback(null);
     try {
       const cached = await getCachedFile(fileId);
       const content = cached?.content ?? "";
-      const res = await fetch("/api/drive/temp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generateEditUrl", fileName, fileId, content }),
-      });
-      if (res.ok) {
-        const { uuid } = await res.json();
-        const editUrl = `${window.location.origin}/api/temp-edit/${uuid}/${encodeURIComponent(fileName)}`;
-        try { await navigator.clipboard.writeText(editUrl); } catch { /* clipboard unavailable */ }
-        setUploaded(true);
-        setTimeout(() => setUploaded(false), 2000);
-      }
-    } finally {
-      setUploading(false);
-    }
-  }, [fileName, fileId]);
+      const feedback = await performTempUpload({ fileName, fileId, content, t });
+      setUploadFeedback(feedback);
+      setTimeout(() => setUploadFeedback(null), 2000);
+    } catch { /* ignore */ }
+    finally { setUploading(false); }
+  }, [fileName, fileId, t]);
 
   const [downloading, setDownloading] = useState(false);
 
@@ -377,13 +368,18 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
           {fileName}
         </span>
         <div className="flex items-center gap-1 ml-2">
+          {uploadFeedback && (
+            <span className="text-xs text-green-600 dark:text-green-400">
+              {uploadFeedback}
+            </span>
+          )}
           <button
             onClick={handleTempUpload}
             disabled={uploading || !src}
             className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
             title={t("contextMenu.tempUpload")}
           >
-            {uploaded ? t("contextMenu.tempUploaded") : t("contextMenu.tempUpload")}
+            {t("contextMenu.tempUpload")}
           </button>
           <button
             onClick={handleTempDownload}
@@ -752,28 +748,18 @@ function MarkdownFileEditor({
     };
   }, [saveToCache]);
 
-  const [uploaded, setUploaded] = useState(false);
+  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
 
   const handleTempUpload = useCallback(async () => {
     setUploading(true);
-    setUploaded(false);
+    setUploadFeedback(null);
     try {
-      const res = await fetch("/api/drive/temp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generateEditUrl", fileName, fileId, content }),
-      });
-      if (res.ok) {
-        const { uuid } = await res.json();
-        const editUrl = `${window.location.origin}/api/temp-edit/${uuid}/${encodeURIComponent(fileName)}`;
-        try { await navigator.clipboard.writeText(editUrl); } catch { /* clipboard unavailable */ }
-      }
-      setUploaded(true);
-      setTimeout(() => setUploaded(false), 2000);
-    } finally {
-      setUploading(false);
-    }
-  }, [content, fileName, fileId]);
+      const feedback = await performTempUpload({ fileName, fileId, content, t });
+      setUploadFeedback(feedback);
+      setTimeout(() => setUploadFeedback(null), 2000);
+    } catch { /* ignore */ }
+    finally { setUploading(false); }
+  }, [content, fileName, fileId, t]);
 
   const handleTempDownload = useCallback(async () => {
     try {
@@ -893,7 +879,7 @@ function MarkdownFileEditor({
           onTempUpload={handleTempUpload}
           onTempDownload={handleTempDownload}
           uploading={uploading}
-          uploaded={uploaded}
+          uploadFeedback={uploadFeedback}
         />
       </div>
 
@@ -1025,28 +1011,18 @@ function HtmlFileEditor({
     };
   }, [saveToCache]);
 
-  const [uploaded, setUploaded] = useState(false);
+  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
 
   const handleTempUpload = useCallback(async () => {
     setUploading(true);
-    setUploaded(false);
+    setUploadFeedback(null);
     try {
-      const res = await fetch("/api/drive/temp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generateEditUrl", fileName, fileId, content }),
-      });
-      if (res.ok) {
-        const { uuid } = await res.json();
-        const editUrl = `${window.location.origin}/api/temp-edit/${uuid}/${encodeURIComponent(fileName)}`;
-        try { await navigator.clipboard.writeText(editUrl); } catch { /* clipboard unavailable */ }
-      }
-      setUploaded(true);
-      setTimeout(() => setUploaded(false), 2000);
-    } finally {
-      setUploading(false);
-    }
-  }, [content, fileName, fileId]);
+      const feedback = await performTempUpload({ fileName, fileId, content, t });
+      setUploadFeedback(feedback);
+      setTimeout(() => setUploadFeedback(null), 2000);
+    } catch { /* ignore */ }
+    finally { setUploading(false); }
+  }, [content, fileName, fileId, t]);
 
   const handleTempDownload = useCallback(async () => {
     try {
@@ -1174,7 +1150,7 @@ parent.postMessage({type:'gemihub-iframe-touch',sx:_sx,sy:_sy,st:_st,ex:t.client
           onTempUpload={handleTempUpload}
           onTempDownload={handleTempDownload}
           uploading={uploading}
-          uploaded={uploaded}
+          uploadFeedback={uploadFeedback}
         />
       </div>
 
@@ -1287,28 +1263,18 @@ function TextFileEditor({
     };
   }, [saveToCache]);
 
-  const [uploaded, setUploaded] = useState(false);
+  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
 
   const handleTempUpload = useCallback(async () => {
     setUploading(true);
-    setUploaded(false);
+    setUploadFeedback(null);
     try {
-      const res = await fetch("/api/drive/temp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generateEditUrl", fileName, fileId, content }),
-      });
-      if (res.ok) {
-        const { uuid } = await res.json();
-        const editUrl = `${window.location.origin}/api/temp-edit/${uuid}/${encodeURIComponent(fileName)}`;
-        try { await navigator.clipboard.writeText(editUrl); } catch { /* clipboard unavailable */ }
-      }
-      setUploaded(true);
-      setTimeout(() => setUploaded(false), 2000);
-    } finally {
-      setUploading(false);
-    }
-  }, [content, fileName, fileId]);
+      const feedback = await performTempUpload({ fileName, fileId, content, t });
+      setUploadFeedback(feedback);
+      setTimeout(() => setUploadFeedback(null), 2000);
+    } catch { /* ignore */ }
+    finally { setUploading(false); }
+  }, [content, fileName, fileId, t]);
 
   const handleTempDownload = useCallback(async () => {
     try {
@@ -1373,7 +1339,7 @@ function TextFileEditor({
           onTempUpload={handleTempUpload}
           onTempDownload={handleTempDownload}
           uploading={uploading}
-          uploaded={uploaded}
+          uploadFeedback={uploadFeedback}
         />
       </div>
       <div className="flex-1 p-4">

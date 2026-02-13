@@ -283,10 +283,23 @@ Trashed files can be managed from Settings → Sync → Trash:
 Quick file sharing without full sync overhead. Use when:
 - You want to quickly share a single file across devices
 - You need a backup before making risky edits
+- You want to preserve specific files across a Pull (see tip below)
 
 Files are stored with `__TEMP__/` prefix on Google Drive. **No metadata is updated** — equivalent to making the same edit on both devices manually.
 
 Temp files can be managed from Settings → Sync → Temporary Files.
+
+### Edit URL
+
+After "Temp UP" saves the file, a confirmation dialog asks whether to generate an edit URL. If confirmed, the URL is copied to the clipboard. The edit URL allows editing the file from other apps (view: 30 min, edit: 1 day).
+
+### Preserving Files Across a Pull
+
+If you have local files that you don't want overwritten by a Pull, you can use Temp UP / Temp DL as a workaround:
+
+1. **Before Pull**: Click "Temp UP" on the files you want to preserve
+2. **Pull**: Perform the Pull — remote versions will overwrite local cache
+3. **After Pull**: Click "Temp DL" on those files to restore your saved versions
 
 ---
 

@@ -177,6 +177,7 @@ export interface TranslationStrings {
   "contextMenu.tempUpload": string;
   "contextMenu.tempUploaded": string;
   "contextMenu.tempUrlCopied": string;
+  "contextMenu.tempEditUrlConfirm": string;
   "contextMenu.noTempFile": string;
   "contextMenu.clearCache": string;
   "contextMenu.clearCacheModified": string;
@@ -579,6 +580,7 @@ const en: TranslationStrings = {
   "contextMenu.tempUpload": "Temp UP",
   "contextMenu.tempUploaded": "Uploaded",
   "contextMenu.tempUrlCopied": "Edit URL copied",
+  "contextMenu.tempEditUrlConfirm": "Generate an edit URL so the file can be edited in other apps? (view: 30 min, edit: 1 day)",
   "contextMenu.noTempFile": "No temp file found for this file.",
   "contextMenu.clearCache": "Clear Cache",
   "contextMenu.clearCacheModified": "This file has unsaved changes that will be lost. Continue?",
@@ -981,6 +983,7 @@ const ja: TranslationStrings = {
   "contextMenu.tempUpload": "一時UP",
   "contextMenu.tempUploaded": "UP済",
   "contextMenu.tempUrlCopied": "編集URLをコピーしました",
+  "contextMenu.tempEditUrlConfirm": "別アプリでも編集できるようURLを発行しますか？（閲覧30分、更新1日）",
   "contextMenu.noTempFile": "このファイルの一時ファイルが見つかりません。",
   "contextMenu.clearCache": "キャッシュクリア",
   "contextMenu.clearCacheModified": "未保存の変更がありますが、変更は失われます。続行しますか？",

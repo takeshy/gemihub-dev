@@ -6,6 +6,7 @@ import { MermaidPreview } from "~/components/flow/MermaidPreview";
 import { useI18n } from "~/i18n/context";
 import { TempDiffModal } from "./TempDiffModal";
 import { EditorToolbarActions } from "./EditorToolbarActions";
+import { performTempUpload } from "~/services/temp-upload";
 import { addCommitBoundary } from "~/services/edit-history-local";
 
 
@@ -124,30 +125,20 @@ export function WorkflowEditor({
     }
   }, [yamlContent]);
 
-  const [uploaded, setUploaded] = useState(false);
+  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
 
   const handleTempUpload = useCallback(async () => {
     setUploading(true);
-    setUploaded(false);
+    setUploadFeedback(null);
     const fullFileName = fileName + ".yaml";
     try {
-      const res = await fetch("/api/drive/temp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generateEditUrl", fileName: fullFileName, fileId, content: yamlContent }),
-      });
-      if (res.ok) {
-        const { uuid } = await res.json();
-        const editUrl = `${window.location.origin}/api/temp-edit/${uuid}/${encodeURIComponent(fullFileName)}`;
-        try { await navigator.clipboard.writeText(editUrl); } catch { /* clipboard unavailable */ }
-      }
+      const feedback = await performTempUpload({ fileName: fullFileName, fileId, content: yamlContent, t });
       await saveToCache(yamlContent);
-      setUploaded(true);
-      setTimeout(() => setUploaded(false), 2000);
-    } finally {
-      setUploading(false);
-    }
-  }, [yamlContent, fileName, fileId, saveToCache]);
+      setUploadFeedback(feedback);
+      setTimeout(() => setUploadFeedback(null), 2000);
+    } catch { /* ignore */ }
+    finally { setUploading(false); }
+  }, [yamlContent, fileName, fileId, saveToCache, t]);
 
   const handleTempDownload = useCallback(async () => {
     try {
@@ -224,7 +215,7 @@ export function WorkflowEditor({
             onTempUpload={handleTempUpload}
             onTempDownload={handleTempDownload}
             uploading={uploading}
-            uploaded={uploaded}
+            uploadFeedback={uploadFeedback}
           />
         </div>
       </div>
