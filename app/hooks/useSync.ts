@@ -77,7 +77,28 @@ export function useSync() {
   const refreshLocalModifiedCount = useCallback(async () => {
     try {
       const ids = await getLocallyModifiedFileIds();
-      setLocalModifiedCount(ids.size);
+      if (ids.size === 0) {
+        setLocalModifiedCount(0);
+        return;
+      }
+
+      // Filter to only sync-eligible files (tracked in meta and not excluded)
+      const remoteMeta = await getCachedRemoteMeta();
+      const localMeta = await getLocalSyncMeta();
+      const trackedRemote = remoteMeta?.files ?? {};
+      const trackedLocal = localMeta?.files ?? {};
+
+      let count = 0;
+      for (const id of ids) {
+        if (trackedRemote[id] || trackedLocal[id]) {
+          // Check if fileName is known and not excluded
+          const cached = await getCachedFile(id);
+          const name = cached?.fileName || trackedRemote[id]?.name || trackedLocal[id]?.name;
+          if (name && isSyncExcludedPath(name)) continue;
+          count++;
+        }
+      }
+      setLocalModifiedCount(count);
     } catch {
       // ignore
     }
@@ -87,8 +108,12 @@ export function useSync() {
   useEffect(() => {
     const handler = () => { refreshLocalModifiedCount(); };
     window.addEventListener("file-modified", handler);
+    window.addEventListener("sync-complete", handler);
     refreshLocalModifiedCount();
-    return () => window.removeEventListener("file-modified", handler);
+    return () => {
+      window.removeEventListener("file-modified", handler);
+      window.removeEventListener("sync-complete", handler);
+    };
   }, [refreshLocalModifiedCount]);
 
   // Ref to access syncStatus inside interval without re-creating it
@@ -120,7 +145,8 @@ export function useSync() {
 
       const localMeta = await getLocalSyncMeta();
       const diff = computeSyncDiff(localMeta ?? null, remoteMeta);
-      setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length);
+      // Include localOnly (remotely deleted) in the count so user knows a sync is needed
+      setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + diff.localOnly.length);
     } catch {
       // ignore network errors
     }

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowUp, ArrowDown, AlertTriangle, Loader2 } from "lucide-react";
+import { ArrowUp, ArrowDown, AlertTriangle, Loader2, Plus, Pencil, Trash2 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { SyncStatus, ConflictInfo } from "~/hooks/useSync";
 import {
@@ -8,6 +8,7 @@ import {
   getLocallyModifiedFileIds,
   getLocalSyncMeta,
 } from "~/services/indexeddb-cache";
+import { computeSyncDiff } from "~/services/sync-diff";
 
 interface SyncStatusBarProps {
   syncStatus: SyncStatus;
@@ -26,6 +27,7 @@ interface SyncStatusBarProps {
 interface FileListItem {
   id: string;
   name: string;
+  type: "new" | "modified" | "deleted";
 }
 
 export function SyncStatusBar({
@@ -47,9 +49,7 @@ export function SyncStatusBar({
   const [openList, setOpenList] = useState<"push" | "pull" | null>(null);
   const [listFiles, setListFiles] = useState<FileListItem[]>([]);
   const [listLoading, setListLoading] = useState(false);
-  // Filtered local modified count (only files tracked in remoteMeta or localSyncMeta)
-  const [filteredLocalModifiedCount, setFilteredLocalModifiedCount] = useState(0);
-  const pushCount = filteredLocalModifiedCount;
+  const pushCount = localModifiedCount;
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Close on click outside
@@ -64,30 +64,6 @@ export function SyncStatusBar({
     return () => document.removeEventListener("mousedown", handler);
   }, [openList]);
 
-  // Filter localModifiedCount to exclude files not tracked by sync (e.g. history/logs)
-  useEffect(() => {
-    if (localModifiedCount === 0) {
-      setFilteredLocalModifiedCount(0);
-      return;
-    }
-    (async () => {
-      try {
-        const remoteMeta = await getCachedRemoteMeta();
-        const localMeta = await getLocalSyncMeta();
-        const trackedRemote = remoteMeta?.files ?? {};
-        const trackedLocal = localMeta?.files ?? {};
-        const localModified = await getLocallyModifiedFileIds();
-        let count = 0;
-        for (const id of localModified) {
-          if (trackedRemote[id] || trackedLocal[id]) count++;
-        }
-        setFilteredLocalModifiedCount(count);
-      } catch {
-        setFilteredLocalModifiedCount(0);
-      }
-    })();
-  }, [localModifiedCount]);
-
   const loadFileList = useCallback(async (type: "push" | "pull") => {
     if (openList === type) {
       setOpenList(null);
@@ -99,34 +75,45 @@ export function SyncStatusBar({
 
     try {
       const remoteMeta = await getCachedRemoteMeta();
-      const remoteFiles = remoteMeta?.files ?? {};
+      const localMeta = await getLocalSyncMeta();
+      const diff = computeSyncDiff(localMeta, remoteMeta ? { lastUpdatedAt: remoteMeta.lastUpdatedAt, files: remoteMeta.files } : null, await getLocallyModifiedFileIds());
 
       if (type === "push") {
-        const localModified = await getLocallyModifiedFileIds();
-        const localMeta = await getLocalSyncMeta();
-        const localFiles = localMeta?.files ?? {};
         const files: FileListItem[] = [];
-        // Include files tracked in remoteMeta or localSyncMeta (exclude history/logs)
-        for (const id of localModified) {
-          if (remoteFiles[id]) {
-            files.push({ id, name: remoteFiles[id].name ?? id });
-          } else if (localFiles[id]) {
+        const remoteFiles = remoteMeta?.files ?? {};
+        const localFiles = localMeta?.files ?? {};
+
+        for (const id of diff.toPush) {
+          const name = remoteFiles[id]?.name || localFiles[id]?.name;
+          if (name) {
+            files.push({ id, name, type: localFiles[id] ? "modified" : "new" });
+          } else {
             const cached = await getCachedFile(id);
-            files.push({ id, name: cached?.fileName ?? id });
+            if (cached) {
+              files.push({ id, name: cached.fileName || id, type: "new" });
+            }
           }
         }
         files.sort((a, b) => a.name.localeCompare(b.name));
         setListFiles(files);
       } else {
-        const localMeta = await getLocalSyncMeta();
-        const localFiles = localMeta?.files ?? {};
         const files: FileListItem[] = [];
-        for (const [id, rf] of Object.entries(remoteFiles)) {
-          const lf = localFiles[id];
-          if (!lf || lf.md5Checksum !== (rf.md5Checksum ?? "")) {
-            files.push({ id, name: rf.name ?? id });
-          }
+        const remoteFiles = remoteMeta?.files ?? {};
+
+        // New remote files
+        for (const id of diff.remoteOnly) {
+          files.push({ id, name: remoteFiles[id]?.name || id, type: "new" });
         }
+        // Modified remote files
+        for (const id of diff.toPull) {
+          files.push({ id, name: remoteFiles[id]?.name || id, type: "modified" });
+        }
+        // Locally-only files (deleted on remote)
+        const localFiles = localMeta?.files ?? {};
+        for (const id of diff.localOnly) {
+          files.push({ id, name: localFiles[id]?.name || id, type: "deleted" });
+        }
+
         files.sort((a, b) => a.name.localeCompare(b.name));
         setListFiles(files);
       }
@@ -260,26 +247,31 @@ function FileListPopover({
         <div className="px-3 py-2 text-xs text-gray-400">No files</div>
       ) : (
         <div className="max-h-48 overflow-y-auto py-1">
-          {files.map((f) =>
-            onSelect ? (
+          {files.map((f) => {
+            const Icon = f.type === "new" ? Plus : f.type === "modified" ? Pencil : Trash2;
+            const iconColor = f.type === "new" ? "text-green-500" : f.type === "modified" ? "text-blue-500" : "text-red-500";
+
+            return onSelect ? (
               <button
                 key={f.id}
-                className="block w-full truncate px-3 py-1 text-left text-xs text-blue-600 hover:bg-gray-100 hover:underline dark:text-blue-400 dark:hover:bg-gray-800"
+                className="flex items-center gap-2 w-full truncate px-3 py-1 text-left text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
                 title={f.name}
                 onClick={() => onSelect(f)}
               >
-                {f.name}
+                <Icon size={12} className={iconColor} />
+                <span className="truncate flex-1">{f.name}</span>
               </button>
             ) : (
               <div
                 key={f.id}
-                className="truncate px-3 py-1 text-xs text-gray-700 dark:text-gray-300"
+                className="flex items-center gap-2 truncate px-3 py-1 text-xs text-gray-700 dark:text-gray-300"
                 title={f.name}
               >
-                {f.name}
+                <Icon size={12} className={iconColor} />
+                <span className="truncate flex-1">{f.name}</span>
               </div>
-            )
-          )}
+            );
+          })}
         </div>
       )}
     </div>

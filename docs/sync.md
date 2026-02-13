@@ -21,7 +21,13 @@ Manual push/pull synchronization between the browser (IndexedDB) and Google Driv
 | **Full Push** | Upload all modified files + merge metadata into remote |
 | **Full Pull** | Download entire remote vault (skip matching hashes) |
 
-Header buttons: Push and Pull buttons are always visible. Badge shows count of pending changes (including locally modified files).
+Header buttons: Push and Pull buttons are always visible. Badge shows count of pending changes.
+- **Push Badge**: Count of locally modified files, excluding system/history files.
+- **Pull Badge**: Count of remote changes, including new files, updates, and files deleted on remote (`localOnly`).
+- **Nature of Change**: Clicking a badge shows a file list with icons indicating the change type:
+  - <kbd>+</kbd> (Green): New file
+  - <kbd>✎</kbd> (Blue): Modified file
+  - <kbd>🗑</kbd> (Red): Deleted on remote
 
 ---
 
@@ -38,6 +44,10 @@ Each metadata contains:
 - `files`: MD5 checksum and modification time for each file (keyed by file ID)
 
 File contents are cached in the IndexedDB `files` store. All edits update this cache directly (no Drive API call). The MD5 checksum in the metadata is only updated during sync operations (Push/Pull) and file reads — it reflects the last-synced state, not the current local content. Local modifications are tracked separately via the `editHistory` store.
+
+### Background Polling
+
+The client polls for remote changes every 5 minutes while the app is active and idle. If remote changes are detected by comparing `_sync-meta.json` with local metadata, the Pull badge is updated automatically.
 
 ### Sync Diff
 
@@ -57,8 +67,8 @@ Detection logic per file:
 | Yes | No | **toPush** |
 | No | Yes | **toPull** |
 | Yes | Yes | **Conflict** |
-| Local only | - | **localOnly** |
-| - | Remote only | **remoteOnly** |
+| Local only | - | **localOnly** (Remotely deleted) |
+| - | Remote only | **remoteOnly** (New remote) |
 
 Where:
 - `localChanged = locallyModifiedFileIds.has(fileId)` — the `editHistory` store tracks which files have been edited locally since the last sync
@@ -85,6 +95,7 @@ Uploads locally-changed files to remote.
 2. BATCH UPLOAD: Update all files via single API call
    ├─ Get modified file IDs from IndexedDB editHistory
    ├─ Filter to only files tracked in any known meta (cached remoteMeta, diff remoteMeta, or localMeta)
+   ├─ Filter out system files and excluded paths (history/, plugins/, etc.)
    ├─ Read all modified file contents from IndexedDB cache
    ├─ POST /api/sync { action: "pushFiles", files, remoteMeta, syncMetaFileId }
    │   └─ Server:
@@ -137,11 +148,12 @@ Downloads only remotely-changed files to local cache.
 2. **Check conflicts** — if any, stop and show conflict UI
 3. **Clean up `localOnly` files** — files that exist locally but were deleted on remote (moved to trash on another device) are removed from IndexedDB cache, edit history, and local sync meta
 4. **Combine** `toPull` + `remoteOnly` arrays
-5. **Download file contents** in parallel (max 5 concurrent)
-6. **Update IndexedDB cache** with downloaded files
-7. **Update local sync meta** with new checksums
-8. **Update remote sync meta** with pulled files, and **prune `localOnly` entries** from `_sync-meta.json`
-9. **Fire "sync-complete" and "files-pulled" events** and update localModifiedCount
+5. **Mobile Optimization**: On mobile devices, binary file contents (images, PDF, etc.) are NOT downloaded to save storage. Metadata is updated so they appear in the file tree, but content is fetched only when opened.
+6. **Download file contents** in parallel (max 5 concurrent)
+7. **Update IndexedDB cache** with downloaded files
+8. **Update local sync meta** with new checksums
+9. **Update remote sync meta** with pulled files, and **prune `localOnly` entries** from `_sync-meta.json`
+10. **Fire "sync-complete" and "files-pulled" events** and update localModifiedCount
 
 ### Decision Tables
 
