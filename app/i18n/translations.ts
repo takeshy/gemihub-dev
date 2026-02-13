@@ -378,6 +378,12 @@ export interface TranslationStrings {
   "conflict.diffError": string;
   "conflict.backupNote": string;
 
+  // Sync diff dialog
+  "sync.pushChanges": string;
+  "sync.pullChanges": string;
+  "sync.openFile": string;
+  "sync.noDiff": string;
+
   // Offline
   "offline.indicator": string;
   "offline.banner": string;
@@ -760,6 +766,12 @@ const en: TranslationStrings = {
   "conflict.diffError": "Failed to load diff",
   "conflict.backupNote": "The overwritten version is backed up and can be restored from Settings > Sync > Conflict Backups.",
 
+  // Sync diff dialog
+  "sync.pushChanges": "Push Changes",
+  "sync.pullChanges": "Pull Changes",
+  "sync.openFile": "Open",
+  "sync.noDiff": "Binary file",
+
   // Offline
   "offline.indicator": "Offline",
   "offline.banner": "You are in offline mode. Some features are unavailable.",
@@ -1141,6 +1153,12 @@ const ja: TranslationStrings = {
   "conflict.hideDiff": "非表示",
   "conflict.diffError": "差分の読み込みに失敗しました",
   "conflict.backupNote": "上書きされたバージョンはバックアップされ、設定 > 同期 > コンフリクトバックアップから復元できます。",
+
+  // Sync diff dialog
+  "sync.pushChanges": "プッシュ変更一覧",
+  "sync.pullChanges": "プル変更一覧",
+  "sync.openFile": "開く",
+  "sync.noDiff": "バイナリファイル",
 
   // Offline
   "offline.indicator": "オフライン",

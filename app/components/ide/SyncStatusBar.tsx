@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowUp, ArrowDown, AlertTriangle, Loader2, Plus, Pencil, Trash2 } from "lucide-react";
+import { useState, useCallback } from "react";
+import { ArrowUp, ArrowDown, AlertTriangle, Loader2 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { SyncStatus, ConflictInfo } from "~/hooks/useSync";
 import {
@@ -9,6 +9,8 @@ import {
   getLocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { computeSyncDiff } from "~/services/sync-diff";
+import { SyncDiffDialog } from "./SyncDiffDialog";
+import type { FileListItem } from "./SyncDiffDialog";
 
 interface SyncStatusBarProps {
   syncStatus: SyncStatus;
@@ -22,12 +24,6 @@ interface SyncStatusBarProps {
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
   conflicts: ConflictInfo[];
   compact?: boolean;
-}
-
-interface FileListItem {
-  id: string;
-  name: string;
-  type: "new" | "modified" | "deleted";
 }
 
 export function SyncStatusBar({
@@ -46,32 +42,15 @@ export function SyncStatusBar({
   const conflictCount = conflicts.length;
   const isBusy = syncStatus === "pushing" || syncStatus === "pulling";
 
-  const [openList, setOpenList] = useState<"push" | "pull" | null>(null);
-  const [listFiles, setListFiles] = useState<FileListItem[]>([]);
-  const [listLoading, setListLoading] = useState(false);
+  const [dialogType, setDialogType] = useState<"push" | "pull" | null>(null);
+  const [dialogFiles, setDialogFiles] = useState<FileListItem[]>([]);
+  const [dialogLoading, setDialogLoading] = useState(false);
   const pushCount = localModifiedCount;
-  const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Close on click outside
-  useEffect(() => {
-    if (!openList) return;
-    const handler = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setOpenList(null);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [openList]);
-
-  const loadFileList = useCallback(async (type: "push" | "pull") => {
-    if (openList === type) {
-      setOpenList(null);
-      return;
-    }
-
-    setListLoading(true);
-    setOpenList(type);
+  const openDiffDialog = useCallback(async (type: "push" | "pull") => {
+    setDialogLoading(true);
+    setDialogType(type);
+    setDialogFiles([]);
 
     try {
       const remoteMeta = await getCachedRemoteMeta();
@@ -85,7 +64,6 @@ export function SyncStatusBar({
 
         for (const id of diff.toPush) {
           const name = remoteFiles[id]?.name;
-          // Not in localMeta (last sync snapshot) = new file since last sync
           const isNew = !localFiles[id];
           if (name) {
             files.push({ id, name, type: isNew ? "new" : "modified" });
@@ -99,34 +77,31 @@ export function SyncStatusBar({
           files.push({ id, name: cached?.fileName || id, type: "new" });
         }
         files.sort((a, b) => a.name.localeCompare(b.name));
-        setListFiles(files);
+        setDialogFiles(files);
       } else {
         const files: FileListItem[] = [];
         const remoteFiles = remoteMeta?.files ?? {};
 
-        // New remote files
         for (const id of diff.remoteOnly) {
           files.push({ id, name: remoteFiles[id]?.name || id, type: "new" });
         }
-        // Modified remote files
         for (const id of diff.toPull) {
           files.push({ id, name: remoteFiles[id]?.name || id, type: "modified" });
         }
-        // Locally-only files (deleted on remote)
         for (const id of diff.localOnly) {
           const cached = await getCachedFile(id);
           files.push({ id, name: cached?.fileName || id, type: "deleted" });
         }
 
         files.sort((a, b) => a.name.localeCompare(b.name));
-        setListFiles(files);
+        setDialogFiles(files);
       }
     } catch {
-      setListFiles([]);
+      setDialogFiles([]);
     } finally {
-      setListLoading(false);
+      setDialogLoading(false);
     }
-  }, [openList]);
+  }, []);
 
   const formatLastSync = (time: string | null) => {
     if (!time) return null;
@@ -155,17 +130,12 @@ export function SyncStatusBar({
         {!compact && "Push"}
       </button>
       {pushCount > 0 && (
-        <div className="relative" ref={openList === "push" ? popoverRef : undefined}>
-          <button
-            onClick={() => loadFileList("push")}
-            className="rounded-full bg-blue-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-          >
-            {pushCount}
-          </button>
-          {openList === "push" && (
-            <FileListPopover files={listFiles} loading={listLoading} onSelect={(f) => { setOpenList(null); onSelectFile?.(f.id, f.name, guessMimeType(f.name)); }} />
-          )}
-        </div>
+        <button
+          onClick={() => openDiffDialog("push")}
+          className="rounded-full bg-blue-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+        >
+          {pushCount}
+        </button>
       )}
 
       {/* Pull button + remote count badge */}
@@ -178,17 +148,12 @@ export function SyncStatusBar({
         {!compact && "Pull"}
       </button>
       {remoteModifiedCount > 0 && (
-        <div className="relative" ref={openList === "pull" ? popoverRef : undefined}>
-          <button
-            onClick={() => loadFileList("pull")}
-            className="rounded-full bg-green-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
-          >
-            {remoteModifiedCount}
-          </button>
-          {openList === "pull" && (
-            <FileListPopover files={listFiles} loading={listLoading} />
-          )}
-        </div>
+        <button
+          onClick={() => openDiffDialog("pull")}
+          className="rounded-full bg-green-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
+        >
+          {remoteModifiedCount}
+        </button>
       )}
 
       {/* Conflict indicator */}
@@ -221,61 +186,21 @@ export function SyncStatusBar({
           {formatLastSync(lastSyncTime)}
         </span>
       )}
-    </div>
-  );
-}
 
-function guessMimeType(name: string): string {
-  if (name.endsWith(".yaml") || name.endsWith(".yml")) return "text/yaml";
-  if (name.endsWith(".json")) return "application/json";
-  if (name.endsWith(".md")) return "text/markdown";
-  return "text/plain";
-}
-
-function FileListPopover({
-  files,
-  loading,
-  onSelect,
-}: {
-  files: FileListItem[];
-  loading: boolean;
-  onSelect?: (file: FileListItem) => void;
-}) {
-  return (
-    <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
-      {loading ? (
-        <div className="flex items-center justify-center py-3">
-          <Loader2 size={ICON.MD} className="animate-spin text-gray-400" />
-        </div>
-      ) : files.length === 0 ? (
-        <div className="px-3 py-2 text-xs text-gray-400">No files</div>
-      ) : (
-        <div className="max-h-48 overflow-y-auto py-1">
-          {files.map((f) => {
-            const Icon = f.type === "new" ? Plus : f.type === "modified" ? Pencil : Trash2;
-            const iconColor = f.type === "new" ? "text-green-500" : f.type === "modified" ? "text-blue-500" : "text-red-500";
-
-            return onSelect ? (
-              <button
-                key={f.id}
-                className="flex items-center gap-2 w-full truncate px-3 py-1 text-left text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-                title={f.name}
-                onClick={() => onSelect(f)}
-              >
-                <Icon size={12} className={iconColor} />
-                <span className="truncate flex-1">{f.name}</span>
-              </button>
-            ) : (
-              <div
-                key={f.id}
-                className="flex items-center gap-2 truncate px-3 py-1 text-xs text-gray-700 dark:text-gray-300"
-                title={f.name}
-              >
-                <Icon size={12} className={iconColor} />
-                <span className="truncate flex-1">{f.name}</span>
-              </div>
-            );
-          })}
+      {/* Sync diff dialog */}
+      {dialogType && !dialogLoading && (
+        <SyncDiffDialog
+          files={dialogFiles}
+          type={dialogType}
+          onClose={() => setDialogType(null)}
+          onSelectFile={onSelectFile}
+        />
+      )}
+      {dialogType && dialogLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="rounded-lg bg-white p-8 shadow-xl dark:bg-gray-900">
+            <Loader2 size={ICON.XL} className="animate-spin text-gray-400" />
+          </div>
         </div>
       )}
     </div>
