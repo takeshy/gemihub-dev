@@ -36,14 +36,20 @@ import { saveSettings } from "~/services/user-settings.server";
 import { deleteSingleFileFromRag } from "~/services/file-search.server";
 import { DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 import { saveEdit } from "~/services/edit-history.server";
+import { createLogContext, emitLog } from "~/services/logger.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const logCtx = createLogContext(request, "/api/drive/files", validTokens.rootFolderId);
   const jsonWithCookie = (data: unknown, init: ResponseInit = {}) => {
     const headers = new Headers(init.headers);
     if (setCookieHeader) headers.set("Set-Cookie", setCookieHeader);
     return Response.json(data, { ...init, headers });
+  };
+  const logAndReturn = (data: unknown, init?: ResponseInit) => {
+    emitLog(logCtx, (init as { status?: number } | undefined)?.status ?? 200);
+    return jsonWithCookie(data, init);
   };
 
   const url = new URL(request.url);
@@ -51,36 +57,37 @@ export async function loader({ request }: Route.LoaderArgs) {
   const fileId = url.searchParams.get("fileId");
   const query = url.searchParams.get("query");
   const folderId = url.searchParams.get("folderId");
+  logCtx.action = action ?? undefined;
 
   switch (action) {
     case "list": {
       if (folderId) {
         const files = await listFiles(validTokens.accessToken, folderId);
-        return jsonWithCookie({ files });
+        return logAndReturn({ files });
       }
       const { files, meta } = await getFileListFromMeta(validTokens.accessToken, validTokens.rootFolderId);
-      return jsonWithCookie({ files, meta: { lastUpdatedAt: meta.lastUpdatedAt, files: meta.files } });
+      return logAndReturn({ files, meta: { lastUpdatedAt: meta.lastUpdatedAt, files: meta.files } });
     }
     case "metadata": {
-      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
       const meta = await getFileMetadata(validTokens.accessToken, fileId);
-      return jsonWithCookie({ name: meta.name, mimeType: meta.mimeType, md5Checksum: meta.md5Checksum, modifiedTime: meta.modifiedTime });
+      return logAndReturn({ name: meta.name, mimeType: meta.mimeType, md5Checksum: meta.md5Checksum, modifiedTime: meta.modifiedTime });
     }
     case "read": {
-      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
       const [content, meta] = await Promise.all([
         readFile(validTokens.accessToken, fileId),
         getFileMetadata(validTokens.accessToken, fileId),
       ]);
-      return jsonWithCookie({ content, md5Checksum: meta.md5Checksum, modifiedTime: meta.modifiedTime });
+      return logAndReturn({ content, md5Checksum: meta.md5Checksum, modifiedTime: meta.modifiedTime });
     }
     case "search": {
-      if (!query) return jsonWithCookie({ error: "Missing query" }, { status: 400 });
+      if (!query) return logAndReturn({ error: "Missing query" }, { status: 400 });
       const files = await searchFiles(validTokens.accessToken, validTokens.rootFolderId, query);
-      return jsonWithCookie({ files });
+      return logAndReturn({ files });
     }
     case "raw": {
-      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
       const meta = await getFileMetadata(validTokens.accessToken, fileId);
       const rawRes = await readFileRaw(validTokens.accessToken, fileId);
       const headers = new Headers({
@@ -88,24 +95,32 @@ export async function loader({ request }: Route.LoaderArgs) {
         "Content-Disposition": `inline; filename="${encodeURIComponent(meta.name)}"`,
       });
       if (setCookieHeader) headers.set("Set-Cookie", setCookieHeader);
+      emitLog(logCtx, 200);
       return new Response(rawRes.body, { headers });
     }
     default:
-      return jsonWithCookie({ error: "Unknown action" }, { status: 400 });
+      return logAndReturn({ error: "Unknown action" }, { status: 400 });
   }
 }
 
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const logCtx = createLogContext(request, "/api/drive/files", validTokens.rootFolderId);
   const jsonWithCookie = (data: unknown, init: ResponseInit = {}) => {
     const headers = new Headers(init.headers);
     if (setCookieHeader) headers.set("Set-Cookie", setCookieHeader);
     return Response.json(data, { ...init, headers });
   };
+  const logAndReturn = (data: unknown, init?: ResponseInit) => {
+    emitLog(logCtx, (init as { status?: number } | undefined)?.status ?? 200);
+    return jsonWithCookie(data, init);
+  };
 
   const body = await request.json();
   const { action: actionType, fileId, name, content, data, mimeType, overwriteFileId } = body;
+  logCtx.action = actionType;
+  logCtx.details = { fileId };
 
   switch (actionType) {
     case "create": {
@@ -117,10 +132,10 @@ export async function action({ request }: Route.ActionArgs) {
         mimeType || "text/yaml"
       );
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
-      return jsonWithCookie({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+      return logAndReturn({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "create-image": {
-      if (!name || !data) return jsonWithCookie({ error: "Missing name or data" }, { status: 400 });
+      if (!name || !data) return logAndReturn({ error: "Missing name or data" }, { status: 400 });
       const buf = Buffer.from(data, "base64");
       const file = await createFileBinary(
         validTokens.accessToken,
@@ -130,17 +145,17 @@ export async function action({ request }: Route.ActionArgs) {
         mimeType || "image/png"
       );
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
-      return jsonWithCookie({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+      return logAndReturn({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "create-markdown-pdf": {
-      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
 
       const sourceMeta = await getFileMetadata(validTokens.accessToken, fileId);
       const lowerName = sourceMeta.name.toLowerCase();
       const isMarkdown = lowerName.endsWith(".md") || sourceMeta.mimeType === "text/markdown";
       const isHtml = lowerName.endsWith(".html") || lowerName.endsWith(".htm") || sourceMeta.mimeType === "text/html";
       if (!isMarkdown && !isHtml) {
-        return jsonWithCookie({ error: "Only markdown/html files are supported" }, { status: 400 });
+        return logAndReturn({ error: "Only markdown/html files are supported" }, { status: 400 });
       }
 
       // Use client-provided content (local cache) if available, otherwise read from Drive
@@ -177,7 +192,7 @@ export async function action({ request }: Route.ActionArgs) {
             "application/pdf"
           );
         const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
-        return jsonWithCookie({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+        return logAndReturn({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
       } finally {
         try {
           await deleteFile(validTokens.accessToken, tempGoogleDoc.id);
@@ -187,12 +202,12 @@ export async function action({ request }: Route.ActionArgs) {
       }
     }
     case "create-markdown-html": {
-      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
 
       const htmlSourceMeta = await getFileMetadata(validTokens.accessToken, fileId);
       const htmlLowerName = htmlSourceMeta.name.toLowerCase();
       if (!htmlLowerName.endsWith(".md") && htmlSourceMeta.mimeType !== "text/markdown") {
-        return jsonWithCookie({ error: "Only markdown files are supported" }, { status: 400 });
+        return logAndReturn({ error: "Only markdown files are supported" }, { status: 400 });
       }
 
       const htmlSourceContent = content ?? await readFile(validTokens.accessToken, fileId);
@@ -205,10 +220,10 @@ export async function action({ request }: Route.ActionArgs) {
         ? await updateFile(validTokens.accessToken, overwriteFileId, htmlContent, "text/html")
         : await createFile(validTokens.accessToken, htmlFileName, htmlContent, validTokens.rootFolderId, "text/html");
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
-      return jsonWithCookie({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+      return logAndReturn({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "update": {
-      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
 
       // Read old content for remote edit history (before update)
       let oldContent: string | null = null;
@@ -236,14 +251,14 @@ export async function action({ request }: Route.ActionArgs) {
         }
       }
 
-      return jsonWithCookie({
+      return logAndReturn({
         file,
         md5Checksum: file.md5Checksum,
         meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files },
       });
     }
     case "rename": {
-      if (!fileId || !name) return jsonWithCookie({ error: "Missing fileId or name" }, { status: 400 });
+      if (!fileId || !name) return logAndReturn({ error: "Missing fileId or name" }, { status: 400 });
 
       // Re-key RAG tracking if file was renamed (best-effort)
       try {
@@ -264,10 +279,10 @@ export async function action({ request }: Route.ActionArgs) {
 
       const renamed = await renameFile(validTokens.accessToken, fileId, name);
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, renamed);
-      return jsonWithCookie({ file: renamed, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+      return logAndReturn({ file: renamed, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "delete": {
-      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
 
       // Clean up RAG tracking (best-effort)
       try {
@@ -296,15 +311,15 @@ export async function action({ request }: Route.ActionArgs) {
       const trashFolderId = await ensureSubFolder(validTokens.accessToken, validTokens.rootFolderId, "trash");
       await moveFile(validTokens.accessToken, fileId, trashFolderId, validTokens.rootFolderId);
       const updatedMeta = await removeFileFromMeta(validTokens.accessToken, validTokens.rootFolderId, fileId);
-      return jsonWithCookie({ ok: true, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+      return logAndReturn({ ok: true, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "encrypt": {
       if (!fileId) {
-        return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+        return logAndReturn({ error: "Missing fileId" }, { status: 400 });
       }
       const encSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
       if (!encSettings.encryption.enabled || !encSettings.encryption.publicKey) {
-        return jsonWithCookie({ error: "Encryption not configured" }, { status: 400 });
+        return logAndReturn({ error: "Encryption not configured" }, { status: 400 });
       }
       // Clean up RAG tracking for old filename before encrypting (best-effort)
       try {
@@ -330,7 +345,7 @@ export async function action({ request }: Route.ActionArgs) {
 
       const plainContent = content != null ? content : await readFile(validTokens.accessToken, fileId);
       if (!plainContent) {
-        return jsonWithCookie({ error: "File is empty" }, { status: 400 });
+        return logAndReturn({ error: "File is empty" }, { status: 400 });
       }
       const encrypted = await encryptFileContent(
         plainContent,
@@ -346,11 +361,11 @@ export async function action({ request }: Route.ActionArgs) {
         meta.name + ".encrypted"
       );
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, renamedFile);
-      return jsonWithCookie({ file: renamedFile, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+      return logAndReturn({ file: renamedFile, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "decrypt": {
-      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
-      if (!content) return jsonWithCookie({ error: "Missing content" }, { status: 400 });
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
+      if (!content) return logAndReturn({ error: "Missing content" }, { status: 400 });
       // Check for duplicate name before proceeding
       const decCurrentMeta = await getFileMetadata(validTokens.accessToken, fileId);
       if (decCurrentMeta.name.endsWith(".encrypted")) {
@@ -361,7 +376,7 @@ export async function action({ request }: Route.ActionArgs) {
             ([id, f]) => id !== fileId && f.name === targetName
           );
           if (duplicate) {
-            return jsonWithCookie({ error: "duplicate", name: targetName }, { status: 409 });
+            return logAndReturn({ error: "duplicate", name: targetName }, { status: 409 });
           }
         }
       }
@@ -374,10 +389,10 @@ export async function action({ request }: Route.ActionArgs) {
         decRenamed = await renameFile(validTokens.accessToken, fileId, newName);
       }
       const decUpdatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, decRenamed);
-      return jsonWithCookie({ file: decRenamed, meta: { lastUpdatedAt: decUpdatedMeta.lastUpdatedAt, files: decUpdatedMeta.files } });
+      return logAndReturn({ file: decRenamed, meta: { lastUpdatedAt: decUpdatedMeta.lastUpdatedAt, files: decUpdatedMeta.files } });
     }
     case "publish": {
-      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
       const webViewLink = await publishFile(validTokens.accessToken, fileId);
 
       // For markdown/HTML files, find internal image URLs, publish those images,
@@ -416,15 +431,15 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       const pubMeta = await setFileSharedInMeta(validTokens.accessToken, validTokens.rootFolderId, fileId, true, webViewLink);
-      return jsonWithCookie({ webViewLink, meta: { lastUpdatedAt: pubMeta.lastUpdatedAt, files: pubMeta.files } });
+      return logAndReturn({ webViewLink, meta: { lastUpdatedAt: pubMeta.lastUpdatedAt, files: pubMeta.files } });
     }
     case "unpublish": {
-      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
       await unpublishFile(validTokens.accessToken, fileId);
       const unpubMeta = await setFileSharedInMeta(validTokens.accessToken, validTokens.rootFolderId, fileId, false);
-      return jsonWithCookie({ ok: true, meta: { lastUpdatedAt: unpubMeta.lastUpdatedAt, files: unpubMeta.files } });
+      return logAndReturn({ ok: true, meta: { lastUpdatedAt: unpubMeta.lastUpdatedAt, files: unpubMeta.files } });
     }
     default:
-      return jsonWithCookie({ error: "Unknown action" }, { status: 400 });
+      return logAndReturn({ error: "Unknown action" }, { status: 400 });
   }
 }

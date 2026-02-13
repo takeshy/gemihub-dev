@@ -28,11 +28,14 @@ import {
 import { parallelProcess } from "~/utils/parallel";
 import { saveEdit } from "~/services/edit-history.server";
 import { handleRagAction } from "~/services/sync-rag.server";
+import { createLogContext, emitLog } from "~/services/logger.server";
 
 // GET: Fetch remote sync meta + current file list
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const logCtx = createLogContext(request, "/api/sync", validTokens.rootFolderId);
+  logCtx.action = "getMeta";
   const jsonWithCookie = (data: unknown, init: ResponseInit = {}) => {
     const headers = new Headers(init.headers);
     if (setCookieHeader) headers.set("Set-Cookie", setCookieHeader);
@@ -54,6 +57,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     remoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
   }
 
+  logCtx.details = { fileCount: Object.keys(remoteMeta.files).length };
+  emitLog(logCtx, 200);
   return jsonWithCookie({
     remoteMeta,
     syncMetaFileId: syncMetaFile?.id ?? null,
@@ -71,10 +76,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const logCtx = createLogContext(request, "/api/sync", validTokens.rootFolderId);
   const jsonWithCookie = (data: unknown, init: ResponseInit = {}) => {
     const headers = new Headers(init.headers);
     if (setCookieHeader) headers.set("Set-Cookie", setCookieHeader);
     return Response.json(data, { ...init, headers });
+  };
+  const logAndReturn = (data: unknown, init?: ResponseInit) => {
+    emitLog(logCtx, (init as { status?: number } | undefined)?.status ?? 200);
+    return jsonWithCookie(data, init);
   };
 
   const body = await request.json();
@@ -88,8 +98,10 @@ export async function action({ request }: Route.ActionArgs) {
     "ragRegister", "ragSave", "ragDeleteDoc", "ragRetryPending",
   ]);
   if (!actionType || !VALID_ACTIONS.has(actionType)) {
+    emitLog(logCtx, 400, { error: `Invalid action: ${actionType}` });
     return jsonWithCookie({ error: `Invalid action: ${actionType}` }, { status: 400 });
   }
+  logCtx.action = actionType;
 
   switch (actionType) {
     case "pullDirect": {
@@ -104,7 +116,8 @@ export async function action({ request }: Route.ActionArgs) {
         const content = await readFile(validTokens.accessToken, fileId);
         return { fileId, content };
       }, 5);
-      return jsonWithCookie({ files });
+      logCtx.details = { fileCount: fileIds.length };
+      return logAndReturn({ files });
     }
 
     case "resolve": {
@@ -116,7 +129,7 @@ export async function action({ request }: Route.ActionArgs) {
       };
 
       if (choice === "local" && localContent == null) {
-        return jsonWithCookie({ error: "Missing localContent" }, { status: 400 });
+        return logAndReturn({ error: "Missing localContent" }, { status: 400 });
       }
 
       const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
@@ -201,7 +214,7 @@ export async function action({ request }: Route.ActionArgs) {
           readFile(validTokens.accessToken, fileId),
           getFileMetadata(validTokens.accessToken, fileId),
         ]);
-        return jsonWithCookie({
+        return logAndReturn({
           remoteMeta,
           file: {
             fileId,
@@ -213,7 +226,7 @@ export async function action({ request }: Route.ActionArgs) {
         });
       }
 
-      return jsonWithCookie({
+      return logAndReturn({
         remoteMeta,
         file: resolvedEntry ? {
           fileId,
@@ -260,7 +273,8 @@ export async function action({ request }: Route.ActionArgs) {
         };
       }, 5);
 
-      return jsonWithCookie({ files, remoteMeta });
+      logCtx.details = { fileCount: files.length };
+      return logAndReturn({ files, remoteMeta });
     }
 
     case "clearConflicts": {
@@ -288,9 +302,9 @@ export async function action({ request }: Route.ActionArgs) {
           await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
         }
 
-        return jsonWithCookie({ deleted: files.length });
+        return logAndReturn({ deleted: files.length });
       } catch {
-        return jsonWithCookie({ deleted: 0 });
+        return logAndReturn({ deleted: 0 });
       }
     }
 
@@ -310,7 +324,7 @@ export async function action({ request }: Route.ActionArgs) {
           modifiedTime: f.modifiedTime,
         }));
 
-      return jsonWithCookie({ untrackedFiles });
+      return logAndReturn({ untrackedFiles });
     }
 
     case "deleteUntracked": {
@@ -318,7 +332,8 @@ export async function action({ request }: Route.ActionArgs) {
       await parallelProcess(fileIds, async (id) => {
         await deleteFile(validTokens.accessToken, id);
       }, 5);
-      return jsonWithCookie({ deleted: fileIds.length });
+      logCtx.details = { fileCount: fileIds.length };
+      return logAndReturn({ deleted: fileIds.length });
     }
 
     case "restoreUntracked": {
@@ -342,7 +357,7 @@ export async function action({ request }: Route.ActionArgs) {
       remoteMeta.lastUpdatedAt = new Date().toISOString();
       await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
 
-      return jsonWithCookie({ restored: fileIds.length, remoteMeta });
+      return logAndReturn({ restored: fileIds.length, remoteMeta });
     }
 
     case "listTrash": {
@@ -353,7 +368,7 @@ export async function action({ request }: Route.ActionArgs) {
           "trash"
         );
         const files = await listFiles(validTokens.accessToken, trashFolderId);
-        return jsonWithCookie({
+        return logAndReturn({
           files: files.map((f) => ({
             id: f.id,
             name: f.name,
@@ -362,7 +377,7 @@ export async function action({ request }: Route.ActionArgs) {
           })),
         });
       } catch {
-        return jsonWithCookie({ files: [] });
+        return logAndReturn({ files: [] });
       }
     }
 
@@ -398,9 +413,9 @@ export async function action({ request }: Route.ActionArgs) {
 
         remoteMeta.lastUpdatedAt = new Date().toISOString();
         await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
-        return jsonWithCookie({ restored: fileIds.length, remoteMeta });
+        return logAndReturn({ restored: fileIds.length, remoteMeta });
       } catch {
-        return jsonWithCookie({ restored: 0 });
+        return logAndReturn({ restored: 0 });
       }
     }
 
@@ -414,7 +429,7 @@ export async function action({ request }: Route.ActionArgs) {
           conflictFolderName
         );
         const files = await listFiles(validTokens.accessToken, folderId);
-        return jsonWithCookie({
+        return logAndReturn({
           files: files.map((f) => ({
             id: f.id,
             name: f.name,
@@ -423,7 +438,7 @@ export async function action({ request }: Route.ActionArgs) {
           })),
         });
       } catch {
-        return jsonWithCookie({ files: [] });
+        return logAndReturn({ files: [] });
       }
     }
 
@@ -468,16 +483,16 @@ export async function action({ request }: Route.ActionArgs) {
 
         remoteMeta.lastUpdatedAt = new Date().toISOString();
         await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
-        return jsonWithCookie({ restored: fileIds.length, remoteMeta });
+        return logAndReturn({ restored: fileIds.length, remoteMeta });
       } catch {
-        return jsonWithCookie({ restored: 0, error: "Restore failed" });
+        return logAndReturn({ restored: 0, error: "Restore failed" });
       }
     }
 
     case "pushFiles": {
       const files = body.files as Array<{ fileId: string; content: string }>;
       if (!Array.isArray(files) || files.length === 0) {
-        return jsonWithCookie({ error: "Missing or empty files array" }, { status: 400 });
+        return logAndReturn({ error: "Missing or empty files array" }, { status: 400 });
       }
 
       const isNotFoundError = (err: unknown) =>
@@ -603,7 +618,8 @@ export async function action({ request }: Route.ActionArgs) {
         })();
       }
 
-      return jsonWithCookie({
+      logCtx.details = { fileCount: files.length };
+      return logAndReturn({
         results: successful.map((r) => ({
           fileId: r.fileId,
           md5Checksum: r.md5Checksum,
@@ -617,10 +633,14 @@ export async function action({ request }: Route.ActionArgs) {
     case "ragRegister":
     case "ragSave":
     case "ragDeleteDoc":
-    case "ragRetryPending":
-      return handleRagAction(actionType, body, { validTokens, jsonWithCookie });
+    case "ragRetryPending": {
+      const result = await handleRagAction(actionType, body, { validTokens, jsonWithCookie });
+      emitLog(logCtx, result.status);
+      return result;
+    }
 
     default:
+      emitLog(logCtx, 400, { error: "Unknown action" });
       return jsonWithCookie({ error: "Unknown action" }, { status: 400 });
   }
 }

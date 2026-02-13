@@ -9,6 +9,7 @@ import { getMcpToolDefinitions, executeMcpTool } from "~/services/mcp-tools.serv
 import { getDriveToolModeConstraint, isImageGenerationModel } from "~/types/settings";
 import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
+import { createLogContext, emitLog } from "~/services/logger.server";
 
 const ChatRequestSchema = z.object({
   messages: z.array(z.object({
@@ -49,9 +50,11 @@ export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
+  const logCtx = createLogContext(request, "/api/chat", validTokens.rootFolderId);
 
   const apiKey = validTokens.geminiApiKey;
   if (!apiKey) {
+    emitLog(logCtx, 400, { error: "Gemini API key not configured" });
     return new Response(
       JSON.stringify({ error: "Gemini API key not configured" }),
       { status: 400, headers: { "Content-Type": "application/json", ...responseHeaders } }
@@ -61,6 +64,7 @@ export async function action({ request }: Route.ActionArgs) {
   const body = await request.json();
   const parsed = ChatRequestSchema.safeParse(body);
   if (!parsed.success) {
+    emitLog(logCtx, 400, { error: "Invalid request body" });
     return new Response(
       JSON.stringify({ error: "Invalid request body", details: parsed.error.issues }),
       { status: 400, headers: { "Content-Type": "application/json", ...responseHeaders } }
@@ -148,6 +152,15 @@ export async function action({ request }: Route.ActionArgs) {
   // Build executeToolCall dispatcher
   const driveToolNames = new Set(DRIVE_TOOL_DEFINITIONS.map((t) => t.name));
   const mcpToolNames = new Set(mcpToolDefs.map((t) => t.name));
+
+  logCtx.details = {
+    model,
+    toolCount: tools.length,
+    mcpServers: resolvedMcpServers?.map((s) => s.name) ?? [],
+    ragStoreIds: ragStoreIds ?? [],
+    streaming: true,
+  };
+  emitLog(logCtx, 200);
 
   // Create SSE stream
   const stream = new ReadableStream({

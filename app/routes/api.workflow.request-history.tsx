@@ -9,18 +9,22 @@ import {
 } from "~/services/workflow-request-history.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getEncryptionParams } from "~/types/settings";
+import { createLogContext, emitLog } from "~/services/logger.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
+  const logCtx = createLogContext(request, "/api/workflow/request-history", validTokens.rootFolderId);
 
   const url = new URL(request.url);
   const fileId = url.searchParams.get("fileId");
   const workflowId = url.searchParams.get("workflowId");
+  logCtx.action = fileId ? "load" : "list";
 
   if (fileId) {
     const result = await loadRequestRecord(validTokens.accessToken, fileId);
+    emitLog(logCtx, 200);
     if ("encrypted" in result) {
       return Response.json(
         { encrypted: true, encryptedContent: result.encryptedContent },
@@ -35,6 +39,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     validTokens.rootFolderId,
     workflowId || undefined
   );
+  emitLog(logCtx, 200);
   return Response.json({ records }, { headers: responseHeaders });
 }
 
@@ -42,9 +47,11 @@ export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
+  const logCtx = createLogContext(request, "/api/workflow/request-history", validTokens.rootFolderId);
 
   const body = await request.json();
   const { action: act, fileId, record } = body;
+  logCtx.action = act;
 
   if (act === "save" && record) {
     let encryption;
@@ -59,13 +66,16 @@ export async function action({ request }: Route.ActionArgs) {
       record,
       encryption
     );
+    emitLog(logCtx, 200);
     return Response.json({ success: true, fileId: id }, { headers: responseHeaders });
   }
 
   if (act === "delete" && fileId) {
     await deleteRequestRecord(validTokens.accessToken, validTokens.rootFolderId, fileId);
+    emitLog(logCtx, 200);
     return Response.json({ success: true }, { headers: responseHeaders });
   }
 
+  emitLog(logCtx, 400, { error: "Invalid action" });
   return Response.json({ error: "Invalid action" }, { status: 400, headers: responseHeaders });
 }

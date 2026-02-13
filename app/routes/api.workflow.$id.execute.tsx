@@ -28,6 +28,7 @@ import {
 } from "~/services/execution-store.server";
 import { saveExecutionRecord } from "~/services/workflow-history.server";
 import yaml from "js-yaml";
+import { createLogContext, emitLog } from "~/services/logger.server";
 
 function isDriveId(value: string): boolean {
   return /^[a-zA-Z0-9_-]{20,}$/.test(value);
@@ -111,9 +112,12 @@ export async function action({ request, params }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
+  const logCtx = createLogContext(request, "/api/workflow/execute", validTokens.rootFolderId);
 
   const fileId = params.id;
   const executionId = `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  logCtx.details = { workflowId: fileId, executionId, streaming: true };
+  emitLog(logCtx, 200);
 
   // Create execution state
   const executionState = createExecution(executionId, fileId, validTokens.rootFolderId);

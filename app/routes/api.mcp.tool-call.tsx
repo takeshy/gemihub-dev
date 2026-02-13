@@ -6,6 +6,7 @@ import { getOrCreateClient } from "~/services/mcp-tools.server";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
 import { resolveMcpServerForProxy } from "~/services/mcp-proxy-server-resolver";
 import type { McpServerConfig } from "~/types/settings";
+import { createLogContext, emitLog } from "~/services/logger.server";
 
 /**
  * Server-side proxy for MCP tool calls from sandboxed iframes.
@@ -21,6 +22,7 @@ export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
+  const logCtx = createLogContext(request, "/api/mcp/tool-call", validTokens.rootFolderId);
 
   const body = await request.json();
   const { serverId, serverUrl, serverHeaders, toolName, args } = body as {
@@ -31,7 +33,10 @@ export async function action({ request }: Route.ActionArgs) {
     args: Record<string, unknown>;
   };
 
+  logCtx.details = { mcpToolName: toolName, mcpServerUrl: serverUrl };
+
   if (!serverUrl || !toolName) {
+    emitLog(logCtx, 400, { error: "serverUrl and toolName are required" });
     return Response.json(
       { error: "serverUrl and toolName are required" },
       { status: 400, headers: responseHeaders }
@@ -41,6 +46,7 @@ export async function action({ request }: Route.ActionArgs) {
   try {
     validateMcpServerUrl(serverUrl);
   } catch (error) {
+    emitLog(logCtx, 400, { error: error instanceof Error ? error.message : "Invalid server URL" });
     return Response.json(
       {
         content: [{ type: "text", text: error instanceof Error ? error.message : "Invalid server URL" }],
@@ -85,8 +91,10 @@ export async function action({ request }: Route.ActionArgs) {
       await saveSettings(validTokens.accessToken, validTokens.rootFolderId, settings);
     }
 
+    emitLog(logCtx, 200);
     return Response.json(result, { headers: responseHeaders });
   } catch (error) {
+    emitLog(logCtx, 200, { error: error instanceof Error ? error.message : "MCP tool call failed" });
     return Response.json(
       {
         content: [

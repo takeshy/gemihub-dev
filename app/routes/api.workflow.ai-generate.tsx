@@ -6,11 +6,14 @@ import { getSettings } from "~/services/user-settings.server";
 import type { ModelType, ApiPlan } from "~/types/settings";
 import { getDefaultModelForPlan } from "~/types/settings";
 import type { ExecutionStep } from "~/engine/types";
+import { createLogContext, emitLog } from "~/services/logger.server";
 
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
+  const logCtx = createLogContext(request, "/api/workflow/ai-generate", tokens.rootFolderId);
 
   if (!tokens.geminiApiKey) {
+    emitLog(logCtx, 400, { error: "Gemini API key not configured" });
     return Response.json(
       { error: "Gemini API key not configured. Please set it in Settings." },
       { status: 400 }
@@ -37,6 +40,7 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   if (!description) {
+    emitLog(logCtx, 400, { error: "Missing description" });
     return Response.json({ error: "Missing description" }, { status: 400 });
   }
 
@@ -91,6 +95,9 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const selectedModel = model || (settings?.selectedModel as ModelType) || getDefaultModelForPlan(apiPlan);
+
+  logCtx.details = { model: selectedModel, streaming: true };
+  emitLog(logCtx, 200);
 
   // SSE streaming response
   const encoder = new TextEncoder();

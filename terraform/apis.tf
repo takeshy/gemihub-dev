@@ -8,6 +8,8 @@ locals {
     "iam.googleapis.com",
     "cloudresourcemanager.googleapis.com",
     "dns.googleapis.com",
+    "bigquery.googleapis.com",
+    "logging.googleapis.com",
   ]
 }
 

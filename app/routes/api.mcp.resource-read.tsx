@@ -6,6 +6,7 @@ import { getOrCreateClient } from "~/services/mcp-tools.server";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
 import { resolveMcpServerForProxy } from "~/services/mcp-proxy-server-resolver";
 import type { McpServerConfig } from "~/types/settings";
+import { createLogContext, emitLog } from "~/services/logger.server";
 
 /**
  * Server-side proxy for reading MCP resources (used by McpAppRenderer as fallback).
@@ -19,6 +20,7 @@ export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
+  const logCtx = createLogContext(request, "/api/mcp/resource-read", validTokens.rootFolderId);
 
   const body = await request.json();
   const { serverId, serverUrl, serverHeaders, resourceUri } = body as {
@@ -28,7 +30,10 @@ export async function action({ request }: Route.ActionArgs) {
     resourceUri: string;
   };
 
+  logCtx.details = { resourceUri };
+
   if (!serverUrl || !resourceUri) {
+    emitLog(logCtx, 400, { error: "serverUrl and resourceUri are required" });
     return Response.json(
       { error: "serverUrl and resourceUri are required" },
       { status: 400, headers: responseHeaders }
@@ -38,6 +43,7 @@ export async function action({ request }: Route.ActionArgs) {
   try {
     validateMcpServerUrl(serverUrl);
   } catch (error) {
+    emitLog(logCtx, 400, { error: error instanceof Error ? error.message : "Invalid server URL" });
     return Response.json(
       { error: error instanceof Error ? error.message : "Invalid server URL" },
       { status: 400, headers: responseHeaders }
@@ -77,11 +83,14 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     if (!resource) {
+      emitLog(logCtx, 404, { error: "Resource not found" });
       return Response.json({ error: "Resource not found" }, { status: 404, headers: responseHeaders });
     }
 
+    emitLog(logCtx, 200);
     return Response.json(resource, { headers: responseHeaders });
   } catch (error) {
+    emitLog(logCtx, 500, { error: error instanceof Error ? error.message : "Resource read failed" });
     return Response.json(
       { error: error instanceof Error ? error.message : "Resource read failed" },
       { status: 500, headers: responseHeaders }
