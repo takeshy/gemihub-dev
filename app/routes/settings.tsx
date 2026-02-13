@@ -2028,7 +2028,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
         clearInterval(checkClosedInterval);
       }
     });
-  }, [t]);
+  }, [t, servers]);
 
   const testConnection = useCallback(async (idx: number) => {
     const server = servers[idx];
@@ -2489,7 +2489,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
     fd.set("selectedRagSetting", sel || "");
     fd.set("ragRegistrationOnPush", hasGemihub ? "on" : "off");
     fetcher.submit(fd, { method: "post" });
-  }, [fetcher, ragTopK, ragSettings, selectedRagSetting]);
+  }, [fetcher, ragTopK, ragSettings, selectedRagSetting, t]);
 
   const addRagSetting = useCallback(() => {
     // Auto-generate a unique name
