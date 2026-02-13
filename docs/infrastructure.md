@@ -57,6 +57,7 @@ Google Cloud deployment managed by Terraform.
 | **Secret Manager** | OAuth credentials, session secret |
 | **Compute Engine** | Global external Application Load Balancer (`EXTERNAL_MANAGED`), static IP, managed SSL |
 | **Cloud DNS** | DNS zone management (A record + TXT verification) |
+| **BigQuery & Logging** | Structured API request logging and long-term storage |
 | **Cloud Build** | CI/CD pipeline (build & deploy on push) |
 | **IAM** | Service accounts and permissions |
 
@@ -122,6 +123,8 @@ The following GCP APIs are enabled via Terraform:
 - `iam.googleapis.com`
 - `cloudresourcemanager.googleapis.com`
 - `dns.googleapis.com`
+- `bigquery.googleapis.com`
+- `logging.googleapis.com`
 
 ## Networking
 
@@ -180,15 +183,10 @@ terraform apply
 ### Build and deploy manually
 
 ```bash
-# Build and push image via Cloud Build
-gcloud builds submit \
-  --region=asia-northeast1 \
-  --tag=<artifact-registry-image-path>:latest
+# Build and deploy via Cloud Build using the pipeline definition
+gcloud builds submit --config cloudbuild.yaml
 
-# Update Cloud Run to use the new image
-gcloud run deploy gemini-hub \
-  --image=<artifact-registry-image-path>:latest \
-  --region=asia-northeast1
+# Check status
 ```
 
 ### Check status

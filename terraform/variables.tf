@@ -3,11 +3,6 @@ variable "project_id" {
   type        = string
 }
 
-variable "project_number" {
-  description = "GCP project number"
-  type        = string
-}
-
 variable "region" {
   description = "GCP region for Cloud Run and Artifact Registry"
   type        = string
@@ -41,5 +36,5 @@ variable "session_secret" {
 variable "google_site_verification_token" {
   description = "Google site verification token (without the 'google-site-verification=' prefix). Empty disables TXT record."
   type        = string
-  default     = "z_QgqT1jpyik9-fWNWwj6fXJQE5IhulrV2450T37djw"
+  default     = ""
 }

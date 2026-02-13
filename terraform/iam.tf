@@ -25,10 +25,10 @@ resource "google_secret_manager_secret_iam_member" "cloud_run_session_secret" {
 }
 
 # Cloud Build SA permissions
-# NOTE: The Cloud Build default SA is created asynchronously after the API is enabled.
-# These bindings depend on the API being fully ready.
+data "google_project" "project" {}
+
 locals {
-  cloud_build_sa = "serviceAccount:${var.project_number}@cloudbuild.gserviceaccount.com"
+  cloud_build_sa = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
 }
 
 resource "google_project_iam_member" "cloudbuild_run_admin" {

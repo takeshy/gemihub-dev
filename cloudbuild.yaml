@@ -24,18 +24,17 @@ steps:
       - 'deploy'
       - '${_SERVICE}'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:${COMMIT_SHA}'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/gemini-hub:${COMMIT_SHA}'
       - '--region'
       - '${_REGION}'
 
 images:
-  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/gemini-hub'
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
   _REGION: asia-northeast1
-  _PROJECT_ID: geminihub-486523
   _SERVICE: gemini-hub
   _REPO: gemini-hub
