@@ -68,15 +68,15 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 
 - **AI Chat** — Streaming conversations with Gemini, function calling, thinking display, image generation, file attachments
 - **Slash Commands** — User-defined `/commands` with template variables (`{content}`, `{selection}` with file ID & position), `@file` mentions (resolved to Drive file IDs for tool access), per-command model/tool overrides
-- **Visual Workflow Editor** — Drag-and-drop node-based builder (20+ node types), YAML import/export, real-time SSE execution
+- **Visual Workflow Editor** — Drag-and-drop node-based builder (25 node types), YAML import/export, real-time SSE execution
 - **AI Workflow Generation** — Create and modify workflows via natural language with streaming preview and diff view
 - **RAG** — Sync Drive files to Gemini File Search for context-aware AI responses
-- **MCP** — Connect external MCP servers as tools for AI chat
+- **MCP** — Connect external MCP servers as tools for AI chat, with OAuth support and rich UI rendering (MCP Apps)
 - **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, and settings panels
 - **Google Drive Integration** — All data stored in your own Drive, no external database
 - **Rich Markdown Editor** — WYSIWYG file editing powered by wysimark-lite
-- **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup
-- **Encryption** — Optional hybrid RSA + AES encryption for chat history and workflow logs
+- **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup. Soft delete with trash recovery
+- **Encryption** — Optional hybrid RSA + AES encryption for individual files, chat history, and workflow logs
 - **Edit History** — Unified diff-based change tracking for workflows and Drive files
 - **Multi-Model Support** — Gemini 3, 2.5, Flash, Pro, Lite, Gemma; paid and free plan model lists
 - **Image Generation** — Generate images via Gemini image models
@@ -96,6 +96,8 @@ Detailed documentation is available in the [`docs/`](./docs/) directory:
 | Encryption | [encryption.md](./docs/encryption.md) | [encryption_ja.md](./docs/encryption_ja.md) |
 | Plugins | [plugins.md](./docs/plugins.md) | [plugins_ja.md](./docs/plugins_ja.md) |
 | Infrastructure | [infrastructure.md](./docs/infrastructure.md) | [infrastructure_ja.md](./docs/infrastructure_ja.md) |
+| Editor | [editor.md](./docs/editor.md) | [editor_ja.md](./docs/editor_ja.md) |
+| Edit History | [history.md](./docs/history.md) | [history_ja.md](./docs/history_ja.md) |
 
 ## Getting Started
 
@@ -139,6 +141,8 @@ Go to [Google Cloud Console](https://console.cloud.google.com/) and perform the 
 1. Go to [Google AI Studio](https://aistudio.google.com/)
 2. Left menu → "API keys" → "Create API key"
 3. Copy the key (you'll enter it in the app's Settings page later)
+
+> **Free vs. Paid API:** The free Gemini API tier has strict rate limits and restricted model access — enough for a quick test, but not for regular use. For the full experience, you'll need a paid plan. [Google AI Pro](https://one.google.com/about/ai-premium) ($19.99/month) is a great option: it includes $10/month in Google Cloud credits that cover extensive Gemini API usage, plus 2 TB Google One storage, Gemini Code Assist, and more. See [Gemini API Pricing](https://ai.google.dev/pricing) for details.
 
 ### 3. Clone and install
 

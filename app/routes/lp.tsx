@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, Bot, Wrench, Cloud } from "lucide-react";
+import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, Bot, Wrench, Cloud, Sparkles, Code, AlertTriangle, ExternalLink } from "lucide-react";
 import type { ComponentType } from "react";
 import { useLocation } from "react-router";
 import type { Language } from "~/types/settings";
@@ -49,6 +49,35 @@ interface LpStrings {
   pluginShowcaseDescription: string;
   pluginShowcaseInstall: string;
   pluginShowcaseLink: string;
+  aiProTitle: string;
+  aiProIntro: string;
+  aiProPricing: string;
+  aiProRegionUs: string;
+  aiProRegionJp: string;
+  aiProMonthly: string;
+  aiProAnnual: string;
+  aiProAiFeatures: string;
+  aiProAiFeaturesDesc: string;
+  aiProStorage: string;
+  aiProStorageDesc: string;
+  aiProDevBenefits: string;
+  aiProDevBenefitsDesc: string;
+  aiProWorthIt: string;
+  aiProWorthItDesc: string;
+  aiProActivateTitle: string;
+  aiProActivateSteps: string[];
+  aiProApiUsageTitle: string;
+  aiProFlashTitle: string;
+  aiProFlashSub: string;
+  aiProFlashDesc: string;
+  aiProProTitle: string;
+  aiProProSub: string;
+  aiProProDesc: string;
+  aiProRagTitle: string;
+  aiProRagSub: string;
+  aiProRagDesc: string;
+  aiProApiUsageSummary: string;
+  aiProReferences: string;
   dataUsageLearnMore: string;
   privacyPolicy: string;
   ctaReady: string;
@@ -104,6 +133,40 @@ const en: LpStrings = {
   pluginShowcaseDescription: "A debate plugin where multiple AIs discuss a topic from different perspectives. You can also participate as a debater.",
   pluginShowcaseInstall: "Install from Settings > Plugins with:",
   pluginShowcaseLink: "View on GitHub",
+  aiProTitle: "Google AI Pro: More Value for Gemini Users",
+  aiProIntro: "GemiHub uses the Gemini API. If you subscribe to Google AI Pro, the included cloud credits can cover your API costs — making GemiHub essentially free to run.",
+  aiProPricing: "Pricing",
+  aiProRegionUs: "United States",
+  aiProRegionJp: "Japan",
+  aiProMonthly: "/month",
+  aiProAnnual: "/year",
+  aiProAiFeatures: "AI Features",
+  aiProAiFeaturesDesc: "Gemini 3 Pro, Workspace AI (Docs, Sheets, Gmail), image & video generation, 1,000 credits/month, NotebookLM Plus, family sharing (up to 5)",
+  aiProStorage: "Storage & Extras",
+  aiProStorageDesc: "2 TB Google One storage, Google Home Premium",
+  aiProDevBenefits: "Developer Benefits",
+  aiProDevBenefitsDesc: "$10/month Google Cloud credits, Gemini Code Assist, Gemini CLI, Firebase Studio (30 workspaces)",
+  aiProWorthIt: "Is It Worth It?",
+  aiProWorthItDesc: "2 TB Google One alone costs $9.99/month. Add the $10 cloud credit and the extra cost for AI Pro is effectively ~$0. You get Gemini 3 Pro, Workspace AI, and developer tools on top — for free.",
+  aiProActivateTitle: "Important: Activate Your Developer Credits",
+  aiProActivateSteps: [
+    "Subscribe to Google AI Pro",
+    "Open Google Cloud Console (console.cloud.google.com)",
+    "Link your billing account to a project",
+    "Verify credits appear under Billing → Credits",
+  ],
+  aiProApiUsageTitle: "What Can $10/Month Cover?",
+  aiProFlashTitle: "Gemini 3 Flash",
+  aiProFlashSub: "Fast & Low Cost",
+  aiProFlashDesc: "Input: ~20–40M tokens. Output: ~3M tokens. For personal development and data analysis, this is practically unlimited — even processing hundreds of books barely scratches the surface.",
+  aiProProTitle: "Gemini 3 Pro",
+  aiProProSub: "High Intelligence & Complex Reasoning",
+  aiProProDesc: "Input: ~4–5M tokens. Output: ~800K–1M tokens. More expensive than Flash, but still enough for thousands of standard chat round-trips.",
+  aiProRagTitle: "File Search (RAG)",
+  aiProRagSub: "Index & Search Your Documents",
+  aiProRagDesc: "Indexing is extremely cheap — $10 covers tens of millions of tokens (thousands of PDF pages). Retrieval uses standard model pricing; with Flash, the cost is negligible.",
+  aiProApiUsageSummary: "With Gemini 3 Flash as your File Search engine, $10/month goes surprisingly far. Build a personal AI librarian from your entire PDF library without worrying about the budget.",
+  aiProReferences: "References",
   dataUsageLearnMore: "Learn more in our",
   privacyPolicy: "Privacy Policy",
   ctaReady: "Ready to get started?",
@@ -159,6 +222,40 @@ const ja: LpStrings = {
   pluginShowcaseDescription: "複数のAIがテーマについてそれぞれの視点で議論するディベートプラグイン。ユーザーも参加できます。",
   pluginShowcaseInstall: "Settings > Plugins からインストール:",
   pluginShowcaseLink: "GitHubで見る",
+  aiProTitle: "Google AI Pro：Gemini ユーザーにお得なプラン",
+  aiProIntro: "GemiHub は Gemini API を利用しています。Google AI Pro に加入すると、付属のクラウドクレジットで API 費用をカバーでき、GemiHub を実質無料で運用できます。",
+  aiProPricing: "料金",
+  aiProRegionUs: "米国",
+  aiProRegionJp: "日本",
+  aiProMonthly: "/月",
+  aiProAnnual: "/年",
+  aiProAiFeatures: "AI 機能",
+  aiProAiFeaturesDesc: "Gemini 3 Pro、Workspace AI（Docs, Sheets, Gmail 等）、画像・動画生成、1,000 クレジット/月、NotebookLM Plus、家族共有（5人まで）",
+  aiProStorage: "ストレージ & 特典",
+  aiProStorageDesc: "2 TB Google One ストレージ、Google Home Premium",
+  aiProDevBenefits: "開発者特典",
+  aiProDevBenefitsDesc: "月 $10 の Google Cloud クレジット、Gemini Code Assist、Gemini CLI、Firebase Studio（30 ワークスペース）",
+  aiProWorthIt: "お得なの？",
+  aiProWorthItDesc: "2 TB Google One だけで $9.99/月。さらに $10 のクラウドクレジットが付くので、AI Pro の追加コストは実質 ～$0。Gemini 3 Pro、Workspace AI、開発者ツールがすべておまけで付いてきます。",
+  aiProActivateTitle: "重要：開発者クレジットの有効化手順",
+  aiProActivateSteps: [
+    "Google AI Pro に加入する",
+    "Google Cloud Console（console.cloud.google.com）を開く",
+    "請求先アカウントをプロジェクトにリンクする",
+    "「お支払い」→「クレジット」にクレジットが表示されることを確認",
+  ],
+  aiProApiUsageTitle: "月 $10 でできること",
+  aiProFlashTitle: "Gemini 3 Flash",
+  aiProFlashSub: "高速・低コスト",
+  aiProFlashDesc: "入力：約 2,000万〜4,000万トークン。出力：約 300万トークン。個人開発やデータ分析では、ほぼ「使い放題」。数百冊分の書籍を読み込ませても使い切るのは困難です。",
+  aiProProTitle: "Gemini 3 Pro",
+  aiProProSub: "高知能・複雑な推論",
+  aiProProDesc: "入力：約 400万〜500万トークン。出力：約 80万〜100万トークン。Flash より高コストですが、標準的なチャットなら数千〜1万回のやり取りが可能です。",
+  aiProRagTitle: "File Search（RAG）",
+  aiProRagSub: "ドキュメントのインデックス＆検索",
+  aiProRagDesc: "インデックス作成は非常に安価 — $10 で数千万トークン（数千〜数万ページ分の PDF）をインデックス化可能。検索は通常のモデル料金で、Flash なら極めて低コスト。",
+  aiProApiUsageSummary: "Gemini 3 Flash を検索エンジンとして使えば、月 $10 のクレジットは驚くほど長持ちします。大量の PDF ライブラリから自分専用の AI 司書を構築しても、予算を心配する必要はほとんどありません。",
+  aiProReferences: "参考リンク",
   dataUsageLearnMore: "詳しくは",
   privacyPolicy: "プライバシーポリシー",
   ctaReady: "さあ、始めましょう",
@@ -309,6 +406,152 @@ export default function LandingPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Google AI Pro */}
+      <section className="mx-auto max-w-4xl px-4 pb-20">
+        <h2 className="mb-4 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
+          {s.aiProTitle}
+        </h2>
+        <p className="mx-auto mb-10 max-w-2xl text-center text-sm text-gray-500 dark:text-gray-400 sm:text-base">
+          {s.aiProIntro}
+        </p>
+
+        {/* Pricing */}
+        <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+          {s.aiProPricing}
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-800 dark:bg-amber-950/40">
+            <h4 className="mb-3 text-base font-semibold text-gray-900 dark:text-gray-100">
+              {s.aiProRegionUs}
+            </h4>
+            <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+              $19.99<span className="text-sm font-normal text-gray-500 dark:text-gray-400">{s.aiProMonthly}</span>
+            </p>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              $179.88{s.aiProAnnual} <span className="text-gray-400 dark:text-gray-500">($14.99{s.aiProMonthly})</span>
+            </p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-800 dark:bg-amber-950/40">
+            <h4 className="mb-3 text-base font-semibold text-gray-900 dark:text-gray-100">
+              {s.aiProRegionJp}
+            </h4>
+            <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
+              ¥2,900<span className="text-sm font-normal text-gray-500 dark:text-gray-400">{s.aiProMonthly}</span>
+            </p>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              ¥28,800{s.aiProAnnual} <span className="text-gray-400 dark:text-gray-500">(¥2,400{s.aiProMonthly})</span>
+            </p>
+          </div>
+        </div>
+
+        {/* What's Included */}
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-800 dark:bg-amber-950/40">
+            <Sparkles size={24} className="mb-2 text-amber-600 dark:text-amber-400" />
+            <h4 className="mb-1.5 text-base font-semibold text-gray-900 dark:text-gray-100">
+              {s.aiProAiFeatures}
+            </h4>
+            <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+              {s.aiProAiFeaturesDesc}
+            </p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-800 dark:bg-amber-950/40">
+            <HardDrive size={24} className="mb-2 text-amber-600 dark:text-amber-400" />
+            <h4 className="mb-1.5 text-base font-semibold text-gray-900 dark:text-gray-100">
+              {s.aiProStorage}
+            </h4>
+            <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+              {s.aiProStorageDesc}
+            </p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-800 dark:bg-amber-950/40">
+            <Code size={24} className="mb-2 text-amber-600 dark:text-amber-400" />
+            <h4 className="mb-1.5 text-base font-semibold text-gray-900 dark:text-gray-100">
+              {s.aiProDevBenefits}
+            </h4>
+            <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+              {s.aiProDevBenefitsDesc}
+            </p>
+          </div>
+        </div>
+
+        {/* Cost Analysis */}
+        <div className="mt-8 rounded-xl border border-amber-300 bg-amber-100 p-6 dark:border-amber-700 dark:bg-amber-900/40">
+          <h3 className="mb-2 text-lg font-bold text-gray-900 dark:text-gray-100">
+            {s.aiProWorthIt}
+          </h3>
+          <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+            {s.aiProWorthItDesc}
+          </p>
+        </div>
+
+        {/* Activation Steps */}
+        <div className="mt-8 rounded-xl border border-amber-400 bg-amber-50 p-6 dark:border-amber-600 dark:bg-amber-950/40">
+          <div className="mb-3 flex items-center gap-2">
+            <AlertTriangle size={20} className="text-amber-600 dark:text-amber-400" />
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+              {s.aiProActivateTitle}
+            </h3>
+          </div>
+          <ol className="list-inside list-decimal space-y-1.5 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+            {s.aiProActivateSteps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+        </div>
+
+        {/* API Usage */}
+        <h3 className="mb-4 mt-8 text-lg font-semibold text-gray-900 dark:text-gray-100">
+          {s.aiProApiUsageTitle}
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { title: s.aiProFlashTitle, sub: s.aiProFlashSub, desc: s.aiProFlashDesc },
+            { title: s.aiProProTitle, sub: s.aiProProSub, desc: s.aiProProDesc },
+            { title: s.aiProRagTitle, sub: s.aiProRagSub, desc: s.aiProRagDesc },
+          ].map(({ title, sub, desc }) => (
+            <div key={title} className="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-800 dark:bg-gray-900">
+              <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                {title}
+              </h4>
+              <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">
+                {sub}
+              </p>
+              <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                {desc}
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+          {s.aiProApiUsageSummary}
+        </p>
+
+        {/* References */}
+        <h3 className="mb-3 mt-8 text-lg font-semibold text-gray-900 dark:text-gray-100">
+          {s.aiProReferences}
+        </h3>
+        <ul className="space-y-1.5">
+          {[
+            { label: "Google AI Pro", href: "https://one.google.com/about/ai-premium" },
+            { label: "Gemini API Pricing", href: "https://ai.google.dev/pricing" },
+            { label: "Google One Cloud Credits", href: "https://cloud.google.com/billing/docs/how-to/google-one-credits" },
+          ].map(({ label, href }) => (
+            <li key={href}>
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
+              >
+                <ExternalLink size={14} />
+                {label}
+              </a>
+            </li>
+          ))}
+        </ul>
       </section>
 
       {/* Plugin Showcase */}

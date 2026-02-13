@@ -96,6 +96,7 @@ GemiHub はオフラインファーストです。すべてのファイルはブ
 | 暗号化 | [encryption.md](./docs/encryption.md) | [encryption_ja.md](./docs/encryption_ja.md) |
 | プラグイン | [plugins.md](./docs/plugins.md) | [plugins_ja.md](./docs/plugins_ja.md) |
 | インフラストラクチャ | [infrastructure.md](./docs/infrastructure.md) | [infrastructure_ja.md](./docs/infrastructure_ja.md) |
+| エディタ | [editor.md](./docs/editor.md) | [editor_ja.md](./docs/editor_ja.md) |
 
 ## はじめかた
 
@@ -139,6 +140,8 @@ GemiHub はオフラインファーストです。すべてのファイルはブ
 1. [Google AI Studio](https://aistudio.google.com/) にアクセス
 2. 左メニュー「API キー」→「API キーを作成」
 3. キーをメモ（あとでアプリの設定画面から入力します）
+
+> **無料 API の制限:** Gemini API の無料枠はレート制限が厳しく、利用できるモデルも限られています。お試しには十分ですが、日常的な利用には不十分です。本格的に使うには有料プランが必要です。[Google AI Pro](https://one.google.com/about/ai-premium)（$19.99/月）がおすすめです。月 $10 の Google Cloud クレジットが付属し、Gemini API を十分にカバーできるほか、2 TB Google One ストレージや Gemini Code Assist なども含まれます。詳細は [Gemini API Pricing](https://ai.google.dev/pricing) を参照してください。
 
 ### 3. クローンとインストール
 

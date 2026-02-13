@@ -6,6 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GemiHub is a web application that integrates Google Gemini AI with Google Drive, with support for self-hosting. It provides visual workflow building, AI chat with streaming/function calling, Drive file management with a WYSIWYG editor, and offline-first caching with push/pull sync.
 
+## Documentation
+
+`docs/` ディレクトリに各機能の詳細ドキュメントがある（`_ja` 付きは日本語版なので参照不要）。機能の仕様や挙動を確認する際は適宜参照すること。
+
+- `docs/chat.md` — チャット・AI機能（ストリーミング、ファンクションコール、スラッシュコマンド等）
+- `docs/sync.md` — Push/Pull同期とオフラインキャッシュの仕組み
+- `docs/workflow_nodes.md` — ワークフローノード全種のリファレンス
+- `docs/rag.md` — RAG（Retrieval-Augmented Generation）の設定と動作
+- `docs/mcp.md` — MCPサーバー連携
+- `docs/encryption.md` — ハイブリッド暗号化（RSA+AES）
+- `docs/plugins.md` — プラグイン開発ガイド
+- `docs/infrastructure.md` — インフラ構成（Cloud Run等）
+- `docs/editor.md` — エディタシステム（WYSIWYG、ワークフロー編集、ファイルタイプ別表示等）（`editor_ja.md` は日本語版）
+- `docs/history.md` — 編集履歴の仕組み
+
 ## Commands
 
 ```bash
@@ -17,7 +32,7 @@ npm run lint         # ESLint check (eslint app/)
 npm run lint:fix     # ESLint auto-fix
 ```
 
-Tests use Node's built-in `node:test` runner via `tsx`. Run `npm run test:sync-diff` for sync diff unit tests. To run a single test file: `npx tsx --test path/to/file.test.ts`.
+Tests use Node's built-in `node:test` runner via `tsx`. Run `npm run test` for all tests, `npm run test:sync-diff` for sync diff tests, or `npm run test:parser` for parser tests. To run a single test file: `npx tsx --test path/to/file.test.ts`.
 
 ## Environment
 
