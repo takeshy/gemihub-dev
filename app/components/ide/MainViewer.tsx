@@ -189,6 +189,8 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
   const [error, setError] = useState<string | null>(null);
   const blobUrlRef = useRef<string | null>(null);
   const { t } = useI18n();
+  const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState(false);
 
   useEffect(() => {
     // Revoke previous blob URL
@@ -265,12 +267,75 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
     };
   }, []);
 
+  const handleTempUpload = useCallback(async () => {
+    setUploading(true);
+    setUploaded(false);
+    try {
+      const cached = await getCachedFile(fileId);
+      const content = cached?.content ?? "";
+      const res = await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generateEditUrl", fileName, fileId, content }),
+      });
+      if (res.ok) {
+        const { uuid } = await res.json();
+        const editUrl = `${window.location.origin}/api/temp-edit/${uuid}/${encodeURIComponent(fileName)}`;
+        try { await navigator.clipboard.writeText(editUrl); } catch { /* clipboard unavailable */ }
+        setUploaded(true);
+        setTimeout(() => setUploaded(false), 2000);
+      }
+    } finally {
+      setUploading(false);
+    }
+  }, [fileName, fileId]);
+
+  const handleTempDownload = useCallback(async () => {
+    if (!confirm(t("contextMenu.tempDownloadConfirm"))) return;
+    try {
+      const res = await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "download", fileName }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.found) {
+        alert(t("contextMenu.noTempFile"));
+        return;
+      }
+      const { payload } = data.tempFile;
+      const cached = await getCachedFile(fileId);
+      if (cached) {
+        await setCachedFile({ ...cached, content: payload.content, cachedAt: Date.now() });
+        window.location.reload();
+      }
+    } catch { /* ignore */ }
+  }, [fileName, fileId, t]);
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
       <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-        <span className="text-xs text-gray-600 dark:text-gray-400 truncate">
+        <span className="text-xs text-gray-600 dark:text-gray-400 truncate flex-1">
           {fileName}
         </span>
+        <div className="flex items-center gap-1 ml-2">
+          <button
+            onClick={handleTempUpload}
+            disabled={uploading || !src}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
+            title={t("contextMenu.tempUpload")}
+          >
+            {uploaded ? t("contextMenu.tempUploaded") : t("contextMenu.tempUpload")}
+          </button>
+          <button
+            onClick={handleTempDownload}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            title={t("contextMenu.tempDownload")}
+          >
+            {t("contextMenu.tempDownload")}
+          </button>
+        </div>
       </div>
       {error ? (
         <div className="flex-1 flex items-center justify-center">

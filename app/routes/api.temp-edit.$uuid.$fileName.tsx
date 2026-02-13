@@ -27,6 +27,13 @@ function guessContentType(name: string): string {
     yml: "text/yaml; charset=utf-8",
     csv: "text/csv; charset=utf-8",
     pdf: "application/pdf",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    bmp: "image/bmp",
+    ico: "image/x-icon",
     ts: "text/plain; charset=utf-8",
     tsx: "text/plain; charset=utf-8",
     jsx: "text/plain; charset=utf-8",
@@ -78,6 +85,24 @@ export async function loader({ params }: Route.LoaderArgs) {
   }
 
   const contentType = guessContentType(fileName);
+  const isBinary = !contentType.startsWith("text/") &&
+    !contentType.startsWith("application/json") &&
+    !contentType.startsWith("application/javascript") &&
+    !contentType.startsWith("application/xml") &&
+    !contentType.startsWith("image/svg+xml");
+
+  if (isBinary && entry.content) {
+    // Binary content is stored as base64 — decode to raw bytes
+    try {
+      const bytes = Buffer.from(entry.content, "base64");
+      return new Response(bytes, {
+        headers: { "Content-Type": contentType, ...getSafeHeaders(contentType) },
+      });
+    } catch {
+      // Fallback: return as-is if not valid base64
+    }
+  }
+
   return new Response(entry.content, {
     headers: { "Content-Type": contentType, ...getSafeHeaders(contentType) },
   });

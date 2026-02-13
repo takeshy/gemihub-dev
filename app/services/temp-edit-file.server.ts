@@ -84,6 +84,19 @@ export function listTempEditFiles(): TempEditEntry[] {
   return entries;
 }
 
+/** Remove all local temp-edit entries with the given fileName, returning their UUIDs. */
+export function removeLocalTempEditsByFileName(fileName: string): string[] {
+  const entries = listTempEditFiles();
+  const removed: string[] = [];
+  for (const e of entries) {
+    if (e.fileName === fileName) {
+      deleteTempEditFile(e.uuid);
+      removed.push(e.uuid);
+    }
+  }
+  return removed;
+}
+
 /** Delete entries older than 1 day (async, non-blocking) */
 export async function cleanupExpired(): Promise<void> {
   ensureDir();

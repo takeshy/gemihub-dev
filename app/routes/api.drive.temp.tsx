@@ -9,8 +9,9 @@ import {
   applyAllTempFiles,
   deleteTempFiles,
   addTempEditEntry,
+  removeTempEditEntry,
 } from "~/services/temp-file.server";
-import { saveTempEditFile, cleanupExpired } from "~/services/temp-edit-file.server";
+import { saveTempEditFile, cleanupExpired, removeLocalTempEditsByFileName } from "~/services/temp-edit-file.server";
 import {
   upsertFileInMeta,
 } from "~/services/sync-meta.server";
@@ -124,6 +125,12 @@ export async function action({ request }: Route.ActionArgs) {
           { error: "Missing fileId or fileName" },
           { status: 400, headers: responseHeaders }
         );
+      }
+
+      // Remove existing temp-edit entries for the same fileName (overwrite)
+      const removedUuids = removeLocalTempEditsByFileName(fileName);
+      for (const oldUuid of removedUuids) {
+        await removeTempEditEntry(validTokens.accessToken, validTokens.rootFolderId, oldUuid);
       }
 
       // Also save to Drive temp (combines save + generateEditUrl into one call)

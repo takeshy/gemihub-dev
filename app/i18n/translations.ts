@@ -169,7 +169,9 @@ export interface TranslationStrings {
   "contextMenu.rename": string;
   "contextMenu.download": string;
   "contextMenu.tempDownload": string;
+  "contextMenu.tempDownloadConfirm": string;
   "contextMenu.tempUpload": string;
+  "contextMenu.tempUploaded": string;
   "contextMenu.tempUrlCopied": string;
   "contextMenu.noTempFile": string;
   "contextMenu.clearCache": string;
@@ -561,7 +563,9 @@ const en: TranslationStrings = {
   "contextMenu.rename": "Rename",
   "contextMenu.download": "Download",
   "contextMenu.tempDownload": "Temp DL",
+  "contextMenu.tempDownloadConfirm": "Overwrite local file with temp file content?",
   "contextMenu.tempUpload": "Temp UP",
+  "contextMenu.tempUploaded": "Uploaded",
   "contextMenu.tempUrlCopied": "Edit URL copied",
   "contextMenu.noTempFile": "No temp file found for this file.",
   "contextMenu.clearCache": "Clear Cache",
@@ -953,7 +957,9 @@ const ja: TranslationStrings = {
   "contextMenu.rename": "名前を変更",
   "contextMenu.download": "ダウンロード",
   "contextMenu.tempDownload": "一時DL",
+  "contextMenu.tempDownloadConfirm": "一時ファイルの内容でローカルを上書きしますか？",
   "contextMenu.tempUpload": "一時UP",
+  "contextMenu.tempUploaded": "UP済",
   "contextMenu.tempUrlCopied": "編集URLをコピーしました",
   "contextMenu.noTempFile": "このファイルの一時ファイルが見つかりません。",
   "contextMenu.clearCache": "キャッシュクリア",
