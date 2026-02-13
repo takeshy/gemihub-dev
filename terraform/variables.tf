@@ -41,5 +41,5 @@ variable "session_secret" {
 variable "google_site_verification_token" {
   description = "Google site verification token (without the 'google-site-verification=' prefix). Empty disables TXT record."
   type        = string
-  default     = "z_QgqT1jpyik9-fWNWwj6fXJQE5IhulrV2450T37djw"
+  default     = ""
 }
