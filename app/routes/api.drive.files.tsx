@@ -258,6 +258,18 @@ export async function action({ request }: Route.ActionArgs) {
         meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files },
       });
     }
+    case "updateBinary": {
+      if (!fileId || content == null) return logAndReturn({ error: "Missing fileId or content" }, { status: 400 });
+      const buffer = Buffer.from(content, "base64");
+      const fileMeta = await getFileMetadata(validTokens.accessToken, fileId);
+      const file = await updateFileBinary(validTokens.accessToken, fileId, buffer, fileMeta.mimeType || "application/octet-stream");
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+      return logAndReturn({
+        file,
+        md5Checksum: file.md5Checksum,
+        meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files },
+      });
+    }
     case "rename": {
       if (!fileId || !name) return logAndReturn({ error: "Missing fileId or name" }, { status: 400 });
 
