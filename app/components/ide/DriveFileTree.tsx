@@ -375,34 +375,27 @@ export function DriveFileTree({
     }
   }, [treeItems, onFileListChange]);
 
-  // Load: IndexedDB cache first (meta or tree), then server in background
+  // Load tree from IndexedDB cache only (server fetch happens after pull/push)
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      // Try cached meta first (more accurate), then cached tree
+      const cached = await getCachedFileTree();
+      if (!cancelled && cached && cached.rootFolderId === rootFolderId) {
+        setTreeItems(cached.items);
+      }
+      // Restore remoteMeta for status icons (shared, cached/modified dots)
       const cachedMeta = await getCachedRemoteMeta();
       if (!cancelled && cachedMeta && cachedMeta.rootFolderId === rootFolderId) {
-        setTreeItems(buildTreeFromMeta(cachedMeta));
         setRemoteMeta(cachedMeta.files);
-        setLoading(false);
-      } else {
-        const cached = await getCachedFileTree();
-        if (!cancelled && cached && cached.rootFolderId === rootFolderId) {
-          setTreeItems(cached.items);
-          setLoading(false);
-        }
       }
-      // Always refresh from server in background
-      if (!cancelled) {
-        await fetchAndCacheTree();
-      }
+      if (!cancelled) setLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [rootFolderId, fetchAndCacheTree]);
+  }, [rootFolderId]);
 
   const toggleFolder = useCallback((folderId: string) => {
     setSelectedFolderId((prev) => (prev === folderId ? null : folderId));
