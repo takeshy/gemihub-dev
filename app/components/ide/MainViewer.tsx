@@ -217,6 +217,7 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
             encoding: "base64",
           });
           if (cancelled) return;
+          window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId } }));
           showBlob(arrayBuffer);
         } catch {
           // Network error (offline) - no cache available

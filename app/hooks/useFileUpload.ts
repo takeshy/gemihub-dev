@@ -9,9 +9,19 @@ export interface UploadProgress {
   error?: string;
 }
 
+export interface UploadedFile {
+  id: string;
+  name: string;
+  md5Checksum?: string;
+  modifiedTime?: string;
+  mimeType?: string;
+}
+
 export interface UploadReturn {
   ok: boolean;
   failedNames: Set<string>;
+  /** Map from original file name to uploaded Drive file metadata */
+  fileMap: Map<string, UploadedFile>;
 }
 
 export function useFileUpload() {
@@ -20,7 +30,7 @@ export function useFileUpload() {
 
   const upload = useCallback(
     async (files: File[], folderId: string, namePrefix?: string, replaceMap?: Record<string, string>): Promise<UploadReturn> => {
-      const fail: UploadReturn = { ok: false, failedNames: new Set() };
+      const fail: UploadReturn = { ok: false, failedNames: new Set(), fileMap: new Map() };
       if (files.length === 0) return fail;
 
       setUploading(true);
@@ -82,12 +92,14 @@ export function useFileUpload() {
         }
 
         const failedNames = new Set<string>();
+        const fileMap = new Map<string, UploadedFile>();
         for (const [name, result] of resultMap) {
           if (result.error) {
             failedNames.add(name);
           } else if (result.file) {
-            const f = result.file as { id: string; name: string };
+            const f = result.file as UploadedFile;
             ragRegisterNewFile(f.id, f.name);
+            fileMap.set(name, f);
           }
         }
 
@@ -103,7 +115,7 @@ export function useFileUpload() {
         );
 
         setUploading(false);
-        return { ok: true, failedNames };
+        return { ok: true, failedNames, fileMap };
       } catch {
         setProgress((prev) =>
           prev.map((p) =>
