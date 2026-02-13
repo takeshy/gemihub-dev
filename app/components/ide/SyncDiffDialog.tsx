@@ -240,7 +240,7 @@ export function SyncDiffDialog({
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700">
           <span className="text-xs text-gray-400">
-            {type === "push" ? "Local \u2192 Remote" : "Remote \u2192 Local"}
+            {type === "push" ? t("sync.pushDirection") : t("sync.pullDirection")}
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -256,7 +256,7 @@ export function SyncDiffDialog({
                 className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {type === "push" ? <ArrowUp size={ICON.SM} /> : <ArrowDown size={ICON.SM} />}
-                {type === "push" ? "Push" : "Pull"}
+                {type === "push" ? t("sync.pushLabel") : t("sync.pullLabel")}
               </button>
             )}
           </div>

@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { ArrowUp, ArrowDown, AlertTriangle, Loader2 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
+import { useI18n } from "~/i18n/context";
 import type { SyncStatus, ConflictInfo } from "~/hooks/useSync";
 import {
   getCachedRemoteMeta,
@@ -39,6 +40,7 @@ export function SyncStatusBar({
   conflicts,
   compact = false,
 }: SyncStatusBarProps) {
+  const { t } = useI18n();
   const conflictCount = conflicts.length;
   const isBusy = syncStatus === "pushing" || syncStatus === "pulling";
 
@@ -127,7 +129,7 @@ export function SyncStatusBar({
         className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 disabled:opacity-50"
       >
         <ArrowUp size={ICON.SM} />
-        {!compact && "Push"}
+        {!compact && t("sync.pushLabel")}
         {pushCount > 0 && (
           <span className="rounded-full bg-blue-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white dark:bg-blue-500">
             {pushCount}
@@ -142,7 +144,7 @@ export function SyncStatusBar({
         className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 disabled:opacity-50"
       >
         <ArrowDown size={ICON.SM} />
-        {!compact && "Pull"}
+        {!compact && t("sync.pullLabel")}
         {remoteModifiedCount > 0 && (
           <span className="rounded-full bg-green-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white dark:bg-green-500">
             {remoteModifiedCount}

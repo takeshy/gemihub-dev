@@ -171,6 +171,7 @@ export interface TranslationStrings {
   "contextMenu.tempDownload": string;
   "contextMenu.tempUpload": string;
   "contextMenu.tempUploaded": string;
+  "contextMenu.tempUrlCopied": string;
   "contextMenu.noTempFile": string;
   "contextMenu.clearCache": string;
   "contextMenu.clearCacheModified": string;
@@ -379,8 +380,12 @@ export interface TranslationStrings {
   "conflict.backupNote": string;
 
   // Sync diff dialog
+  "sync.pushLabel": string;
+  "sync.pullLabel": string;
   "sync.pushChanges": string;
   "sync.pullChanges": string;
+  "sync.pushDirection": string;
+  "sync.pullDirection": string;
   "sync.openFile": string;
   "sync.noDiff": string;
 
@@ -559,6 +564,7 @@ const en: TranslationStrings = {
   "contextMenu.tempDownload": "Temp DL",
   "contextMenu.tempUpload": "Temp UP",
   "contextMenu.tempUploaded": "Uploaded to temp",
+  "contextMenu.tempUrlCopied": "Edit URL copied",
   "contextMenu.noTempFile": "No temp file found for this file.",
   "contextMenu.clearCache": "Clear Cache",
   "contextMenu.clearCacheModified": "This file has unsaved changes that will be lost. Continue?",
@@ -767,8 +773,12 @@ const en: TranslationStrings = {
   "conflict.backupNote": "The overwritten version is backed up and can be restored from Settings > Sync > Conflict Backups.",
 
   // Sync diff dialog
+  "sync.pushLabel": "Push to Remote",
+  "sync.pullLabel": "Pull to Local",
   "sync.pushChanges": "Push Changes",
   "sync.pullChanges": "Pull Changes",
+  "sync.pushDirection": "Local \u2192 Remote",
+  "sync.pullDirection": "Remote \u2192 Local",
   "sync.openFile": "Open",
   "sync.noDiff": "Binary file",
 
@@ -947,6 +957,7 @@ const ja: TranslationStrings = {
   "contextMenu.tempDownload": "一時DL",
   "contextMenu.tempUpload": "一時UP",
   "contextMenu.tempUploaded": "一時ファイルにアップロードしました",
+  "contextMenu.tempUrlCopied": "編集URLをコピーしました",
   "contextMenu.noTempFile": "このファイルの一時ファイルが見つかりません。",
   "contextMenu.clearCache": "キャッシュクリア",
   "contextMenu.clearCacheModified": "未保存の変更がありますが、変更は失われます。続行しますか？",
@@ -1155,8 +1166,12 @@ const ja: TranslationStrings = {
   "conflict.backupNote": "上書きされたバージョンはバックアップされ、設定 > 同期 > コンフリクトバックアップから復元できます。",
 
   // Sync diff dialog
-  "sync.pushChanges": "プッシュ変更一覧",
-  "sync.pullChanges": "プル変更一覧",
+  "sync.pushLabel": "リモート反映",
+  "sync.pullLabel": "ローカル反映",
+  "sync.pushChanges": "リモート反映 — 変更一覧",
+  "sync.pullChanges": "ローカル反映 — 変更一覧",
+  "sync.pushDirection": "ローカル \u2192 リモート",
+  "sync.pullDirection": "リモート \u2192 ローカル",
   "sync.openFile": "開く",
   "sync.noDiff": "バイナリファイル",
 
