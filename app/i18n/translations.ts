@@ -113,6 +113,7 @@ export interface TranslationStrings {
   "settings.rag.invalidExcludePattern": string;
   "settings.rag.applyAndSync": string;
   "settings.rag.noFiles": string;
+  "settings.rag.reloadConfirm": string;
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": string;
@@ -514,6 +515,7 @@ const en: TranslationStrings = {
   "settings.rag.invalidExcludePattern": "Invalid exclude pattern regex: {pattern}",
   "settings.rag.applyAndSync": "Apply & Sync",
   "settings.rag.noFiles": "No files found.",
+  "settings.rag.reloadConfirm": "RAG registration complete. Reload to enable RAG search?",
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "Encrypt Chat History",
@@ -915,6 +917,7 @@ const ja: TranslationStrings = {
   "settings.rag.invalidExcludePattern": "除外パターンの正規表現が不正です: {pattern}",
   "settings.rag.applyAndSync": "適用 & 同期",
   "settings.rag.noFiles": "ファイルが見つかりません。",
+  "settings.rag.reloadConfirm": "RAG登録が完了しました。リロードしてRAG検索を有効にしますか？",
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "チャット履歴を暗号化",

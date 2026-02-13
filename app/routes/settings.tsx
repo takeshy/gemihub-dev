@@ -2641,13 +2641,20 @@ function RagTab({ settings }: { settings: UserSettings }) {
       // (avoids re-fetch overwriting exclude patterns with stale loader data)
       if (completedRagSetting) {
         setRagSettings((prev) => ({ ...prev, [key]: completedRagSetting! }));
+        // Prompt reload when gemihub RAG store is newly created (search needs storeId)
+        if (key === DEFAULT_RAG_STORE_KEY && !settings.ragSettings?.[DEFAULT_RAG_STORE_KEY]?.storeId) {
+          invalidateIndexCache();
+          if (confirm(t("settings.rag.reloadConfirm"))) {
+            window.location.href = "/";
+          }
+        }
       }
     } catch (err) {
       setSyncMsg(err instanceof Error ? err.message : "Sync error.");
     } finally {
       setSyncing(false);
     }
-  }, [ragSettings, ragTopK]);
+  }, [ragSettings, ragTopK, settings.ragSettings, t]);
 
   const [ragFilesDialogKey, setRagFilesDialogKey] = useState<string | null>(null);
 
