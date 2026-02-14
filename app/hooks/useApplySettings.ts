@@ -20,7 +20,7 @@ function applyTheme(resolved: "light" | "dark") {
 
 export function useApplySettings(language: Language, fontSize: FontSize, theme: Theme = "system") {
   useEffect(() => {
-    document.documentElement.style.fontSize = `${fontSize}px`;
+    document.documentElement.style.setProperty("--user-font-size", `${fontSize}px`);
     document.documentElement.lang = language;
     localStorage.setItem("gemihub-fontSize", String(fontSize));
     localStorage.setItem("gemihub-language", language);
