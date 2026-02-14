@@ -30,6 +30,7 @@ export interface ToolCall {
   id: string;
   name: string;
   args: Record<string, unknown>;
+  thoughtSignature?: string;
 }
 
 // Tool result

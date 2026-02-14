@@ -42,30 +42,84 @@ const DEFAULT_WARNING_THRESHOLD = 5;
 const DEFAULT_RAG_TOP_K = 5;
 
 // Convert our Message format to Gemini Content format
+// For assistant messages with tool calls, this produces multiple Content entries:
+//   1. model Content with functionCall parts
+//   2. user Content with functionResponse parts
+//   3. model Content with text response
 function messagesToContents(messages: Message[]): Content[] {
-  return messages.map((msg) => {
-    const parts: Part[] = [];
+  const contents: Content[] = [];
 
-    if (msg.attachments && msg.attachments.length > 0) {
-      for (const attachment of msg.attachments) {
-        parts.push({
-          inlineData: {
-            mimeType: attachment.mimeType,
-            data: attachment.data,
+  for (const msg of messages) {
+    if (msg.role === "assistant" && msg.toolCalls && msg.toolCalls.length > 0) {
+      // Build functionCall parts for the model turn
+      const fcParts: Part[] = [];
+      for (const tc of msg.toolCalls) {
+        const part: Part = {
+          functionCall: {
+            name: tc.name,
+            args: tc.args,
           },
+        };
+        if (tc.thoughtSignature) {
+          (part as Record<string, unknown>).thoughtSignature = tc.thoughtSignature;
+        }
+        fcParts.push(part);
+      }
+      if (fcParts.length > 0) {
+        contents.push({ role: "model", parts: fcParts });
+      }
+
+      // Build functionResponse parts for the user turn
+      if (msg.toolResults && msg.toolResults.length > 0) {
+        const frParts: Part[] = [];
+        for (const tr of msg.toolResults) {
+          const matchingCall = msg.toolCalls.find((tc) => tc.id === tr.toolCallId);
+          frParts.push({
+            functionResponse: {
+              name: matchingCall?.name ?? tr.toolCallId,
+              id: tr.toolCallId,
+              response: { result: tr.result } as Record<string, unknown>,
+            },
+          });
+        }
+        if (frParts.length > 0) {
+          contents.push({ role: "user", parts: frParts });
+        }
+      }
+
+      // Add the final text response as a model turn
+      if (msg.content) {
+        contents.push({ role: "model", parts: [{ text: msg.content }] });
+      }
+    } else {
+      // Regular message (user or assistant without tool calls)
+      const parts: Part[] = [];
+
+      if (msg.attachments && msg.attachments.length > 0) {
+        for (const attachment of msg.attachments) {
+          parts.push({
+            inlineData: {
+              mimeType: attachment.mimeType,
+              data: attachment.data,
+            },
+          });
+        }
+      }
+
+      if (msg.content) {
+        parts.push({ text: msg.content });
+      }
+
+      if (parts.length > 0) {
+        contents.push({
+          role: msg.role === "user" ? "user" : "model",
+          parts,
         });
       }
     }
+  }
 
-    if (msg.content) {
-      parts.push({ text: msg.content });
-    }
-
-    return {
-      role: msg.role === "user" ? "user" : "model",
-      parts,
-    };
-  });
+  return contents;
 }
 
 // Convert tool definitions to Gemini format
@@ -274,22 +328,13 @@ export async function* chatWithToolsStream(
   let response = await chat.sendMessageStream({ message: messageParts });
 
   while (continueLoop) {
-    const functionCallsToProcess: Array<{ name: string; args: Record<string, unknown> }> = [];
+    const functionCallsToProcess: Array<{ name: string; args: Record<string, unknown>; thoughtSignature?: string }> = [];
 
     for await (const chunk of response) {
-      if (chunk.functionCalls && chunk.functionCalls.length > 0) {
-        for (const fc of chunk.functionCalls) {
-          functionCallsToProcess.push({
-            name: fc.name ?? "",
-            args: (fc.args as Record<string, unknown>) ?? {},
-          });
-        }
-      }
-
       const chunkWithCandidates = chunk as {
         candidates?: Array<{
           content?: {
-            parts?: Array<{ text?: string; thought?: boolean }>;
+            parts?: Array<{ text?: string; thought?: boolean; functionCall?: { name?: string; args?: unknown }; thoughtSignature?: string }>;
           };
           groundingMetadata?: {
             groundingChunks?: Array<{
@@ -299,6 +344,22 @@ export async function* chatWithToolsStream(
         }>;
       };
       const candidates = chunkWithCandidates.candidates;
+
+      // Extract function calls from candidates to preserve thoughtSignature
+      if (candidates && candidates.length > 0) {
+        const parts = candidates[0]?.content?.parts;
+        if (parts) {
+          for (const part of parts) {
+            if (part.functionCall) {
+              functionCallsToProcess.push({
+                name: part.functionCall.name ?? "",
+                args: (part.functionCall.args as Record<string, unknown>) ?? {},
+                thoughtSignature: part.thoughtSignature,
+              });
+            }
+          }
+        }
+      }
 
       if (candidates && candidates.length > 0) {
         const parts = candidates[0]?.content?.parts;
@@ -386,6 +447,7 @@ export async function* chatWithToolsStream(
           id: (fc as { id?: string }).id ?? `${fc.name}_${Date.now()}`,
           name: fc.name,
           args: fc.args,
+          thoughtSignature: fc.thoughtSignature,
         };
 
         yield { type: "tool_call", toolCall };
