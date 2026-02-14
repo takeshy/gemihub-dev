@@ -720,6 +720,7 @@ function MarkdownFileEditor({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const contentFromProps = useRef(true);
   const pendingContentRef = useRef<string | null>(null);
+  const prevFileIdRef = useRef(fileId);
 
   const updateContent = useCallback((newContent: string) => {
     contentFromProps.current = false;
@@ -823,6 +824,10 @@ function MarkdownFileEditor({
   >(null);
 
   useEffect(() => {
+    const prev = prevFileIdRef.current;
+    prevFileIdRef.current = fileId;
+    // Skip content/mode reset during new: → real ID migration (preserves cursor)
+    if (prev.startsWith("new:") && !fileId.startsWith("new:")) return;
     contentFromProps.current = true;
     setContent(initialContent);
     setMode("wysiwyg");
@@ -976,6 +981,7 @@ function HtmlFileEditor({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const contentFromProps = useRef(true);
   const pendingContentRef = useRef<string | null>(null);
+  const prevFileIdRef = useRef(fileId);
 
   const updateContent = useCallback((newContent: string) => {
     contentFromProps.current = false;
@@ -983,6 +989,9 @@ function HtmlFileEditor({
   }, []);
 
   useEffect(() => {
+    const prev = prevFileIdRef.current;
+    prevFileIdRef.current = fileId;
+    if (prev.startsWith("new:") && !fileId.startsWith("new:")) return;
     contentFromProps.current = true;
     setContent(initialContent);
     setMode("preview");
@@ -1231,6 +1240,7 @@ function TextFileEditor({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const contentFromProps = useRef(true);
   const pendingContentRef = useRef<string | null>(null);
+  const prevFileIdRef = useRef(fileId);
 
   const updateContent = useCallback((newContent: string) => {
     contentFromProps.current = false;
@@ -1238,6 +1248,9 @@ function TextFileEditor({
   }, []);
 
   useEffect(() => {
+    const prev = prevFileIdRef.current;
+    prevFileIdRef.current = fileId;
+    if (prev.startsWith("new:") && !fileId.startsWith("new:")) return;
     contentFromProps.current = true;
     setContent(initialContent);
   }, [initialContent, fileId]);
@@ -1404,6 +1417,7 @@ function DiffEditor({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const contentFromProps = useRef(true);
   const pendingContentRef = useRef<string | null>(null);
+  const prevFileIdRef = useRef(fileId);
 
   const updateContent = useCallback((newContent: string) => {
     contentFromProps.current = false;
