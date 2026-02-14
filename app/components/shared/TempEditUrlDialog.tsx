@@ -22,13 +22,13 @@ export function TempEditUrlDialog({ t, onYes, onNo }: TempEditUrlDialogProps) {
         <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-800">
           <button
             onClick={onNo}
-            className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+            className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
           >
             {t("contextMenu.tempEditUrlNo")}
           </button>
           <button
             onClick={onYes}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
           >
             {t("contextMenu.tempEditUrlYes")}
           </button>
