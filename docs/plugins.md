@@ -87,7 +87,9 @@ class MyPlugin {
   }
 }
 
+// Both export styles are supported:
 module.exports = MyPlugin;
+// or: module.exports.default = MyPlugin;
 ```
 
 Example esbuild config:
@@ -123,6 +125,7 @@ api.registerView({
   name: "My View",
   icon: "puzzle",       // optional icon identifier
   location: "sidebar", // or "main"
+  extensions: [".csv", ".tsv"], // optional: bind to specific file extensions (main views only)
   component: MyReactComponent, // receives { api } as props
 });
 
@@ -165,10 +168,10 @@ const content = await api.drive.readFile(fileId);
 // Search files by name
 const files = await api.drive.searchFiles("query");
 
-// List files in a folder
+// List files in a folder (omit folderId to list files in the GeminiHub root folder)
 const files = await api.drive.listFiles(folderId);
 
-// Create a file
+// Create a file (created in the GeminiHub root folder)
 const { id, name } = await api.drive.createFile("notes.md", "# Notes");
 
 // Update a file
@@ -225,6 +228,20 @@ function MyPanel({ api }) {
 - Only install plugins from sources you trust
 - `require()` shim only provides `react`, `react-dom`, and `react-dom/client`
 - Plugin code runs in the browser, not on the server
+
+### Local Development
+
+In development mode (`NODE_ENV !== "production"`), plugins can be loaded directly from the local filesystem without installing via GitHub. Place your plugin files in the `plugins/{id}/` directory at the project root:
+
+```
+plugins/
+  my-plugin/
+    manifest.json
+    main.js
+    styles.css     ← optional
+```
+
+Local plugins are automatically detected and always enabled. The IndexedDB cache is bypassed, so changes to `main.js` or `styles.css` take effect on the next page reload without needing to update the version. Local plugins cannot be uninstalled from the UI — simply remove the directory to unload them.
 
 ### Publishing
 

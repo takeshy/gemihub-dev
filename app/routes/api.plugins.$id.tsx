@@ -82,6 +82,19 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 // ---------------------------------------------------------------------------
+// Per-plugin lock to serialize setData (prevents read-modify-write races)
+// ---------------------------------------------------------------------------
+
+const pluginDataLocks = new Map<string, Promise<void>>();
+
+function withPluginLock<T>(pluginId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = pluginDataLocks.get(pluginId) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  pluginDataLocks.set(pluginId, next.then(() => {}, () => {}));
+  return next;
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/plugins/:id — toggle, getData, setData, update
 // ---------------------------------------------------------------------------
 
@@ -200,18 +213,20 @@ export async function action({ request, params }: Route.ActionArgs) {
           saveLocalPluginData(pluginId, localData);
           return jsonWithCookie({ success: true });
         }
-        const data = await getPluginDataFile(
-          validTokens.accessToken,
-          validTokens.rootFolderId,
-          pluginId
-        );
-        data[key] = value;
-        await savePluginDataFile(
-          validTokens.accessToken,
-          validTokens.rootFolderId,
-          pluginId,
-          data
-        );
+        await withPluginLock(pluginId, async () => {
+          const data = await getPluginDataFile(
+            validTokens.accessToken,
+            validTokens.rootFolderId,
+            pluginId
+          );
+          data[key] = value;
+          await savePluginDataFile(
+            validTokens.accessToken,
+            validTokens.rootFolderId,
+            pluginId,
+            data
+          );
+        });
         return jsonWithCookie({ success: true });
       }
 

@@ -13,6 +13,7 @@ import {
 import type { UserSettings, PluginConfig } from "~/types/settings";
 import { useI18n } from "~/i18n/context";
 import { invalidateIndexCache } from "~/routes/_index";
+import { clearPluginCache } from "~/services/plugin-loader";
 import { usePlugins } from "~/contexts/PluginContext";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 
@@ -140,6 +141,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
         const data = await res.json();
         if (data.success) {
           setPlugins((prev) => prev.filter((p) => p.id !== pluginId));
+          await clearPluginCache(pluginId);
           invalidateIndexCache();
           showStatus("success", t("plugins.uninstalled"));
         }

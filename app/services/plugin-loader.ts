@@ -82,6 +82,62 @@ async function setCachedAsset(pluginId: string, version: string, fileName: strin
   }
 }
 
+/**
+ * Delete cached assets for a plugin whose key does NOT start with the given
+ * "{pluginId}:{currentVersion}:" prefix. This cleans up stale entries left
+ * behind after plugin updates.
+ */
+async function purgeOldCacheEntries(pluginId: string, currentVersion: string): Promise<void> {
+  try {
+    const db = await getPluginDB();
+    const prefix = `${pluginId}:`;
+    const keepPrefix = `${pluginId}:${currentVersion}:`;
+    const tx = db.transaction("assets", "readwrite");
+    const store = tx.objectStore("assets");
+    const req = store.openCursor();
+    await new Promise<void>((resolve, reject) => {
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (!cursor) { resolve(); return; }
+        const key = cursor.key as string;
+        if (key.startsWith(prefix) && !key.startsWith(keepPrefix)) {
+          cursor.delete();
+        }
+        cursor.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    // cache cleanup failure is non-fatal
+  }
+}
+
+/**
+ * Remove ALL cached assets for a given plugin (used on uninstall).
+ */
+export async function clearPluginCache(pluginId: string): Promise<void> {
+  try {
+    const db = await getPluginDB();
+    const prefix = `${pluginId}:`;
+    const tx = db.transaction("assets", "readwrite");
+    const store = tx.objectStore("assets");
+    const req = store.openCursor();
+    await new Promise<void>((resolve, reject) => {
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (!cursor) { resolve(); return; }
+        if ((cursor.key as string).startsWith(prefix)) {
+          cursor.delete();
+        }
+        cursor.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    // cache cleanup failure is non-fatal
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Plugin code execution
 // ---------------------------------------------------------------------------
@@ -152,6 +208,9 @@ export async function loadPlugin(
   } catch {
     manifest = fallbackManifest;
   }
+
+  // Purge stale cache entries from older versions
+  if (!isDev) await purgeOldCacheEntries(config.id, config.version);
 
   // Execute plugin code
   const PluginClass = executePluginCode(code);

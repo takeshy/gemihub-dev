@@ -72,13 +72,17 @@ export function createPluginAPI(
         let result = "";
         for (const line of lines) {
           if (line.startsWith("data: ")) {
+            let data: Record<string, unknown>;
             try {
-              const data = JSON.parse(line.slice(6));
-              if (data.type === "text" && data.content) {
-                result += data.content;
-              }
+              data = JSON.parse(line.slice(6));
             } catch {
-              // skip non-JSON lines
+              continue; // skip non-JSON lines
+            }
+            if (data.type === "error") {
+              throw new Error((data.error || data.content || "Gemini API error") as string);
+            }
+            if (data.type === "text" && data.content) {
+              result += data.content;
             }
           }
         }
