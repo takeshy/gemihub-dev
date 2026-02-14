@@ -730,6 +730,9 @@ function MarkdownFileEditor({
   const contentFromProps = useRef(true);
   const pendingContentRef = useRef<string | null>(null);
   const prevFileIdRef = useRef(fileId);
+  // Track last content we saved to distinguish our own save being reflected
+  // back via initialContent from genuine external changes (pull, restore, etc.)
+  const lastSavedContentRef = useRef<string | null>(null);
 
   const updateContent = useCallback((newContent: string) => {
     contentFromProps.current = false;
@@ -741,6 +744,7 @@ function MarkdownFileEditor({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     pendingContentRef.current = content;
     debounceRef.current = setTimeout(() => {
+      lastSavedContentRef.current = content;
       saveToCache(content);
       pendingContentRef.current = null;
     }, 1000);
@@ -835,9 +839,25 @@ function MarkdownFileEditor({
     prevFileIdRef.current = fileId;
     // Skip content/mode reset during new: → real ID migration (preserves cursor)
     if (prev.startsWith("new:") && !fileId.startsWith("new:")) return;
+    // When switching files, always reset
+    if (fileId !== prev) {
+      lastSavedContentRef.current = null;
+      contentFromProps.current = true;
+      setContent(initialContent);
+      setMode("wysiwyg");
+      return;
+    }
+    // Same file — skip if this is our own save being reflected back via
+    // useFileWithCache.saveToCache → setContent → initialContent prop change.
+    // This prevents a race where the debounce timer and wysimark's throttle
+    // fire at the same time, causing content to revert and cursor to reset.
+    if (lastSavedContentRef.current !== null && lastSavedContentRef.current === initialContent) {
+      lastSavedContentRef.current = null;
+      return;
+    }
+    lastSavedContentRef.current = null;
     contentFromProps.current = true;
     setContent(initialContent);
-    setMode("wysiwyg");
   }, [initialContent, fileId]);
 
   useEffect(() => {
