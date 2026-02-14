@@ -910,16 +910,8 @@ export function DriveFileTree({
       if (!cached) return; // temp entry was removed (e.g. file renamed/deleted before migration)
       const currentContent = cached.content;
 
-      // Migrate editHistory entry (new: → real ID)
-      const editHistory = await getEditHistoryForFile(tempId);
-      if (editHistory) {
-        await deleteEditHistoryEntry(tempId);
-        await setEditHistoryEntry({
-          ...editHistory,
-          fileId: file.id,
-          filePath: file.name,
-        });
-      }
+      // Clean up editHistory for temp ID — content will be synced to Drive below
+      await deleteEditHistoryEntry(tempId);
 
       // If user edited before migration, push content to Drive and get final checksum
       let finalMd5 = file.md5Checksum ?? "";
@@ -962,6 +954,25 @@ export function DriveFileTree({
           };
           localMeta.lastUpdatedAt = new Date().toISOString();
           await setLocalSyncMeta(localMeta);
+        }
+      } catch {
+        // Non-critical — next pull will fix the inconsistency
+      }
+
+      // Update cachedRemoteMeta so computeSyncDiff doesn't treat this as localOnly
+      try {
+        const remoteMeta = await getCachedRemoteMeta();
+        if (remoteMeta) {
+          remoteMeta.files[file.id] = {
+            name: file.name,
+            mimeType: file.mimeType ?? mimeType,
+            md5Checksum: finalMd5,
+            modifiedTime: finalModifiedTime,
+            createdTime: file.createdTime ?? "",
+          };
+          remoteMeta.lastUpdatedAt = new Date().toISOString();
+          remoteMeta.cachedAt = Date.now();
+          await setCachedRemoteMeta(remoteMeta);
         }
       } catch {
         // Non-critical — next pull will fix the inconsistency

@@ -46,7 +46,7 @@ export async function addCommitBoundary(fileId: string): Promise<void> {
 }
 
 /**
- * Called every 3s auto-save, BEFORE cache is updated.
+ * Called every 1s auto-save (debounced), BEFORE cache is updated.
  * Reads old content from IndexedDB cache, computes cumulative diff from base.
  */
 export async function saveLocalEdit(
