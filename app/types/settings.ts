@@ -360,7 +360,7 @@ export function getEncryptionParams(
 ): EncryptionParams | undefined {
   const enc = settings.encryption;
   const enabled = type === "chat" ? enc.encryptChatHistory : enc.encryptWorkflowHistory;
-  if (!enc.enabled || !enabled || !enc.publicKey) return undefined;
+  if (!enc.enabled || !enabled || !enc.publicKey || !enc.encryptedPrivateKey || !enc.salt) return undefined;
   return {
     publicKey: enc.publicKey,
     encryptedPrivateKey: enc.encryptedPrivateKey,

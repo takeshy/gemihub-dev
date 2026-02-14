@@ -2,6 +2,7 @@ import type { Route } from "./+types/api.drive.files";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import {
+  type DriveFile,
   readFile,
   readFileBase64,
   readFileRaw,
@@ -331,7 +332,12 @@ export async function action({ request }: Route.ActionArgs) {
         return logAndReturn({ error: "Missing fileId" }, { status: 400 });
       }
       const encSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-      if (!encSettings.encryption.enabled || !encSettings.encryption.publicKey) {
+      if (
+        !encSettings.encryption.enabled ||
+        !encSettings.encryption.publicKey ||
+        !encSettings.encryption.encryptedPrivateKey ||
+        !encSettings.encryption.salt
+      ) {
         return logAndReturn({ error: "Encryption not configured" }, { status: 400 });
       }
       // Clean up RAG tracking for old filename before encrypting (best-effort)
@@ -382,14 +388,20 @@ export async function action({ request }: Route.ActionArgs) {
         encSettings.encryption.encryptedPrivateKey,
         encSettings.encryption.salt
       );
-      await updateFile(validTokens.accessToken, fileId, encrypted);
-      const renamedFile = await renameFile(
+      await renameFile(
         validTokens.accessToken,
         fileId,
         encFileMeta.name + ".encrypted"
       );
-      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, renamedFile);
-      return logAndReturn({ file: renamedFile, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+      let updatedFile: DriveFile;
+      try {
+        updatedFile = await updateFile(validTokens.accessToken, fileId, encrypted);
+      } catch (e) {
+        try { await renameFile(validTokens.accessToken, fileId, encFileMeta.name); } catch { /* best-effort rollback */ }
+        throw e;
+      }
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, updatedFile);
+      return logAndReturn({ file: updatedFile, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "decrypt": {
       if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });

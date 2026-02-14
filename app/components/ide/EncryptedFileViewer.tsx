@@ -5,8 +5,10 @@ import type { EncryptionSettings } from "~/types/settings";
 import { useI18n } from "~/i18n/context";
 import { useEditorContext } from "~/contexts/EditorContext";
 import {
+  decryptData,
   decryptFileContent,
   decryptPrivateKey,
+  decryptWithPrivateKey,
   encryptFileContent,
   isEncryptedFile,
   unwrapEncryptedFile,
@@ -96,18 +98,23 @@ export function EncryptedFileViewer({
     }
   }, [fileName, contentIsEncrypted, forceRefresh]);
 
-  // Auto-decrypt if password is cached and content is encrypted
+  // Auto-decrypt if private key or password is cached and content is encrypted
   useEffect(() => {
     if (decryptedContent !== null) return;
     if (!isEncryptedFile(encryptedContent)) return;
-    const cached = cryptoCache.getPassword();
-    if (!cached) return;
+    const cachedKey = cryptoCache.getPrivateKey();
+    const cachedPw = cryptoCache.getPassword();
+    if (!cachedKey && !cachedPw) return;
 
     let cancelled = false;
     setDecrypting(true);
     setError(null);
 
-    decryptFileContent(encryptedContent, cached)
+    const doDecrypt = cachedKey
+      ? decryptWithPrivateKey(encryptedContent, cachedKey)
+      : decryptFileContent(encryptedContent, cachedPw!);
+
+    doDecrypt
       .then((plain) => {
         if (cancelled) return;
         setDecryptedContent(plain);
@@ -185,10 +192,10 @@ export function EncryptedFileViewer({
         setError(t("crypt.wrongPassword"));
         return;
       }
-      const plain = await decryptFileContent(encryptedContent, password);
-      cryptoCache.setPassword(password);
       const pk = await decryptPrivateKey(parsed.key, parsed.salt, password);
+      cryptoCache.setPassword(password);
       cryptoCache.setPrivateKey(pk);
+      const plain = await decryptData(parsed.data, pk);
       setDecryptedContent(plain);
       setEditedContent(plain);
     } catch (e) {
@@ -234,10 +241,8 @@ export function EncryptedFileViewer({
         body: JSON.stringify({ action: "save", fileName, fileId, content: reEncrypted }),
       });
       await saveToCache(reEncrypted);
-      // Go back to password screen (lock the file)
-      setDecryptedContent(null);
-      setEditedContent("");
-      setPassword("");
+      // Update ref so the reset effect doesn't fire when parent re-renders with new encrypted content
+      prevContentRef.current = reEncrypted;
     } finally {
       setUploading(false);
     }
@@ -258,13 +263,19 @@ export function EncryptedFileViewer({
       }
       const { payload } = data.tempFile;
       // Decrypt the temp content for diff
-      const pw = cryptoCache.getPassword();
       let tempPlain = payload.content;
-      if (pw && isEncryptedFile(payload.content)) {
+      if (isEncryptedFile(payload.content)) {
+        const pk = cryptoCache.getPrivateKey();
+        const pw = cryptoCache.getPassword();
         try {
-          tempPlain = await decryptFileContent(payload.content, pw);
+          tempPlain = pk
+            ? await decryptWithPrivateKey(payload.content, pk)
+            : pw
+              ? await decryptFileContent(payload.content, pw)
+              : (() => { throw new Error("no key"); })();
         } catch {
-          // If decryption fails, show raw
+          alert(t("crypt.wrongPassword"));
+          return;
         }
       }
       setTempDiffData({

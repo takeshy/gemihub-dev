@@ -102,7 +102,7 @@ When encryption is enabled and `encryptChatHistory` / `encryptWorkflowHistory` a
 
 - **Password is never stored** — only the encrypted private key and salt are saved in settings
 - **Decryption happens in the browser** — encrypted files and history records are decrypted client-side using the Web Crypto API; the server never sees plaintext of encrypted content
-- **Encryption uses server-side crypto for saving** — when saving new encrypted content, the server encrypts using the public key (no password needed) before writing to Drive
+- **Encryption for saving uses the public key only** — the server calls the same shared crypto module (`crypto-core.ts`) to encrypt with the public key; no password is needed for encryption
 - **Each file has a unique AES key** — compromising one file's AES key does not affect others
 - **RSA key pair is generated once** — stored encrypted with your password in settings
 - **Forgetting your password means data loss** — there is no recovery mechanism
