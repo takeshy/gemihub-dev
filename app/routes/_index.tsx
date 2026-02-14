@@ -6,6 +6,7 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import { DEFAULT_USER_SETTINGS, type UserSettings } from "~/types/settings";
+import { resolveLanguage } from "~/i18n/resolve-language";
 import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus, WifiOff, AlertTriangle, Loader2, Check, AlertCircle } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
@@ -55,10 +56,12 @@ export async function loader({ request }: Route.LoaderArgs) {
       ...(driveSettings.plugins || []).filter((p) => !localIds.has(p.id)),
     ];
     const settings = { ...driveSettings, plugins: mergedPlugins };
+    const acceptLanguage = request.headers.get("Accept-Language");
+    const effectiveLanguage = resolveLanguage(settings.language ?? "en", acceptLanguage);
 
     return data(
       {
-        settings: settings as UserSettings,
+        settings: { ...settings, language: effectiveLanguage } as UserSettings,
         hasGeminiApiKey: !!validTokens.geminiApiKey,
         hasEncryptedApiKey: !!settings.encryptedApiKey,
         rootFolderId: validTokens.rootFolderId,
@@ -70,8 +73,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     if (e instanceof Response) throw e;
     // Network error (Google API unreachable) — return offline-compatible data
     // so the client can fall back to IndexedDB-cached settings.
+    const acceptLanguage = request.headers.get("Accept-Language");
     return data({
-      settings: DEFAULT_USER_SETTINGS,
+      settings: { ...DEFAULT_USER_SETTINGS, language: resolveLanguage(null, acceptLanguage) },
       hasGeminiApiKey: !!tokens.geminiApiKey,
       hasEncryptedApiKey: false,
       rootFolderId: tokens.rootFolderId,
@@ -140,7 +144,7 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
     // redirecting to /lp (which also fails offline and shows a blank page)
     if (!navigator.onLine) {
       cachedLoaderData = {
-        settings: DEFAULT_USER_SETTINGS as LoaderData["settings"],
+        settings: { ...DEFAULT_USER_SETTINGS, language: resolveLanguage(null, navigator.language) } as LoaderData["settings"],
         hasGeminiApiKey: false,
         hasEncryptedApiKey: false,
         rootFolderId: "",
@@ -208,7 +212,7 @@ function IDELayout({
   initialOffline: boolean;
 }) {
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(initialHasGeminiApiKey);
-  useApplySettings(settings.language, settings.fontSize, settings.theme);
+  useApplySettings(settings.language ?? "en", settings.fontSize, settings.theme);
   const [searchParams] = useSearchParams();
 
   // Active file state — use local state to avoid React Router navigation on file switch
@@ -499,9 +503,9 @@ function IDELayout({
   );
 
   return (
-    <I18nProvider language={settings.language}>
+    <I18nProvider language={settings.language ?? "en"}>
       <EditorContextProvider>
-      <PluginProvider pluginConfigs={settings.plugins || []} language={settings.language}>
+      <PluginProvider pluginConfigs={settings.plugins || []} language={settings.language ?? "en"}>
       <IDEContent
         settings={settings}
         hasGeminiApiKey={hasGeminiApiKey}
@@ -1098,7 +1102,7 @@ function IDEContent({
       {activePluginMainView ? (
         <div className="flex-1 overflow-auto p-4">
           {getPluginAPI(activePluginMainView.pluginId) ? (
-            <activePluginMainView.component api={getPluginAPI(activePluginMainView.pluginId)!} language={settings.language} fileId={activeFileId ?? undefined} fileName={activeFileName ?? undefined} />
+            <activePluginMainView.component api={getPluginAPI(activePluginMainView.pluginId)!} language={settings.language ?? "en"} fileId={activeFileId ?? undefined} fileName={activeFileName ?? undefined} />
           ) : null}
         </div>
       ) : (
@@ -1120,7 +1124,7 @@ function IDEContent({
       {activePluginSidebarView ? (
         <div className="h-full overflow-auto p-2">
           {getPluginAPI(activePluginSidebarView.pluginId) ? (
-            <activePluginSidebarView.component api={getPluginAPI(activePluginSidebarView.pluginId)!} language={settings.language} />
+            <activePluginSidebarView.component api={getPluginAPI(activePluginSidebarView.pluginId)!} language={settings.language ?? "en"} />
           ) : null}
         </div>
       ) : rightPanel === "chat" ? (

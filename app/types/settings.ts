@@ -539,7 +539,7 @@ export interface UserSettings {
   maxFunctionCalls: number;
   functionCallWarningThreshold: number;
   rootFolderName: string;
-  language: Language;
+  language: Language | null;
   fontSize: FontSize;
   theme: Theme;
   slashCommands: SlashCommand[];
@@ -565,7 +565,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   maxFunctionCalls: 20,
   functionCallWarningThreshold: 5,
   rootFolderName: "GeminiHub",
-  language: "en",
+  language: null,
   fontSize: 16,
   theme: "system",
   slashCommands: [],

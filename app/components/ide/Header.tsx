@@ -8,6 +8,7 @@ import {
   Puzzle,
   Search,
   WifiOff,
+  HelpCircle,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { SyncStatusBar } from "./SyncStatusBar";
@@ -204,11 +205,23 @@ export function Header({
         {/* Settings */}
         <Link
           to="/settings"
-          className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+          className="flex items-center gap-1 rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
           title={t("common.settings")}
         >
           <Settings size={ICON.MD} />
+          {!isMobile && <span className="text-sm">{t("common.settings")}</span>}
         </Link>
+
+        {/* Manual */}
+        <a
+          href="/manual"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+          title={t("header.manual")}
+        >
+          <HelpCircle size={ICON.MD} />
+        </a>
 
         {/* Logout */}
         <a

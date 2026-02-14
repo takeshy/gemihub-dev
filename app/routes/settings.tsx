@@ -4,6 +4,7 @@ import type { Route } from "./+types/settings";
 import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
+import { resolveLanguage } from "~/i18n/resolve-language";
 import { rebuildSyncMeta } from "~/services/sync-meta.server";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
 import {
@@ -126,10 +127,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     ...(driveSettings.plugins || []).filter((p) => !localIds.has(p.id)),
   ];
   const settings = { ...driveSettings, plugins: mergedPlugins };
+  const acceptLanguage = request.headers.get("Accept-Language");
+  const effectiveLanguage = resolveLanguage(settings.language, acceptLanguage);
 
   return data(
     {
-      settings,
+      settings: { ...settings, language: effectiveLanguage },
       hasApiKey: !!validTokens.geminiApiKey,
       maskedKey: validTokens.geminiApiKey ? maskApiKey(validTokens.geminiApiKey) : null,
     },
@@ -422,7 +425,8 @@ export default function Settings() {
   const { settings, hasApiKey, maskedKey } = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<TabId>("general");
 
-  useApplySettings(settings.language, settings.fontSize, settings.theme);
+  const effectiveLang = settings.language ?? "en";
+  useApplySettings(effectiveLang, settings.fontSize, settings.theme);
 
   // Detect OAuth redirect return from mobile flow
   useEffect(() => {
@@ -437,8 +441,8 @@ export default function Settings() {
   }, []);
 
   return (
-    <I18nProvider language={settings.language}>
-      <PluginProvider pluginConfigs={settings.plugins || []} language={settings.language}>
+    <I18nProvider language={effectiveLang}>
+      <PluginProvider pluginConfigs={settings.plugins || []} language={effectiveLang}>
         <SettingsInner
           settings={settings}
           hasApiKey={hasApiKey}
@@ -614,7 +618,7 @@ function GeneralTab({
     settings.selectedModel || ""
   );
   const [systemPrompt, setSystemPrompt] = useState(settings.systemPrompt);
-  const [language, setLanguage] = useState<Language>(settings.language);
+  const [language, setLanguage] = useState<Language>(settings.language ?? "en");
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
   const availableModels = getAvailableModels(apiPlan);

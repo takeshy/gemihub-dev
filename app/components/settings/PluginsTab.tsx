@@ -25,7 +25,7 @@ interface PluginsTabProps {
 }
 
 export function PluginsTab({ settings }: PluginsTabProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { settingsTabs, getPluginAPI } = usePlugins();
   const [plugins, setPlugins] = useState<PluginConfig[]>(
     settings.plugins || []
@@ -365,7 +365,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
                   {isSettingsOpen && settingsTab && api && (
                     <div className="border border-t-0 border-gray-200 dark:border-gray-700 rounded-b-md p-4 bg-white dark:bg-gray-900">
                       <PanelErrorBoundary fallbackLabel={`${plugin.id} settings error`}>
-                        <settingsTab.component api={api} language={settings.language} onClose={() => setOpenSettingsId(null)} />
+                        <settingsTab.component api={api} language={language} onClose={() => setOpenSettingsId(null)} />
                       </PanelErrorBoundary>
                     </div>
                   )}
