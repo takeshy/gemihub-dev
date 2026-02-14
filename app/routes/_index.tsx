@@ -57,7 +57,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     ];
     const settings = { ...driveSettings, plugins: mergedPlugins };
     const acceptLanguage = request.headers.get("Accept-Language");
-    const effectiveLanguage = resolveLanguage(settings.language ?? "en", acceptLanguage);
+    const effectiveLanguage = resolveLanguage(settings.language, acceptLanguage);
 
     return data(
       {
