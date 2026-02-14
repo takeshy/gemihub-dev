@@ -136,11 +136,16 @@ export function useSync() {
       setLocalModifiedCount(pushCount);
 
       // --- Pull count ---
-      // Include localOnly files that are in localMeta (remotely deleted) so user knows pull is needed.
-      // Exclude localOnly files only in editHistory (new local files — shown in push badge).
-      // Exclude conflicts — they are shown in the conflict dialog, not pull.
-      const pullLocalOnly = diff.localOnly.filter(id => id in localFiles);
-      setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + pullLocalOnly.length);
+      // When remoteMeta is null (no sync meta on Drive), there is nothing to pull.
+      if (!remoteMeta) {
+        setRemoteModifiedCount(0);
+      } else {
+        // Include localOnly files that are in localMeta (remotely deleted) so user knows pull is needed.
+        // Exclude localOnly files only in editHistory (new local files — shown in push badge).
+        // Exclude conflicts — they are shown in the conflict dialog, not pull.
+        const pullLocalOnly = diff.localOnly.filter(id => id in localFiles);
+        setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + pullLocalOnly.length);
+      }
     } catch {
       // ignore
     }
