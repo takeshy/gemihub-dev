@@ -114,6 +114,23 @@ export interface TranslationStrings {
   "settings.rag.applyAndSync": string;
   "settings.rag.noFiles": string;
   "settings.rag.reloadConfirm": string;
+  "settings.rag.addSetting": string;
+  "settings.rag.noSettings": string;
+  "settings.rag.copyStoreId": string;
+  "settings.rag.external": string;
+  "settings.rag.internal": string;
+  "settings.rag.sync": string;
+  "settings.rag.type": string;
+  "settings.rag.typeInternal": string;
+  "settings.rag.typeExternal": string;
+  "settings.rag.storeIdsLabel": string;
+  "settings.rag.targetFoldersLabel": string;
+  "settings.rag.targetFoldersHint": string;
+  "settings.rag.excludePatternsLabel": string;
+  "settings.rag.syncSaveFailed": string;
+  "settings.rag.syncFailed": string;
+  "settings.rag.noResponseBody": string;
+  "settings.rag.syncError": string;
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": string;
@@ -293,6 +310,12 @@ export interface TranslationStrings {
   "plugins.invalidRepo": string;
   "plugins.settings": string;
   "plugins.reloadConfirm": string;
+  "plugins.installFailed": string;
+  "plugins.toggleFailed": string;
+  "plugins.updateFailed": string;
+  "plugins.uninstallFailed": string;
+  "plugins.localCannotUninstall": string;
+  "plugins.localBadge": string;
 
   // Commands tab
   "settings.tab.commands": string;
@@ -543,6 +566,23 @@ const en: TranslationStrings = {
   "settings.rag.applyAndSync": "Apply & Sync",
   "settings.rag.noFiles": "No files found.",
   "settings.rag.reloadConfirm": "RAG registration complete. Reload to enable RAG search?",
+  "settings.rag.addSetting": "Add Setting",
+  "settings.rag.noSettings": "No RAG settings configured.",
+  "settings.rag.copyStoreId": "Copy Store ID",
+  "settings.rag.external": "External",
+  "settings.rag.internal": "Internal",
+  "settings.rag.sync": "Sync",
+  "settings.rag.type": "Type",
+  "settings.rag.typeInternal": "Internal (Google Drive folders)",
+  "settings.rag.typeExternal": "External (store IDs)",
+  "settings.rag.storeIdsLabel": "Store IDs (one per line)",
+  "settings.rag.targetFoldersLabel": "Target Folders (one per line, name or ID)",
+  "settings.rag.targetFoldersHint": "Folder names (e.g. {example}) or Drive folder IDs. Leave empty to use the root folder.",
+  "settings.rag.excludePatternsLabel": "Exclude Patterns (one per line, regex)",
+  "settings.rag.syncSaveFailed": "Failed to save settings before sync.",
+  "settings.rag.syncFailed": "Sync failed.",
+  "settings.rag.noResponseBody": "No response body.",
+  "settings.rag.syncError": "Sync error.",
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "Encrypt Chat History",
@@ -722,6 +762,12 @@ const en: TranslationStrings = {
   "plugins.invalidRepo": "Invalid repository format. Use owner/repo.",
   "plugins.settings": "Settings",
   "plugins.reloadConfirm": "Reload to activate changes?",
+  "plugins.installFailed": "Install failed",
+  "plugins.toggleFailed": "Toggle failed",
+  "plugins.updateFailed": "Update failed",
+  "plugins.uninstallFailed": "Uninstall failed",
+  "plugins.localCannotUninstall": "Local plugins cannot be uninstalled from the UI.",
+  "plugins.localBadge": "Local",
 
   // Commands tab
   "settings.tab.commands": "Commands",
@@ -771,7 +817,7 @@ const en: TranslationStrings = {
   "search.localMode": "Local",
   "search.localNote": "Only cached files are searched.",
   "search.modelLabel": "Model",
-  "settings.rag.searchTip": "When RAG is configured, file search (magnifying glass / Ctrl+Shift+F) defaults to semantic RAG search. You can also switch to Drive or Local search.",
+  "settings.rag.searchTip": "When the gemihub (auto) RAG is configured, a semantic RAG search tab is available in file search (magnifying glass / Ctrl+Shift+F). You can switch between Local, Drive, and RAG search.",
 
   // Quick Open
   "quickOpen.placeholder": "Search files...",
@@ -840,7 +886,7 @@ const en: TranslationStrings = {
 
   // Shortcuts tab
   "settings.tab.shortcuts": "Shortcuts",
-  "settings.shortcuts.description": "Assign keyboard shortcuts to quickly execute your workflows.",
+  "settings.shortcuts.description": "Assign keyboard shortcuts to quickly execute your workflows. Selecting Background executes the workflow without opening the workflow screen. If the workflow has a file picker dialog, the currently open file is automatically selected.",
   "settings.shortcuts.noShortcuts": "No shortcut keys configured. Add a shortcut to execute a workflow with a key combination.",
   "settings.shortcuts.addShortcut": "Add Shortcut",
   "settings.shortcuts.pressKey": "Press a key...",
@@ -972,6 +1018,23 @@ const ja: TranslationStrings = {
   "settings.rag.applyAndSync": "適用 & 同期",
   "settings.rag.noFiles": "ファイルが見つかりません。",
   "settings.rag.reloadConfirm": "RAG登録が完了しました。リロードしてRAG検索を有効にしますか？",
+  "settings.rag.addSetting": "設定を追加",
+  "settings.rag.noSettings": "RAG設定がありません。",
+  "settings.rag.copyStoreId": "Store IDをコピー",
+  "settings.rag.external": "外部",
+  "settings.rag.internal": "内部",
+  "settings.rag.sync": "同期",
+  "settings.rag.type": "タイプ",
+  "settings.rag.typeInternal": "内部（Google Driveフォルダ）",
+  "settings.rag.typeExternal": "外部（Store ID）",
+  "settings.rag.storeIdsLabel": "Store ID（1行に1つ）",
+  "settings.rag.targetFoldersLabel": "対象フォルダ（1行に1つ、名前またはID）",
+  "settings.rag.targetFoldersHint": "フォルダ名（例: {example}）またはDriveフォルダID。空欄の場合はルートフォルダが対象になります。",
+  "settings.rag.excludePatternsLabel": "除外パターン（1行に1つ、正規表現）",
+  "settings.rag.syncSaveFailed": "同期前の設定保存に失敗しました。",
+  "settings.rag.syncFailed": "同期に失敗しました。",
+  "settings.rag.noResponseBody": "レスポンスがありません。",
+  "settings.rag.syncError": "同期エラー。",
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "チャット履歴を暗号化",
@@ -1151,6 +1214,12 @@ const ja: TranslationStrings = {
   "plugins.invalidRepo": "リポジトリの形式が無効です。owner/repo の形式で入力してください。",
   "plugins.settings": "設定",
   "plugins.reloadConfirm": "リロードして変更を反映しますか？",
+  "plugins.installFailed": "インストールに失敗しました",
+  "plugins.toggleFailed": "切り替えに失敗しました",
+  "plugins.updateFailed": "更新に失敗しました",
+  "plugins.uninstallFailed": "アンインストールに失敗しました",
+  "plugins.localCannotUninstall": "ローカルプラグインはUIからアンインストールできません。",
+  "plugins.localBadge": "ローカル",
 
   // Commands tab
   "settings.tab.commands": "コマンド",
@@ -1200,7 +1269,7 @@ const ja: TranslationStrings = {
   "search.localMode": "ローカル",
   "search.localNote": "キャッシュ済みファイルのみが検索対象です。",
   "search.modelLabel": "モデル",
-  "settings.rag.searchTip": "RAGが設定されている場合、ファイル検索（虫めがね / Ctrl+Shift+F）はデフォルトでセマンティックRAG検索を使用します。Drive検索やローカル検索に切り替えることもできます。",
+  "settings.rag.searchTip": "gemihub（自動）のRAGが設定されている場合、ファイル検索（虫めがね / Ctrl+Shift+F）でセマンティックRAG検索タブが利用できます。ローカル・Drive・RAG検索を切り替えられます。",
 
   // Quick Open
   "quickOpen.placeholder": "ファイルを検索...",
@@ -1269,7 +1338,7 @@ const ja: TranslationStrings = {
 
   // Shortcuts tab
   "settings.tab.shortcuts": "ショートカット",
-  "settings.shortcuts.description": "キーボードショートカットを割り当てて、作成済みのワークフローをすばやく実行できます。",
+  "settings.shortcuts.description": "キーボードショートカットを割り当てて、作成済みのワークフローをすばやく実行できます。バックグラウンドを選ぶとワークフロー画面を開かずに実行できます。ファイルを選択するダイアログがある場合は、現在開いているファイルが自動的に選択されます。",
   "settings.shortcuts.noShortcuts": "ショートカットキーは設定されていません。ショートカットを追加して、キー操作でワークフローを実行できます。",
   "settings.shortcuts.addShortcut": "ショートカットを追加",
   "settings.shortcuts.pressKey": "キーを押してください...",

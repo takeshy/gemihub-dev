@@ -21,7 +21,7 @@ export interface PluginView {
   icon?: string;
   location: "sidebar" | "main";
   extensions?: string[];
-  component: React.ComponentType<{ api: PluginAPI; fileId?: string; fileName?: string }>;
+  component: React.ComponentType<{ api: PluginAPI; language?: string; fileId?: string; fileName?: string }>;
 }
 
 /** Slash command registered by a plugin */
@@ -35,7 +35,7 @@ export interface PluginSlashCommand {
 /** Settings tab registered by a plugin */
 export interface PluginSettingsTab {
   pluginId: string;
-  component: React.ComponentType<{ api: PluginAPI; onClose?: () => void }>;
+  component: React.ComponentType<{ api: PluginAPI; language?: string; onClose?: () => void }>;
 }
 
 /** API exposed to plugins */
@@ -50,7 +50,7 @@ export interface PluginAPI {
     icon?: string;
     location: "sidebar" | "main";
     extensions?: string[];
-    component: React.ComponentType<{ api: PluginAPI; fileId?: string; fileName?: string }>;
+    component: React.ComponentType<{ api: PluginAPI; language?: string; fileId?: string; fileName?: string }>;
   }): void;
   registerSlashCommand(cmd: {
     name: string;
@@ -58,7 +58,7 @@ export interface PluginAPI {
     execute: (args: string) => Promise<string>;
   }): void;
   registerSettingsTab(tab: {
-    component: React.ComponentType<{ api: PluginAPI; onClose?: () => void }>;
+    component: React.ComponentType<{ api: PluginAPI; language?: string; onClose?: () => void }>;
   }): void;
 
   // Gemini API (via host /api/chat)

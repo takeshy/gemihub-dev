@@ -1098,7 +1098,7 @@ function IDEContent({
       {activePluginMainView ? (
         <div className="flex-1 overflow-auto p-4">
           {getPluginAPI(activePluginMainView.pluginId) ? (
-            <activePluginMainView.component api={getPluginAPI(activePluginMainView.pluginId)!} fileId={activeFileId ?? undefined} fileName={activeFileName ?? undefined} />
+            <activePluginMainView.component api={getPluginAPI(activePluginMainView.pluginId)!} language={settings.language} fileId={activeFileId ?? undefined} fileName={activeFileName ?? undefined} />
           ) : null}
         </div>
       ) : (
@@ -1120,7 +1120,7 @@ function IDEContent({
       {activePluginSidebarView ? (
         <div className="h-full overflow-auto p-2">
           {getPluginAPI(activePluginSidebarView.pluginId) ? (
-            <activePluginSidebarView.component api={getPluginAPI(activePluginSidebarView.pluginId)!} />
+            <activePluginSidebarView.component api={getPluginAPI(activePluginSidebarView.pluginId)!} language={settings.language} />
           ) : null}
         </div>
       ) : rightPanel === "chat" ? (

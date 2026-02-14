@@ -67,7 +67,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        showStatus("error", data.error || "Install failed");
+        showStatus("error", data.error || t("plugins.installFailed"));
         return;
       }
       setPlugins((prev) => {
@@ -88,7 +88,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
     } catch (err) {
       showStatus(
         "error",
-        err instanceof Error ? err.message : "Install failed"
+        err instanceof Error ? err.message : t("plugins.installFailed")
       );
     } finally {
       setInstalling(false);
@@ -114,7 +114,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
           invalidateIndexCache();
         }
       } catch {
-        showStatus("error", "Toggle failed");
+        showStatus("error", t("plugins.toggleFailed"));
       } finally {
         setTogglingId(null);
       }
@@ -128,7 +128,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
       if (plugin?.source === "local") {
         showStatus(
           "error",
-          "Local plugins cannot be uninstalled from the UI."
+          t("plugins.localCannotUninstall")
         );
         return;
       }
@@ -146,7 +146,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
           showStatus("success", t("plugins.uninstalled"));
         }
       } catch {
-        showStatus("error", "Uninstall failed");
+        showStatus("error", t("plugins.uninstallFailed"));
       } finally {
         setDeletingId(null);
       }
@@ -176,10 +176,10 @@ export function PluginsTab({ settings }: PluginsTabProps) {
             window.location.reload();
           }
         } else {
-          showStatus("error", data.error || "Update failed");
+          showStatus("error", data.error || t("plugins.updateFailed"));
         }
       } catch {
-        showStatus("error", "Update failed");
+        showStatus("error", t("plugins.updateFailed"));
       } finally {
         setUpdatingId(null);
       }
@@ -280,7 +280,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
                         </span>
                         {plugin.source === "local" && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium">
-                            Local
+                            {t("plugins.localBadge")}
                           </span>
                         )}
                       </div>
@@ -365,7 +365,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
                   {isSettingsOpen && settingsTab && api && (
                     <div className="border border-t-0 border-gray-200 dark:border-gray-700 rounded-b-md p-4 bg-white dark:bg-gray-900">
                       <PanelErrorBoundary fallbackLabel={`${plugin.id} settings error`}>
-                        <settingsTab.component api={api} onClose={() => setOpenSettingsId(null)} />
+                        <settingsTab.component api={api} language={settings.language} onClose={() => setOpenSettingsId(null)} />
                       </PanelErrorBoundary>
                     </div>
                   )}

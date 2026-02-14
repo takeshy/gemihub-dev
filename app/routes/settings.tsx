@@ -2612,7 +2612,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
       fd.set("ragRegistrationOnPush", hasGemihub ? "on" : "off");
       const saveRes = await fetch("/settings", { method: "POST", body: fd });
       if (!saveRes.ok) {
-        setSyncMsg("Failed to save settings before sync.");
+        setSyncMsg(t("settings.rag.syncSaveFailed"));
         return;
       }
 
@@ -2624,13 +2624,13 @@ function RagTab({ settings }: { settings: UserSettings }) {
 
       if (!res.ok) {
         const data = await res.json();
-        setSyncMsg(data.error || "Sync failed.");
+        setSyncMsg(data.error || t("settings.rag.syncFailed"));
         return;
       }
 
       const reader = res.body?.getReader();
       if (!reader) {
-        setSyncMsg("No response body.");
+        setSyncMsg(t("settings.rag.noResponseBody"));
         return;
       }
 
@@ -2671,7 +2671,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
         }
       }
     } catch (err) {
-      setSyncMsg(err instanceof Error ? err.message : "Sync error.");
+      setSyncMsg(err instanceof Error ? err.message : t("settings.rag.syncError"));
     } finally {
       setSyncing(false);
     }
@@ -2858,12 +2858,12 @@ function RagTab({ settings }: { settings: UserSettings }) {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
           >
             <Plus size={14} />
-            Add Setting
+            {t("settings.rag.addSetting")}
           </button>
         </div>
 
         {settingNames.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400 italic">No RAG settings configured.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 italic">{t("settings.rag.noSettings")}</p>
         ) : (
           <div className="border border-gray-200 dark:border-gray-700 rounded-md divide-y divide-gray-200 dark:divide-gray-700">
             {settingNames.map((name) => {
@@ -2922,7 +2922,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
                               setTimeout(() => setCopiedStoreId(null), 1500);
                             }}
                             className="shrink-0 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-                            title="Copy Store ID"
+                            title={t("settings.rag.copyStoreId")}
                           >
                             {copiedStoreId === s.storeId ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-gray-400" />}
                           </button>
@@ -2959,7 +2959,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
                         ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
                         : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
                     }`}>
-                      {s.isExternal ? "External" : "Internal"}
+                      {s.isExternal ? t("settings.rag.external") : t("settings.rag.internal")}
                     </span>
 
                     {/* Auto badge for gemihub setting */}
@@ -2981,7 +2981,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
                       className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-xs disabled:opacity-50"
                     >
                       <RefreshCw size={12} className={syncing && syncingKey === name ? "animate-spin" : ""} />
-                      Sync
+                      {t("settings.rag.sync")}
                     </button>
 
                     {/* Edit (pencil) */}
@@ -3022,11 +3022,11 @@ function RagTab({ settings }: { settings: UserSettings }) {
                     <div className="px-4 py-4 bg-gray-50 dark:bg-gray-800/50 space-y-4 border-t border-gray-200 dark:border-gray-700">
                       {/* Internal / External toggle */}
                       <div>
-                        <Label>Type</Label>
+                        <Label>{t("settings.rag.type")}</Label>
                         <div className="flex gap-4 mt-1">
                           {[
-                            { value: false, label: "Internal (Google Drive folders)" },
-                            { value: true, label: "External (store IDs)" },
+                            { value: false, label: t("settings.rag.typeInternal") },
+                            { value: true, label: t("settings.rag.typeExternal") },
                           ].map((opt) => (
                             <label
                               key={String(opt.value)}
@@ -3046,7 +3046,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
 
                       {s.isExternal ? (
                         <div>
-                          <Label htmlFor={`rag-storeIds-${name}`}>Store IDs (one per line)</Label>
+                          <Label htmlFor={`rag-storeIds-${name}`}>{t("settings.rag.storeIdsLabel")}</Label>
                           <textarea
                             id={`rag-storeIds-${name}`}
                             rows={3}
@@ -3067,7 +3067,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
                       ) : (
                         <>
                           <div>
-                            <Label htmlFor={`rag-targetFolders-${name}`}>Target Folders (one per line, name or ID)</Label>
+                            <Label htmlFor={`rag-targetFolders-${name}`}>{t("settings.rag.targetFoldersLabel")}</Label>
                             <textarea
                               id={`rag-targetFolders-${name}`}
                               rows={3}
@@ -3085,11 +3085,11 @@ function RagTab({ settings }: { settings: UserSettings }) {
                               className={inputClass + " font-mono resize-y"}
                             />
                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              Folder names (e.g. <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">workflows</code>) or Drive folder IDs. Leave empty to use the root folder.
+                              {t("settings.rag.targetFoldersHint").replace("{example}", "workflows")}
                             </p>
                           </div>
                           <div>
-                            <Label htmlFor={`rag-excludePatterns-${name}`}>Exclude Patterns (one per line, regex)</Label>
+                            <Label htmlFor={`rag-excludePatterns-${name}`}>{t("settings.rag.excludePatternsLabel")}</Label>
                             <textarea
                               id={`rag-excludePatterns-${name}`}
                               rows={2}
@@ -3133,7 +3133,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
                           onClick={() => saveRagSettings()}
                           className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium"
                         >
-                          Save
+                          {t("common.save")}
                         </button>
                       )}
 
