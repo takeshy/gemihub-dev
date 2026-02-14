@@ -96,6 +96,11 @@ export function setCancelled(
 ): void {
   const state = executions.get(executionId);
   if (!state) return;
+  // Guard: if already cancelled, only update record if provided (no re-broadcast)
+  if (state.status === "cancelled") {
+    if (record) state.record = record;
+    return;
+  }
   state.status = "cancelled";
   state.record = record;
   broadcast(executionId, "status", JSON.stringify({ status: "cancelled" }));

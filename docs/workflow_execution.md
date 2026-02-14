@@ -27,8 +27,8 @@ Workflow {
   nodes: Map<string, WorkflowNode>   // Node ID → node definition
   edges: WorkflowEdge[]              // Connections between nodes
   startNode: string                  // Entry point node ID
-  options?: WorkflowOptions          // { showProgress?: boolean }
-  positions?: Map<string, Position>  // Visual positions for diagram
+  options?: WorkflowOptions          // { showProgress?: boolean } — show per-node progress logs in the UI during execution
+  positions?: Record<string, { x: number; y: number }>  // Visual positions for diagram
 }
 ```
 
@@ -91,8 +91,10 @@ External dependencies injected into handlers:
 ServiceContext {
   driveAccessToken: string
   driveRootFolderId: string
+  driveHistoryFolderId: string            // Folder ID for edit history files
   geminiApiKey?: string
   abortSignal?: AbortSignal
+  editHistorySettings?: EditHistorySettings  // Remote edit history config
   settings?: UserSettings
   onDriveFileUpdated?: (data) => void   // Broadcast to SSE
   onDriveFileCreated?: (data) => void   // Broadcast to SSE
@@ -122,6 +124,7 @@ ExecutionRecord {
   endTime: string
   status: "running" | "completed" | "error" | "cancelled"
   steps: ExecutionStep[]   // Per-node input/output/status/error
+  isEncrypted?: boolean    // Whether the record is encrypted
 }
 ```
 
@@ -180,7 +183,7 @@ Execution uses Server-Sent Events for real-time updates.
 | Event | Description |
 |-------|-------------|
 | `log` | Node execution log (nodeId, nodeType, message, status, input/output) |
-| `status` | Status change (running / completed / error / cancelled / waiting-prompt) |
+| `status` | Status change (`running` / `completed` / `error` / `cancelled` / `waiting-prompt`) |
 | `complete` | Execution finished with record and optional openFile |
 | `cancelled` | User stopped execution |
 | `error` | Fatal error message |
@@ -229,7 +232,7 @@ ExecutionState {
 
 - `broadcast(id, event, data)` calls all SSE subscribers
 - Existing logs are replayed when a new subscriber connects
-- Executions are cleaned up after 30 minutes
+- Executions are cleaned up after 30 minutes of inactivity (measured from the last log entry timestamp, or `createdAt` if no logs exist). Executions in `running` or `waiting-prompt` status are skipped during cleanup
 
 ---
 
@@ -331,6 +334,42 @@ All 24 node types are dispatched to isolated handler functions in `app/engine/ha
 | `handleMcpNode` | `mcp` | Call MCP tool via HTTP with OAuth support |
 | `handleRagSyncNode` | `rag-sync` | Sync Drive file to Gemini RAG store |
 | `handleGemihubCommandNode` | `gemihub-command` | Special commands: encrypt, publish, unpublish, duplicate, convert-to-pdf, convert-to-html, rename |
+
+### Handler Property Details
+
+#### `drive-file` additional properties
+
+| Property | Description |
+|----------|-------------|
+| `history` | Set to `"true"` to record edit history for the file (requires `editHistorySettings` in ServiceContext) |
+| `open` | Set to `"true"` to open the file in the editor after writing (sets `__openFile` variable) |
+| `confirm` | Set to `"false"` to skip the diff confirmation dialog before writing (default: `"true"`) |
+
+#### `command` additional properties
+
+| Property | Description |
+|----------|-------------|
+| `attachments` | Comma-separated variable names containing FileExplorerData. Files are sent as Gemini attachments (image/pdf/text). If the FileExplorerData has an `id` but no `data`, the file is read from Drive automatically |
+| `systemPrompt` | System prompt passed to the Gemini model. Supports `{{variable}}` templates |
+| `saveImageTo` | Variable name to save generated image data as FileExplorerData (for image generation models) |
+
+#### `drive-file-picker` modes
+
+| Mode | Description |
+|------|-------------|
+| `select` (default) | Shows an interactive file picker to select an existing Drive file |
+| `create` | Shows a text input for the user to enter a file path. Does not create the file; returns the path string. Useful with `drive-save` or `drive-file` nodes |
+
+#### `http` contentType: `binary`
+
+When `contentType` is `"binary"`, the body is parsed as FileExplorerData. The base64 `data` field is decoded and sent as a raw binary body. The `mimeType` from the FileExplorerData is used as `Content-Type` if not explicitly set in headers. Falls back to trying the body as a variable reference to FileExplorerData.
+
+#### `gemihub-command` property notes
+
+| Command | `text` property |
+|---------|-----------------|
+| `rename` | Required — specifies the new file name |
+| `duplicate` | Optional — specifies the new file name (defaults to `"{stem} (copy){ext}"`) |
 
 ---
 
