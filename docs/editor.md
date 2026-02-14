@@ -17,6 +17,32 @@ File editing system with a WYSIWYG markdown editor, visual workflow editor, HTML
 
 ---
 
+## New File Creation
+
+The file tree toolbar provides a **New File** button that opens a creation dialog. In addition to specifying a file name and extension, you can optionally include date/time and geolocation metadata in the initial file content.
+
+![New File Dialog](/images/editor_new.png)
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| **Add date/time** | Inserts the current date and time (`YYYY-MM-DD HH:MM:SS`) at the top of the file |
+| **Add location** | Requests browser geolocation and inserts latitude/longitude coordinates |
+
+- Checkbox preferences are saved to `localStorage` and restored on the next file creation
+- For `.md` files, labels use bold formatting (`**Date:**`, `**Location:**`); other file types use plain text
+- Geolocation uses the Web Geolocation API with a 10-second timeout; silently skipped on failure
+- Default file name follows the format `YYYY/MM/DD_HH_MM_SS`
+
+### Using Location Data with AI Chat
+
+When a memo contains latitude and longitude, you can ask the AI in the chat panel to identify the place name. The AI reads the file content via the `read_drive_file` function call and resolves the coordinates to a human-readable location.
+
+![Memo with Location and AI Chat](/images/editor_memo.png)
+
+---
+
 ## File-Type-Specific Editors
 
 `MainViewer` switches the display component based on file extension and MIME type.
