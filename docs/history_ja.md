@@ -6,7 +6,7 @@
 
 | レイヤー | ストレージ | diff の生成方法 | 保持期間 |
 |---------|-----------|---------------|---------|
-| **ローカル** | IndexedDB `editHistory` ストア | クライアントの自動保存がベースから現在の内容への diff を計算 | ファイル単位: Push 時にクリア。Full Pull で全クリア |
+| **ローカル** | IndexedDB `editHistory` ストア | クライアントの自動保存がベースから現在の内容への diff を計算 | ファイル単位: Push 時にクリア（差し戻しファイル含む）。Full Pull で全クリア |
 | **リモート** | Drive のファイルごとの `.history.json` | サーバーが Drive 上の旧コンテンツと Push された新コンテンツの diff を計算 | 編集履歴設定に従い保持 |
 
 2つのレイヤーは独立しており、ローカルの diff は Drive にアップロード **されません**。Push 時、サーバーが Drive 側の旧コンテンツと Push された新コンテンツから独自に diff を計算し、`.history.json` に追記します。
@@ -27,6 +27,8 @@
 逆適用に失敗した場合（例: 外部からの内容変更によるパッチ不一致）、コミット境界が挿入されて破損した diff が確定され、現在の旧キャッシュ内容から新セッションが開始されます。
 
 セッション中は最後の diff が継続的に上書きされるため、アクティブなセッションは常に `base → 現在の内容` を表す **1つの非空 diff エントリ** のみを持ちます。
+
+**差し戻し検出:** 累積 diff の追加・削除がともにゼロの場合（内容がセッション開始時のベースと一致）、`saveLocalEdit` は古い diff エントリをクリーンアップします。有意な diff が残っていなければ editHistory エントリ自体が削除され、`"reverted"` が返されます。これにより、ファイルツリーのインジケーターが黄色（変更あり）から緑（キャッシュ済み）に切り替わります。
 
 > **注:** `saveLocalEdit` は自動保存以外からも呼ばれます: AI チャットによるファイル更新（`ChatPanel`）、ワークフロー実行によるファイル更新（`useWorkflowExecution`）、ドラッグ&ドロップによるファイルインポート（`DriveFileTree`）、テンプファイルのマージ（`TempFilesDialog`）。すべての呼び出し元は `setCachedFile` の前に `saveLocalEdit` を呼び出します。
 
@@ -83,7 +85,7 @@
 - **Push**（`api.sync.tsx` `pushFiles` アクション）: バックグラウンドで履歴保存（fire-and-forget、best-effort）
 - **直接ファイル更新**（`api.drive.files.tsx` `update` アクション）: インラインで履歴保存（await、best-effort）
 
-Push 後、ローカルの IndexedDB 編集履歴は Push に成功したファイル分がクリアされます（キャッシュが Drive と一致するため、ローカル diff は不要になります）。Push に失敗したファイルはローカル編集履歴が保持されます。
+Push 後、ローカルの IndexedDB 編集履歴は Push に成功したファイル分と差し戻しファイル（編集後に同期状態に戻されたファイル — `hasNetContentChange` で検出）分がクリアされます。Push に失敗したファイルはローカル編集履歴が保持されます。
 
 リモートエントリにはメタデータが含まれます: `id`、`timestamp`、`source`（workflow/propose_edit/manual/auto）、オプションの `workflowName` と `model`。
 
@@ -181,7 +183,7 @@ diff 設定:
 
 | ファイル | 役割 |
 |---------|------|
-| `app/services/edit-history-local.ts` | クライアント側の編集履歴: 自動保存（`saveLocalEdit`）、コミット境界（`addCommitBoundary`）、リストア（`restoreToHistoryEntry`）、逆適用 diff |
+| `app/services/edit-history-local.ts` | クライアント側の編集履歴: 自動保存（`saveLocalEdit`）、コミット境界（`addCommitBoundary`）、リストア（`restoreToHistoryEntry`）、逆適用 diff、実質変更チェック（`hasNetContentChange`） |
 | `app/services/edit-history.server.ts` | サーバー側の編集履歴: Push 時に Drive `.history.json` に保存、履歴読込、保持ポリシー |
 | `app/services/indexeddb-cache.ts` | IndexedDB ストア: `editHistory` CRUD、`CachedEditHistoryEntry` / `EditHistoryDiff` 型定義 |
 | `app/hooks/useFileWithCache.ts` | キャッシュ優先のファイル読取、自動保存連携（`saveToCache` が `saveLocalEdit` を呼出）、`file-restored` イベントハンドラ |

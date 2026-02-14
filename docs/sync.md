@@ -22,7 +22,7 @@ Manual push/pull synchronization between the browser (IndexedDB) and Google Driv
 | **Full Pull** | Download entire remote vault (skip matching hashes) |
 
 Header buttons: Push and Pull buttons are always visible. Badge shows count of pending changes.
-- **Push Badge**: Count of locally modified files, excluding system/history files.
+- **Push Badge**: Count of locally modified files, excluding system/history files and files whose content was reverted to the synced state (no net change).
 - **Pull Badge**: Count of remote changes, including new files, updates, and files deleted on remote (`localOnly`).
 - **Nature of Change**: Clicking a badge shows a file list with icons indicating the change type:
   - <kbd>+</kbd> (Green): New file
@@ -96,6 +96,7 @@ Uploads locally-changed files to remote.
    ├─ Get modified file IDs from IndexedDB editHistory
    ├─ Filter to only files tracked in any known meta (remoteMeta or localMeta)
    ├─ Filter out system files and excluded paths (history/, plugins/, etc.)
+   ├─ Filter out reverted files (hasNetContentChange = false)
    ├─ Read all modified file contents from IndexedDB cache
    ├─ POST /api/sync { action: "pushFiles", files, remoteMeta, syncMetaFileId }
    │   └─ Server:
@@ -111,6 +112,7 @@ Uploads locally-changed files to remote.
 
 3. CLEANUP
    ├─ Clear IndexedDB editHistory for pushed files only
+   ├─ Clear IndexedDB editHistory for reverted files (no net change)
    ├─ Update localModifiedCount
    └─ Fire "sync-complete" event (UI refresh)
 
@@ -134,7 +136,7 @@ Uploads locally-changed files to remote.
 
 - Push checks for conflicts and remote-newer **before** writing any files to Drive. If the check fails, nothing is written.
 - Push does **NOT** delete remote files. Deletion is handled separately (see Soft Delete below).
-- After a successful push, local edit history in IndexedDB is cleared for the pushed files only.
+- After a successful push, local edit history in IndexedDB is cleared for the pushed files and for reverted files (files whose content was edited then reverted to the synced state).
 
 ---
 
@@ -445,7 +447,7 @@ Browser (IndexedDB)          Server                Google Drive
 | `app/routes/api.drive.files.tsx` | Drive file CRUD (used by push to update files directly; delete moves to trash/) |
 | `app/services/sync-meta.server.ts` | Sync metadata read/write/rebuild/diff |
 | `app/services/indexeddb-cache.ts` | IndexedDB cache (files, syncMeta, fileTree, editHistory, remoteMeta) |
-| `app/services/edit-history-local.ts` | Client-side edit history (reverse-apply diffs in IndexedDB) |
+| `app/services/edit-history-local.ts` | Client-side edit history (reverse-apply diffs, revert detection, net change check) |
 | `app/services/edit-history.server.ts` | Server-side edit history (Drive `.history.json` read/write) |
 | `app/components/settings/TrashDialog.tsx` | Trash file management dialog (restore/delete) |
 | `app/components/settings/ConflictsDialog.tsx` | Conflict backup management dialog (restore/rename/delete) |

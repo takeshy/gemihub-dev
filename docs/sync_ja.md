@@ -22,7 +22,7 @@
 | **Full Pull** | リモートの全ファイルをダウンロード（ハッシュ一致分はスキップ） |
 
 ヘッダーボタン: Push と Pull ボタンは常に表示されます。バッジには保留中の変更数が表示されます。
-- **Push バッジ**: システム/履歴ファイルを除いた、ローカルで変更されたファイルの数。
+- **Push バッジ**: システム/履歴ファイルおよび同期状態に戻されたファイル（実質的な変更なし）を除いた、ローカルで変更されたファイルの数。
 - **Pull バッジ**: 新規ファイル、更新、およびリモートで削除されたファイル（`localOnly`）を含む、リモートの変更数。
 - **変更の内容**: バッジをクリックすると、変更タイプを示すアイコン付きのファイルリストが表示されます。
   - <kbd>+</kbd> (緑): 新規ファイル
@@ -95,6 +95,7 @@ Drive API のリアルタイム一覧は不要: `drive.file` スコープによ�
    ├─ IndexedDB の editHistory から変更ファイル ID を取得
    ├─ 既知のメタ（キャッシュ済み remoteMeta、diff remoteMeta、localMeta）で追跡されているファイルのみにフィルタ
    ├─ システムファイルや除外パス (history/, plugins/ など) を除外
+   ├─ 差し戻しファイルを除外 (hasNetContentChange = false)
    ├─ IndexedDB キャッシュから全変更ファイルの内容を読み取り
    ├─ POST /api/sync { action: "pushFiles", files: [{ fileId, content }, ...], remoteMeta, syncMetaFileId }
    │   └─ サーバー:
@@ -110,6 +111,7 @@ Drive API のリアルタイム一覧は不要: `drive.file` スコープによ�
 
 3. クリーンアップ
    ├─ Push したファイルの editHistory のみクリア
+   ├─ 差し戻しファイル（実質的な変更なし）の editHistory をクリア
    ├─ localModifiedCount を更新
    └─ "sync-complete" イベント発火（UI 更新用）
 
@@ -133,7 +135,7 @@ Drive API のリアルタイム一覧は不要: `drive.file` スコープによ�
 
 - Push はコンフリクトおよびリモート優先のチェックを **Drive への書き込み前に** 行います。チェックに失敗した場合、何も書き込まれません。
 - Push はリモートファイルを**削除しません**。削除は別途処理されます（下記のソフトデリートを参照）。
-- Push 成功後、Push されたファイルの IndexedDB ローカル編集履歴のみがクリアされます。
+- Push 成功後、Push されたファイルおよび差し戻しファイル（編集後に同期状態に戻されたファイル）の IndexedDB ローカル編集履歴がクリアされます。
 
 ---
 
@@ -445,7 +447,7 @@ Chat → サーバー（Drive にファイル作成 + upsertFileInMeta）
 | `app/routes/api.drive.files.tsx` | Drive ファイル CRUD（Push 時のファイル直接更新に使用、削除は trash/ に移動） |
 | `app/services/sync-meta.server.ts` | 同期メタデータの読取・書込・再構築・Diff |
 | `app/services/indexeddb-cache.ts` | IndexedDB キャッシュ（files, syncMeta, fileTree, editHistory, remoteMeta） |
-| `app/services/edit-history-local.ts` | クライアント側の編集履歴（IndexedDB での逆適用 diff） |
+| `app/services/edit-history-local.ts` | クライアント側の編集履歴（逆適用 diff、差し戻し検出、実質変更チェック） |
 | `app/services/edit-history.server.ts` | サーバー側の編集履歴（Drive `.history.json` の読取・書込） |
 | `app/components/settings/TrashDialog.tsx` | ゴミ箱管理ダイアログ（復元・削除） |
 | `app/components/settings/ConflictsDialog.tsx` | コンフリクトバックアップ管理ダイアログ（復元・リネーム・削除） |

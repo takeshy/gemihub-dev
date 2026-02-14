@@ -6,7 +6,7 @@ Edit history has two independent layers — local (IndexedDB) and remote (Drive)
 
 | Layer | Storage | How Diffs Are Created | Lifetime |
 |-------|---------|----------------------|----------|
-| **Local** | IndexedDB `editHistory` store | Client auto-save computes diffs from base to current content | Per-file: cleared on Push; all cleared on Full Pull |
+| **Local** | IndexedDB `editHistory` store | Client auto-save computes diffs from base to current content | Per-file: cleared on Push (including reverted files); all cleared on Full Pull |
 | **Remote** | Drive `.history.json` per file | Server computes diff between old Drive content and newly pushed content | Retained per edit history settings |
 
 The two layers are independent: local diffs are **not** uploaded to Drive. On Push, the server independently computes its own diff from the Drive-side old content vs the pushed new content and appends it to `.history.json`.
@@ -27,6 +27,8 @@ Each file has one `CachedEditHistoryEntry` with a `diffs[]` array. Each array el
 If reverse-apply fails (e.g. patch mismatch due to external content change), a commit boundary is inserted to seal the corrupted diff, and a new session starts from the current old cache content.
 
 Because the last diff is continuously overwritten during a session, a single active session always has exactly **one non-empty diff** entry representing `base → current content`.
+
+**Revert detection:** When the cumulative diff produces zero additions and zero deletions (content matches session base), `saveLocalEdit` cleans up the stale diff entry. If no meaningful diffs remain, the editHistory entry is deleted entirely and `"reverted"` is returned, causing the file tree indicator to switch from yellow (modified) to green (cached).
 
 > **Note:** `saveLocalEdit` is also called from outside auto-save: AI chat file updates (`ChatPanel`), workflow execution file updates (`useWorkflowExecution`), file imports via drag-and-drop (`DriveFileTree`), and temp file merges (`TempFilesDialog`). All callers invoke `saveLocalEdit` before `setCachedFile`.
 
@@ -83,7 +85,7 @@ This happens in two paths:
 - **Push** (`api.sync.tsx` `pushFiles` action): saves history in background (fire-and-forget, best-effort)
 - **Direct file update** (`api.drive.files.tsx` `update` action): saves history inline (awaited, best-effort)
 
-After Push, local edit history in IndexedDB is cleared for the pushed files (the local diffs are no longer needed since the cache now matches Drive). Files that failed to push retain their local edit history.
+After Push, local edit history in IndexedDB is cleared for the pushed files (the local diffs are no longer needed since the cache now matches Drive) and for reverted files (files whose content was edited then reverted to the synced state — detected by `hasNetContentChange`). Files that failed to push retain their local edit history.
 
 Remote entries include metadata: `id`, `timestamp`, `source` (workflow/propose_edit/manual/auto), optional `workflowName` and `model`.
 
@@ -181,7 +183,7 @@ Diff settings:
 
 | File | Role |
 |------|------|
-| `app/services/edit-history-local.ts` | Client-side edit history: auto-save (`saveLocalEdit`), commit boundary (`addCommitBoundary`), restore (`restoreToHistoryEntry`), reverse-apply diff |
+| `app/services/edit-history-local.ts` | Client-side edit history: auto-save (`saveLocalEdit`), commit boundary (`addCommitBoundary`), restore (`restoreToHistoryEntry`), reverse-apply diff, net change check (`hasNetContentChange`) |
 | `app/services/edit-history.server.ts` | Server-side edit history: save to Drive `.history.json` on Push, load history, retention policy |
 | `app/services/indexeddb-cache.ts` | IndexedDB stores: `editHistory` CRUD, `CachedEditHistoryEntry` / `EditHistoryDiff` types |
 | `app/hooks/useFileWithCache.ts` | Cache-first file reads, auto-save integration (`saveToCache` calls `saveLocalEdit`), `file-restored` event handler |
