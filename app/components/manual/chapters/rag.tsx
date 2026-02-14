@@ -40,12 +40,18 @@ function RagEn() {
           Enable <strong>Auto RAG Registration</strong> to automatically register eligible files when you sync changes to Drive (Push to Drive). You can choose between registering all files or customizing which folders to include.
         </p>
         <p>
+          This feature uses the built-in <code>gemihub</code> RAG store exclusively. Files pushed to Drive are registered to this default store only — other RAG settings (External type or additional Internal configurations) are not affected by auto registration.
+        </p>
+        <p>
           System-generated files, chat history, workflow history, and encrypted files are automatically excluded.
         </p>
 
         <h2>Using RAG in Chat</h2>
         <p>
           When RAG stores are configured, the AI can use File Search as a tool during chat conversations. The AI automatically searches your indexed documents to find relevant information and generate informed answers.
+        </p>
+        <p>
+          When RAG is enabled, the Drive Search tool (<code>search_drive_files</code> / <code>list_drive_files</code>) is disabled by default. This is because the AI tends to spend tokens calling Drive search instead of using RAG&apos;s semantic search, often resulting in missed or irrelevant results. Other Drive tools (read, create, update) remain available.
         </p>
 
         <h2>RAG Search Panel</h2>
@@ -101,12 +107,18 @@ function RagJa() {
           <strong>自動RAG登録</strong>を有効にすると、ドライブ反映の際に対象ファイルが自動的に登録されます。すべてのファイルを登録するか、含めるフォルダをカスタマイズするかを選択できます。
         </p>
         <p>
+          この機能は組み込みの<code>gemihub</code> RAGストアのみを対象とします。Driveに反映されたファイルはこのデフォルトストアにのみ登録され、他のRAG設定（外部タイプや追加の内部設定）は自動登録の対象外です。
+        </p>
+        <p>
           システム生成ファイル、チャット履歴、ワークフロー履歴、暗号化ファイルは自動的に除外されます。
         </p>
 
         <h2>チャットでのRAG使用</h2>
         <p>
           RAGストアが設定されている場合、AIはチャット中にFile Searchツールを使用できます。AIがインデックス済みドキュメントを自動検索し、関連情報を見つけて情報に基づいた回答を生成します。
+        </p>
+        <p>
+          RAGが有効な場合、Drive検索ツール（<code>search_drive_files</code> / <code>list_drive_files</code>）はデフォルトで無効化されます。これは、AIがRAGの意味検索ではなくDrive検索にトークンを消費してしまい、結果として的外れな検索や空振りに終わるケースがあるためです。他のDriveツール（読み取り、作成、更新）は引き続き利用可能です。
         </p>
 
         <h2>RAG検索パネル</h2>

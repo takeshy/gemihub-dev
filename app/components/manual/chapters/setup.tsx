@@ -16,7 +16,10 @@ function SetupEn() {
       <div className={prose}>
         <h2>1. Sign In</h2>
         <p>
-          Visit the GemiHub landing page and click <strong>&quot;Sign in with Google&quot;</strong>. GemiHub will request permission to access your Google Drive (scoped to a <code>gemihub/</code> folder).
+          Visit the GemiHub landing page and click <strong>&quot;Sign in with Google&quot;</strong>. GemiHub will request permission to access your Google Drive.
+        </p>
+        <p>
+          GemiHub uses the <code>drive.file</code> scope, which means it can <strong>only access files it has created</strong> — not your entire Drive. Files you create outside of GemiHub are not visible to the app. If you want to work with existing Drive files, you can import them into the <code>gemihub/</code> folder via GemiHub&apos;s interface.
         </p>
 
         <h2>2. Configure Gemini API Key</h2>
@@ -64,7 +67,10 @@ function SetupJa() {
       <div className={prose}>
         <h2>1. サインイン</h2>
         <p>
-          GemiHubのランディングページにアクセスし、<strong>「Googleでサインイン」</strong>をクリックします。GemiHubはGoogle Drive（<code>gemihub/</code>フォルダにスコープ）へのアクセス許可を要求します。
+          GemiHubのランディングページにアクセスし、<strong>「Googleでサインイン」</strong>をクリックします。GemiHubはGoogle Driveへのアクセス許可を要求します。
+        </p>
+        <p>
+          GemiHubは<code>drive.file</code>スコープを使用しており、<strong>GemiHubが作成したファイルのみ</strong>にアクセスできます。Drive全体のファイルにはアクセスしません。GemiHub外で作成した既存のDriveファイルはアプリから見えません。既存のDriveファイルを扱いたい場合は、GemiHubのインターフェースから<code>gemihub/</code>フォルダにインポートしてください。
         </p>
 
         <h2>2. Gemini APIキーの設定</h2>

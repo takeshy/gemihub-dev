@@ -30,7 +30,10 @@ function WorkflowEn() {
           <img src="/images/ai_generate_workflow.png" alt="AI workflow generation" className="w-full" loading="lazy" />
         </figure>
         <p>
-          Describe what you want in plain language and AI will create the workflow for you. Click the <strong>AI Generate</strong> button, enter a description, and the AI produces the YAML with a live preview. You can refine the result by giving follow-up instructions.
+          Describe what you want in plain language and AI will create the workflow YAML for you. Click the <strong>AI Generate</strong> button in the workflow editor, type a natural language description (e.g. &quot;Read all Markdown files in the reports folder and summarize each one&quot;), and the AI generates the corresponding YAML definition. A live Mermaid diagram preview updates as the YAML is generated, so you can see the workflow structure in real-time.
+        </p>
+        <p>
+          You can iteratively refine the generated workflow by giving follow-up instructions in the same dialog — for example, &quot;add an error handling branch&quot; or &quot;save the summary to a new file&quot;. The AI modifies the existing YAML while preserving your previous changes.
         </p>
 
         <h2>Running a Workflow</h2>
@@ -132,7 +135,10 @@ function WorkflowJa() {
           <img src="/images/ai_generate_workflow.png" alt="AIワークフロー生成" className="w-full" loading="lazy" />
         </figure>
         <p>
-          やりたいことを言葉で伝えるだけでAIがワークフローを作成します。<strong>AI生成</strong>ボタンをクリックし、説明を入力すると、AIがYAMLを生成しライブプレビューを表示します。追加の指示で結果を修正することもできます。
+          やりたいことを自然言語で伝えるだけで、AIがワークフローのYAMLを生成します。ワークフローエディタの<strong>AI生成</strong>ボタンをクリックし、説明を入力してください（例：「reportsフォルダ内のすべてのMarkdownファイルを読み取り、各ファイルを要約する」）。AIが対応するYAML定義を生成します。生成中はMermaidダイアグラムのライブプレビューがリアルタイムで更新され、ワークフローの構造を確認できます。
+        </p>
+        <p>
+          同じダイアログで追加の指示を出すことで、生成されたワークフローを繰り返し改善できます。例えば「エラーハンドリングの分岐を追加」や「要約を新しいファイルに保存」など。AIは以前の変更を保持しながら既存のYAMLを修正します。
         </p>
 
         <h2>ワークフローの実行</h2>

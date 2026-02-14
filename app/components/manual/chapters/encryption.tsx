@@ -59,8 +59,15 @@ function EncryptionEn() {
         </p>
 
         <h2>Important Notes</h2>
+        <div className="rounded-lg border-2 border-red-300 bg-red-50 p-4 dark:border-red-700 dark:bg-red-950/30 mb-4">
+          <p className="font-bold text-red-700 dark:text-red-400 !mt-0">
+            Warning: If you lose your password, there is no way to recover encrypted data.
+          </p>
+          <p className="!mb-0">
+            The password is used entirely on the client side and is never stored on any server. GemiHub cannot reset or recover your password. Encrypted files, chat history, workflow history, and your API key will all become permanently inaccessible. Always keep your password in a safe place.
+          </p>
+        </div>
         <ul>
-          <li>If you forget your password, encrypted data cannot be recovered.</li>
           <li>Encrypted files are stored on Drive in encrypted form — even Google cannot read them.</li>
           <li>The password is cached in your browser session. You only need to enter it once per session.</li>
           <li>Resetting encryption keys will make all previously encrypted data unreadable.</li>
@@ -123,8 +130,15 @@ function EncryptionJa() {
         </p>
 
         <h2>重要な注意事項</h2>
+        <div className="rounded-lg border-2 border-red-300 bg-red-50 p-4 dark:border-red-700 dark:bg-red-950/30 mb-4">
+          <p className="font-bold text-red-700 dark:text-red-400 !mt-0">
+            警告：パスワードを紛失すると、暗号化されたデータを復元する方法はありません。
+          </p>
+          <p className="!mb-0">
+            パスワードは完全にクライアントサイドで使用され、サーバーには一切保存されません。GemiHubがパスワードをリセットしたり復元することはできません。暗号化されたファイル、チャット履歴、ワークフロー履歴、APIキーのすべてが永久にアクセス不能になります。パスワードは必ず安全な場所に保管してください。
+          </p>
+        </div>
         <ul>
-          <li>パスワードを忘れた場合、暗号化されたデータは復旧できません。</li>
           <li>暗号化ファイルは暗号化された状態でDriveに保存されます。Googleでさえ読み取れません。</li>
           <li>パスワードはブラウザセッションにキャッシュされます。セッションごとに1回入力するだけです。</li>
           <li>暗号化キーをリセットすると、以前に暗号化されたすべてのデータが読み取れなくなります。</li>

@@ -31,6 +31,12 @@ function ChatEn() {
           Select a Gemini model from the dropdown. Available models depend on your API plan (Free / Paid). Some models support extended thinking — the AI&apos;s reasoning process is displayed in a collapsible section.
         </p>
 
+        <h3>Model-Specific Limitations</h3>
+        <ul>
+          <li><strong>Gemma models</strong> — Do not support function calling (tool use) or extended thinking. When a Gemma model is selected, all tools (Drive, MCP, RAG, Web Search) are automatically disabled.</li>
+          <li><strong>Flash Lite + RAG</strong> — When RAG is enabled with a Flash Lite model, Drive and MCP tools are disabled. Flash Lite cannot combine function calling tools with RAG file search in a single request.</li>
+        </ul>
+
         <h2>Function Calling (Agentic AI)</h2>
         <p>
           The AI can automatically choose and execute tools during the conversation:
@@ -44,6 +50,16 @@ function ChatEn() {
         </ul>
         <p>
           Tool mode can be set to <strong>Auto</strong> (AI decides), <strong>Manual</strong> (require confirmation), or <strong>None</strong> (disable tools).
+        </p>
+
+        <h3>Web Search Mode</h3>
+        <p>
+          When Web Search is enabled, the AI uses Google Search exclusively. <strong>All other tools (Drive, MCP, RAG) are disabled</strong> during Web Search mode, because Google Search is incompatible with other tool types in a single request.
+        </p>
+
+        <h3>RAG and Drive Search</h3>
+        <p>
+          When RAG is enabled, the Drive Search tool (<code>search_drive_files</code> / <code>list_drive_files</code>) is disabled by default. This is because the AI tends to spend tokens calling Drive search instead of using RAG&apos;s semantic search, often resulting in missed or irrelevant results. RAG provides more accurate, meaning-based retrieval. You can override this in the tool mode settings if needed.
         </p>
 
         <h2>File Attachments</h2>
@@ -101,6 +117,12 @@ function ChatJa() {
           ドロップダウンからGeminiモデルを選択します。利用可能なモデルはAPIプラン（無料/有料）によって異なります。一部のモデルは拡張思考（Extended Thinking）に対応しており、AIの推論プロセスが折りたたみ可能なセクションに表示されます。
         </p>
 
+        <h3>モデル固有の制限事項</h3>
+        <ul>
+          <li><strong>Gemmaモデル</strong> — ファンクションコール（ツール使用）および拡張思考に非対応です。Gemmaモデル選択時は、すべてのツール（Drive、MCP、RAG、Web検索）が自動的に無効化されます。</li>
+          <li><strong>Flash Lite + RAG</strong> — Flash LiteモデルでRAGを有効にすると、DriveツールとMCPツールが無効化されます。Flash Liteは1つのリクエスト内でファンクションコールツールとRAGファイル検索を同時に使用できません。</li>
+        </ul>
+
         <h2>ファンクションコール（エージェント型AI）</h2>
         <p>
           AIは会話中に自動的にツールを選択して実行できます：
@@ -114,6 +136,16 @@ function ChatJa() {
         </ul>
         <p>
           ツールモードは<strong>自動</strong>（AIが判断）、<strong>手動</strong>（確認が必要）、<strong>なし</strong>（ツール無効）に設定可能。
+        </p>
+
+        <h3>Web検索モード</h3>
+        <p>
+          Web検索を有効にすると、AIはGoogle検索のみを使用します。<strong>他のすべてのツール（Drive、MCP、RAG）はWeb検索モード中は無効化</strong>されます。Google検索は1つのリクエスト内で他のツールタイプと併用できないためです。
+        </p>
+
+        <h3>RAGとDrive検索</h3>
+        <p>
+          RAGを有効にすると、Drive検索ツール（<code>search_drive_files</code> / <code>list_drive_files</code>）はデフォルトで無効化されます。これは、AIがRAGの意味検索ではなくDrive検索にトークンを消費してしまい、結果として的外れな検索や空振りに終わるケースがあるためです。RAGはより正確な意味ベースの検索を提供します。必要に応じてツールモード設定で上書きできます。
         </p>
 
         <h2>ファイル添付</h2>
