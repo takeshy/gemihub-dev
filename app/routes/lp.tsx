@@ -86,9 +86,11 @@ interface LpStrings {
   aiProReferences: string;
   dataUsageLearnMore: string;
   privacyPolicy: string;
+  heroManual: string;
   ctaReady: string;
   footerTerms: string;
   footerPolicy: string;
+  footerManual: string;
   footerContact: string;
 }
 
@@ -175,9 +177,11 @@ const en: LpStrings = {
   aiProReferences: "References",
   dataUsageLearnMore: "Learn more in our",
   privacyPolicy: "Privacy Policy",
+  heroManual: "Read the Manual",
   ctaReady: "Ready to get started?",
   footerTerms: "Terms of Service",
   footerPolicy: "Privacy Policy",
+  footerManual: "Manual",
   footerContact: "Contact",
 };
 
@@ -264,9 +268,11 @@ const ja: LpStrings = {
   aiProReferences: "参考リンク",
   dataUsageLearnMore: "詳しくは",
   privacyPolicy: "プライバシーポリシー",
+  heroManual: "マニュアルを読む",
   ctaReady: "さあ、始めましょう",
   footerTerms: "利用規約",
   footerPolicy: "プライバシーポリシー",
+  footerManual: "マニュアル",
   footerContact: "お問い合わせ",
 };
 
@@ -307,6 +313,13 @@ export default function LandingPage() {
         >
           <LogIn size={22} />
           {s.signIn}
+        </a>
+        <a
+          href={`/manual${jaPrefix}`}
+          className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+        >
+          <BookOpen size={16} />
+          {s.heroManual}
         </a>
       </section>
 
@@ -667,6 +680,10 @@ export default function LandingPage() {
             <a href={`https://github.com/takeshy/gemihub/blob/main/${lang === "ja" ? "README_ja.md" : "README.md"}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-gray-700 hover:underline dark:hover:text-gray-200">
               <BookOpen size={14} />
               README
+            </a>
+            <a href={`/manual${jaPrefix}`} className="inline-flex items-center gap-1 hover:text-gray-700 hover:underline dark:hover:text-gray-200">
+              <BookOpen size={14} />
+              {s.footerManual}
             </a>
             <a href="mailto:takeshy.work@gmail.com" className="hover:text-gray-700 hover:underline dark:hover:text-gray-200">
               {s.footerContact}
