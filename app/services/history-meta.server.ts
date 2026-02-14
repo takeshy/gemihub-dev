@@ -9,6 +9,7 @@ import {
   updateFile,
   listFiles,
 } from "./google-drive.server";
+import { isEncryptedFile } from "./crypto.server";
 
 const META_FILE_NAME = "_meta.json";
 
@@ -126,7 +127,12 @@ export async function rebuildHistoryMeta<T>(
     const results = await Promise.allSettled(
       batch.map(async (file) => {
         const content = await readFile(accessToken, file.id);
-        const parsed = JSON.parse(content);
+        let parsed: unknown;
+        if (isEncryptedFile(content)) {
+          parsed = { __encrypted: true, fileName: file.name };
+        } else {
+          parsed = JSON.parse(content);
+        }
         const item = extractItem(file.id, parsed);
         return { fileId: file.id, item };
       })

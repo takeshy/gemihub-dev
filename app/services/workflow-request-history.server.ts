@@ -33,6 +33,23 @@ function extractRequestItem(
   fileId: string,
   content: unknown
 ): WorkflowRequestRecordItem | null {
+  const obj = content as Record<string, unknown>;
+  if (obj.__encrypted) {
+    const fileName = obj.fileName as string;
+    const match = fileName.match(/^req_(.+)\.json$/);
+    if (!match) return null;
+    return {
+      id: match[1],
+      fileId,
+      workflowId: "",
+      workflowName: "",
+      createdAt: "",
+      description: "",
+      model: "",
+      mode: "create",
+      isEncrypted: true,
+    };
+  }
   const record = content as WorkflowRequestRecord;
   if (!record.id) return null;
   return {

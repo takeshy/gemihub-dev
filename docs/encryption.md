@@ -27,6 +27,16 @@ salt: <Base64: PBKDF2 salt (16 bytes)>
 
 The `key` and `salt` fields are copied from your encryption settings at the time of encryption. This makes each file self-contained — decryptable with only the password.
 
+### Binary File Encryption
+
+Binary files (images, PDFs, etc.) are encoded before encryption using a prefix format:
+
+```
+BINARY:{mimeType}\n{base64data}
+```
+
+When encrypting, the binary content is read as Base64 and prefixed with `BINARY:{mimeType}\n`. This combined string is then encrypted using the standard hybrid encryption flow. On decryption, the `BINARY:` prefix is detected and the content is decoded back to binary.
+
 ## How It Works
 
 ### Setup (Once)
@@ -62,6 +72,18 @@ Password + salt
   → Plaintext
 ```
 
+### Fast Decryption (Cached Private Key)
+
+After the first successful decryption, the decrypted private key is cached in memory (`crypto-cache.ts`). Subsequent decryptions use `decryptWithPrivateKey()` which skips the PBKDF2 key derivation step entirely:
+
+```
+Cached private key (already decrypted)
+  → Unwrap: extract encrypted AES key, IV, ciphertext
+  → Decrypt AES key with RSA private key (RSA-OAEP)
+  → Decrypt content with AES key (AES-256-GCM)
+  → Plaintext
+```
+
 ## Binary Layout of Encrypted Data
 
 After Base64 decoding the data section:
@@ -88,6 +110,14 @@ Click an `.encrypted` file in the tree. A password prompt appears. Enter your en
 
 The password is cached in memory for the session. Subsequent encrypted files are decrypted automatically.
 
+### Permanently Decrypt a File
+
+To permanently remove encryption from a file:
+- Right-click the `.encrypted` file in the file tree → **Decrypt**, or
+- Open the encrypted file and click the **Decrypt** button in the editor toolbar.
+
+This decrypts the content on Drive, removes the `.encrypted` extension from the filename, and updates the sync metadata. For binary files, the original binary content is restored.
+
 ### Temp Upload / Download
 
 In the encrypted file editor:
@@ -98,6 +128,10 @@ In the encrypted file editor:
 
 When encryption is enabled and `encryptChatHistory` / `encryptWorkflowHistory` are turned on in settings, new chat histories and workflow execution/request records are encrypted before saving to Drive. Older unencrypted records remain readable. When loading an encrypted record, the app decrypts it client-side using your cached private key or prompts for your password.
 
+### Workflow Encryption Command
+
+The `gemihub-command` workflow node supports an `encrypt` command that encrypts a Drive file programmatically. It reads the file content, encrypts it using the configured encryption keys, updates the file on Drive, and appends `.encrypted` to the filename. Encryption must be configured in settings for this command to work.
+
 ## Security Notes
 
 - **Password is never stored** — only the encrypted private key and salt are saved in settings
@@ -106,6 +140,7 @@ When encryption is enabled and `encryptChatHistory` / `encryptWorkflowHistory` a
 - **Each file has a unique AES key** — compromising one file's AES key does not affect others
 - **RSA key pair is generated once** — stored encrypted with your password in settings
 - **Forgetting your password means data loss** — there is no recovery mechanism
+- **Do not regenerate keys while encrypted files exist** — regenerating the RSA key pair creates new keys; files encrypted with the previous key pair become permanently undecryptable
 
 ## Python Decryption Script
 

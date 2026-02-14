@@ -17,7 +17,7 @@ import {
 } from "./history-meta.server";
 import type { ChatHistory, ChatHistoryItem } from "~/types/chat";
 import type { EncryptionParams } from "~/types/settings";
-import { encryptFileContent } from "./crypto.server";
+import { encryptFileContent, isEncryptedFile } from "./crypto.server";
 
 const CHATS_FOLDER = "chats";
 
@@ -37,6 +37,20 @@ function extractChatItem(
   fileId: string,
   content: unknown
 ): ChatHistoryItem | null {
+  const obj = content as Record<string, unknown>;
+  if (obj.__encrypted) {
+    const fileName = obj.fileName as string;
+    const match = fileName.match(/^chat_(.+)\.json$/);
+    if (!match) return null;
+    return {
+      id: match[1],
+      fileId,
+      title: "",
+      createdAt: 0,
+      updatedAt: 0,
+      isEncrypted: true,
+    };
+  }
   const chat = content as ChatHistory;
   if (!chat.id) return null;
   return {
@@ -82,8 +96,11 @@ export async function listChatHistories(
 export async function loadChat(
   accessToken: string,
   chatFileId: string
-): Promise<ChatHistory> {
+): Promise<ChatHistory | { encrypted: true; encryptedContent: string }> {
   const content = await readFile(accessToken, chatFileId);
+  if (isEncryptedFile(content)) {
+    return { encrypted: true, encryptedContent: content };
+  }
   return JSON.parse(content) as ChatHistory;
 }
 
@@ -129,7 +146,7 @@ export async function saveChat(
       title: chatHistory.title,
       createdAt: chatHistory.createdAt,
       updatedAt: chatHistory.updatedAt,
-      isEncrypted: chatHistory.isEncrypted,
+      isEncrypted: chatHistory.isEncrypted ?? !!encryption,
     };
     await upsertHistoryMetaEntry(accessToken, chatsFolderId, fileId, item);
   } catch (err) {

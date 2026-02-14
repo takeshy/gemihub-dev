@@ -32,6 +32,21 @@ function extractExecItem(
   fileId: string,
   content: unknown
 ): ExecutionRecordItem | null {
+  const obj = content as Record<string, unknown>;
+  if (obj.__encrypted) {
+    const fileName = obj.fileName as string;
+    const match = fileName.match(/^exec_(.+)\.json$/);
+    if (!match) return null;
+    return {
+      id: match[1],
+      fileId,
+      workflowId: "",
+      startTime: "",
+      status: "completed",
+      stepCount: 0,
+      isEncrypted: true,
+    };
+  }
   const record = content as ExecutionRecord;
   if (!record.id) return null;
   return {
