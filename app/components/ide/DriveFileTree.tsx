@@ -1448,6 +1448,11 @@ export function DriveFileTree({
         await deleteEditHistoryEntry(item.id);
         setTreeItems((prev) => removeNodeFromTree(prev, item.id));
         window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: item.id } }));
+        if (item.id === activeFileId) {
+          window.history.pushState({}, "", "/");
+          window.dispatchEvent(new PopStateEvent("popstate"));
+          return;
+        }
         return;
       }
 
@@ -1482,6 +1487,11 @@ export function DriveFileTree({
           }
           // Refresh push count after edit history cleanup
           window.dispatchEvent(new CustomEvent("file-modified", { detail: {} }));
+          if (activeFileId && fileIds.includes(activeFileId)) {
+            window.history.pushState({}, "", "/");
+            window.dispatchEvent(new PopStateEvent("popstate"));
+            return;
+          }
         } catch {
           // ignore
         } finally {
@@ -1511,6 +1521,11 @@ export function DriveFileTree({
             }
             // Refresh push count after edit history cleanup
             window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: item.id } }));
+            if (item.id === activeFileId) {
+              window.history.pushState({}, "", "/");
+              window.dispatchEvent(new PopStateEvent("popstate"));
+              return;
+            }
           }
         } catch {
           // ignore
@@ -1519,7 +1534,7 @@ export function DriveFileTree({
         }
       }
     },
-    [treeItems, collectFileIds, fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy]
+    [treeItems, collectFileIds, fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, activeFileId]
   );
 
   const handleEncrypt = useCallback(
@@ -1702,7 +1717,8 @@ export function DriveFileTree({
             return next;
           });
           if (item.id === activeFileId) {
-            location.reload();
+            window.history.pushState({}, "", "/");
+            window.dispatchEvent(new PopStateEvent("popstate"));
           }
         } else {
           // Folder: collect all file IDs
@@ -1737,7 +1753,8 @@ export function DriveFileTree({
             return next;
           });
           if (activeFileId && toDelete.includes(activeFileId)) {
-            location.reload();
+            window.history.pushState({}, "", "/");
+            window.dispatchEvent(new PopStateEvent("popstate"));
           }
         }
       } catch {
