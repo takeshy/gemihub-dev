@@ -10,6 +10,7 @@ import {
   getLocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { hasNetContentChange } from "~/services/edit-history-local";
+import { isSyncExcludedPath } from "~/services/sync-client-utils";
 import { computeSyncDiff } from "~/services/sync-diff";
 import { SyncDiffDialog } from "./SyncDiffDialog";
 import type { FileListItem } from "./SyncDiffDialog";
@@ -69,25 +70,25 @@ export function SyncStatusBar({
         for (const id of diff.toPush) {
           // Skip files whose content was reverted to synced state (no net change)
           if (!(await hasNetContentChange(id))) continue;
-          const name = remoteFiles[id]?.name;
+          const cached = await getCachedFile(id);
+          const name = cached?.fileName || remoteFiles[id]?.name || id;
+          if (isSyncExcludedPath(name)) continue;
           const isNew = !localFiles[id];
-          if (name) {
-            files.push({ id, name, type: isNew ? "new" : "modified" });
-          } else {
-            const cached = await getCachedFile(id);
-            files.push({ id, name: cached?.fileName || id, type: isNew ? "new" : "modified" });
-          }
+          files.push({ id, name, type: isNew ? "new" : "modified" });
         }
         for (const id of diff.localOnly) {
           if (!modifiedIds.has(id)) continue;  // Skip remotely-deleted files
           const cached = await getCachedFile(id);
-          files.push({ id, name: cached?.fileName || id, type: "new" });
+          const name = cached?.fileName || id;
+          if (isSyncExcludedPath(name)) continue;
+          files.push({ id, name, type: "new" });
         }
         files.sort((a, b) => a.name.localeCompare(b.name));
         setDialogFiles(files);
       } else {
         const files: FileListItem[] = [];
         const remoteFiles = remoteMeta?.files ?? {};
+        const localFiles = localMeta?.files ?? {};
 
         for (const id of diff.remoteOnly) {
           files.push({ id, name: remoteFiles[id]?.name || id, type: "new" });
@@ -95,7 +96,10 @@ export function SyncStatusBar({
         for (const id of diff.toPull) {
           files.push({ id, name: remoteFiles[id]?.name || id, type: "modified" });
         }
+        // Only show files that exist in localMeta (remotely-deleted files).
+        // Files only in editHistory are new local files — shown in push, not pull.
         for (const id of diff.localOnly) {
+          if (!(id in localFiles)) continue;
           const cached = await getCachedFile(id);
           files.push({ id, name: cached?.fileName || id, type: "deleted" });
         }
