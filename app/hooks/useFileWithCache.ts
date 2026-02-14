@@ -219,13 +219,14 @@ export function useFileWithCache(
       if (effectiveFileId.startsWith("new:")) {
         try {
           const cached = await getCachedFile(effectiveFileId);
+          if (!cached) return; // File was deleted — don't re-create
           await setCachedFile({
             fileId: effectiveFileId,
             content: newContent,
             md5Checksum: "",
             modifiedTime: "",
             cachedAt: Date.now(),
-            fileName: cached?.fileName ?? effectiveFileId.slice("new:".length),
+            fileName: cached.fileName ?? effectiveFileId.slice("new:".length),
           });
         } catch { /* ignore */ }
         return;
@@ -233,7 +234,8 @@ export function useFileWithCache(
 
       try {
         const cached = await getCachedFile(effectiveFileId);
-        const fileName = cached?.fileName ?? effectiveFileId;
+        if (!cached) return; // File was deleted — don't re-create cache or edit history
+        const fileName = cached.fileName ?? effectiveFileId;
 
         // 1. Record local edit history BEFORE cache update
         //    (saveLocalEdit reads old cache content for reverse-apply diff)
@@ -249,10 +251,10 @@ export function useFileWithCache(
         await setCachedFile({
           fileId: effectiveFileId,
           content: newContent,
-          md5Checksum: cached?.md5Checksum ?? "",
-          modifiedTime: cached?.modifiedTime ?? "",
+          md5Checksum: cached.md5Checksum ?? "",
+          modifiedTime: cached.modifiedTime ?? "",
           cachedAt: Date.now(),
-          fileName: cached?.fileName,
+          fileName: cached.fileName,
         });
 
         // Notify file tree only when edit history actually recorded a change

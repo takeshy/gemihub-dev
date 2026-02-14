@@ -1333,6 +1333,7 @@ export function DriveFileTree({
         await deleteCachedFile(item.id);
         await deleteEditHistoryEntry(item.id);
         setTreeItems((prev) => removeNodeFromTree(prev, item.id));
+        window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: item.id } }));
         return;
       }
 
@@ -1365,6 +1366,8 @@ export function DriveFileTree({
           } else {
             await fetchAndCacheTree();
           }
+          // Refresh push count after edit history cleanup
+          window.dispatchEvent(new CustomEvent("file-modified", { detail: {} }));
         } catch {
           // ignore
         } finally {
@@ -1391,13 +1394,9 @@ export function DriveFileTree({
             } else {
               const updated = removeNodeFromTree(treeItems, item.id);
               setTreeItems(updated);
-              await setCachedFileTree({
-                id: "current",
-                rootFolderId,
-                items: updated,
-                cachedAt: Date.now(),
-              });
             }
+            // Refresh push count after edit history cleanup
+            window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: item.id } }));
           }
         } catch {
           // ignore
