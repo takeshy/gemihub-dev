@@ -734,17 +734,20 @@ export function DriveFileTree({
     setCreateFileDialog((prev) => ({ ...prev, open: false }));
 
     // Build initial content from optional metadata
+    const isMd = fileName.endsWith(".md");
+    const bold = (s: string) => isMd ? `**${s}**` : s;
     const contentParts: string[] = [];
     if (addDateTime) {
       const now = new Date();
-      contentParts.push(`Date: ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`);
+      const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+      contentParts.push(`${bold(t("fileContent.dateTime"))} ${ts}`);
     }
     if (addLocation) {
       try {
         const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
         });
-        contentParts.push(`Latitude: ${pos.coords.latitude}, Longitude: ${pos.coords.longitude}`);
+        contentParts.push(`${bold(t("fileContent.location"))} ${t("fileContent.latitude")} ${pos.coords.latitude}, ${t("fileContent.longitude")} ${pos.coords.longitude}`);
       } catch {
         // Location unavailable — skip
       }
