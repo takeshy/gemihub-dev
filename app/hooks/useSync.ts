@@ -548,7 +548,10 @@ export function useSync() {
             const merged: LocalSyncMeta = {
               id: "current",
               lastUpdatedAt: incoming.lastUpdatedAt,
-              files: { ...existing.files, ...incoming.files },
+              files: {
+                ...existing.files,
+                ...(incoming.files[fileId] ? { [fileId]: incoming.files[fileId] } : {}),
+              },
             };
             await setLocalSyncMeta(merged);
           } else {

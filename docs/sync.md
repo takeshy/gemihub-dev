@@ -94,7 +94,7 @@ Uploads locally-changed files to remote.
 
 2. BATCH UPLOAD: Update all files via single API call
    ├─ Get modified file IDs from IndexedDB editHistory
-   ├─ Filter to only files tracked in any known meta (cached remoteMeta, diff remoteMeta, or localMeta)
+   ├─ Filter to only files tracked in any known meta (remoteMeta or localMeta)
    ├─ Filter out system files and excluded paths (history/, plugins/, etc.)
    ├─ Read all modified file contents from IndexedDB cache
    ├─ POST /api/sync { action: "pushFiles", files, remoteMeta, syncMetaFileId }
@@ -152,8 +152,7 @@ Downloads only remotely-changed files to local cache.
 6. **Download file contents** in parallel (max 5 concurrent)
 7. **Update IndexedDB cache** with downloaded files
 8. **Update local sync meta** with new checksums
-9. **Update remote sync meta** with pulled files, and **prune `localOnly` entries** from `_sync-meta.json`
-10. **Fire "sync-complete" and "files-pulled" events** and update localModifiedCount
+9. **Fire "sync-complete" and "files-pulled" events** and update localModifiedCount
 
 ### Decision Tables
 
@@ -442,7 +441,7 @@ Browser (IndexedDB)          Server                Google Drive
 |------|------|
 | `app/hooks/useSync.ts` | Client-side sync hook (push, pull, resolveConflict, fullPull, localModifiedCount) |
 | `app/hooks/useFileWithCache.ts` | IndexedDB cache-first file reads, auto-save with edit history |
-| `app/routes/api.sync.tsx` | Server-side sync API (17 POST actions) |
+| `app/routes/api.sync.tsx` | Server-side sync API (16 POST actions + GET loader) |
 | `app/routes/api.drive.files.tsx` | Drive file CRUD (used by push to update files directly; delete moves to trash/) |
 | `app/services/sync-meta.server.ts` | Sync metadata read/write/rebuild/diff |
 | `app/services/indexeddb-cache.ts` | IndexedDB cache (files, syncMeta, fileTree, editHistory, remoteMeta) |
