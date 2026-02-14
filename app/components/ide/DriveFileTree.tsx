@@ -42,6 +42,7 @@ import {
   getAllCachedFileIds,
   getLocallyModifiedFileIds,
   deleteCachedFile,
+  renameCachedFile,
   getEditHistoryForFile,
   setEditHistoryEntry,
   deleteEditHistoryEntry,
@@ -1056,6 +1057,7 @@ export function DriveFileTree({
             setExpandedFolders((prev) => new Set(prev).add(newParentId));
           }
           const data = await res.json();
+          await renameCachedFile(itemId, newFullName);
           if (data.meta) {
             await updateTreeFromMeta(data.meta);
           } else {
@@ -1381,6 +1383,7 @@ export function DriveFileTree({
             });
             if (res.ok) {
               const data = await res.json();
+              await renameCachedFile(fid, newFullName);
               if (data.meta) lastMeta = data.meta;
             }
           }
@@ -1424,6 +1427,7 @@ export function DriveFileTree({
         });
         if (res.ok) {
           const data = await res.json();
+          await renameCachedFile(item.id, newFullName);
           if (data.meta) {
             await updateTreeFromMeta(data.meta);
           } else {

@@ -203,6 +203,32 @@ export async function setCachedFile(file: CachedFile): Promise<void> {
   await txPut(db, "files", file);
 }
 
+export async function renameCachedFile(
+  fileId: string,
+  newFileName: string
+): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    const db = await getDB();
+    const file = await txGet<CachedFile>(db, "files", fileId);
+    if (file) {
+      file.fileName = newFileName;
+      await txPut(db, "files", file);
+    }
+    const entry = await txGet<CachedEditHistoryEntry>(
+      db,
+      "editHistory",
+      fileId
+    );
+    if (entry) {
+      entry.filePath = newFileName;
+      await txPut(db, "editHistory", entry);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export async function deleteCachedFile(fileId: string): Promise<void> {
   if (typeof indexedDB === "undefined") return;
   try {
