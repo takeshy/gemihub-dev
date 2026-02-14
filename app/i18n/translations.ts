@@ -4,6 +4,7 @@ export interface TranslationStrings {
   // Common
   "common.save": string;
   "common.cancel": string;
+  "common.close": string;
   "common.settings": string;
   "common.logout": string;
 
@@ -153,6 +154,12 @@ export interface TranslationStrings {
   "settings.general.passwordMinLength": string;
   "settings.general.apiKeyPasswordSection": string;
   "settings.general.configured": string;
+  "settings.general.invalidApiKey": string;
+  "settings.general.apiKeyRequired": string;
+  "settings.general.passwordRequiredError": string;
+  "settings.general.required": string;
+  "settings.general.errorTitle": string;
+  "settings.general.generalSaved": string;
 
   // Unlock dialog
   "unlock.title": string;
@@ -458,6 +465,7 @@ const en: TranslationStrings = {
   // Common
   "common.save": "Save",
   "common.cancel": "Cancel",
+  "common.close": "Close",
   "common.settings": "Settings",
   "common.logout": "Logout",
 
@@ -606,6 +614,12 @@ const en: TranslationStrings = {
   "settings.general.passwordMinLength": "Password must be at least 8 characters",
   "settings.general.apiKeyPasswordSection": "API Key & Password",
   "settings.general.configured": "API Key & Encryption configured.",
+  "settings.general.invalidApiKey": "Invalid API key. Please check your Gemini API key and try again.",
+  "settings.general.apiKeyRequired": "API key is required for initial setup.",
+  "settings.general.passwordRequiredError": "Password is required for initial setup.",
+  "settings.general.required": "Required",
+  "settings.general.errorTitle": "Save Error",
+  "settings.general.generalSaved": "General settings saved.",
 
   // Unlock dialog
   "unlock.title": "Enter Password",
@@ -911,6 +925,7 @@ const ja: TranslationStrings = {
   // Common
   "common.save": "保存",
   "common.cancel": "キャンセル",
+  "common.close": "閉じる",
   "common.settings": "設定",
   "common.logout": "ログアウト",
 
@@ -1059,6 +1074,12 @@ const ja: TranslationStrings = {
   "settings.general.passwordMinLength": "パスワードは8文字以上である必要があります",
   "settings.general.apiKeyPasswordSection": "APIキー & パスワード",
   "settings.general.configured": "APIキーと暗号化が設定されています。",
+  "settings.general.invalidApiKey": "無効なAPIキーです。Gemini APIキーを確認して再度お試しください。",
+  "settings.general.apiKeyRequired": "初回設定にはAPIキーが必要です。",
+  "settings.general.passwordRequiredError": "初回設定にはパスワードが必要です。",
+  "settings.general.required": "必須",
+  "settings.general.errorTitle": "保存エラー",
+  "settings.general.generalSaved": "一般設定を保存しました。",
 
   // Unlock dialog
   "unlock.title": "パスワードを入力",

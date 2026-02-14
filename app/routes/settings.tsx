@@ -7,6 +7,7 @@ import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { resolveLanguage } from "~/i18n/resolve-language";
 import { rebuildSyncMeta } from "~/services/sync-meta.server";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
+import { GoogleGenAI } from "@google/genai";
 import {
   isSyncExcludedPath,
   getSyncCompletionStatus,
@@ -184,6 +185,27 @@ export async function action({ request }: Route.ActionArgs) {
         const newPassword = (formData.get("newPassword") as string)?.trim() || "";
         const encryptChatHistory = formData.get("encryptChatHistory") === "on";
         const encryptWorkflowHistory = formData.get("encryptWorkflowHistory") === "on";
+
+        // Require API key and password on initial setup
+        if (!currentSettings.encryptedApiKey) {
+          if (!geminiApiKey) {
+            return jsonWithCookie({ success: false, message: "apiKeyRequired" });
+          }
+          if (!password) {
+            return jsonWithCookie({ success: false, message: "passwordRequiredError" });
+          }
+        }
+
+        // Validate API key by calling Gemini API
+        if (geminiApiKey) {
+          try {
+            const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+            const validationModel = getDefaultModelForPlan(apiPlan);
+            await ai.models.get({ model: validationModel });
+          } catch {
+            return jsonWithCookie({ success: false, message: "invalidApiKey" });
+          }
+        }
 
         const updatedSettings: UserSettings = {
           ...currentSettings,
@@ -591,6 +613,51 @@ function SaveButton({ loading }: { loading?: boolean }) {
   );
 }
 
+function ErrorDialog({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="mx-4 w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-red-600 dark:text-red-400 flex items-center gap-2">
+            <AlertCircle size={16} />
+            {t("settings.general.errorTitle")}
+          </h3>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="px-4 py-4">
+          <p className="text-sm text-gray-700 dark:text-gray-300">{message}</p>
+        </div>
+        <div className="flex justify-end border-t border-gray-200 dark:border-gray-700 px-4 py-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-sm"
+          >
+            {t("common.close")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const inputClass =
   "w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
 const checkboxClass =
@@ -629,6 +696,8 @@ function GeneralTab({
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const isEncryptionSetup = !!settings.encryptedApiKey;
   const isRsaSetup = settings.encryption.enabled && !!settings.encryption.publicKey;
 
@@ -638,6 +707,19 @@ function GeneralTab({
       setSelectedModel(getDefaultModelForPlan(apiPlan));
     }
   }, [apiPlan, selectedModel]);
+
+  // Show error dialog or success banner based on fetcher result
+  const fetcherData = fetcher.data as { success?: boolean; message?: string } | undefined;
+  useEffect(() => {
+    if (!fetcherData) return;
+    if (fetcherData.success) {
+      invalidateIndexCache();
+    } else if (fetcherData.message) {
+      const key = `settings.general.${fetcherData.message}` as Parameters<typeof t>[0];
+      const translated = t(key);
+      setErrorMessage(translated !== key ? translated : fetcherData.message);
+    }
+  }, [fetcherData, t]);
 
   const handleResetEncryption = useCallback(() => {
     // Reset encryption by submitting with cleared values
@@ -649,7 +731,20 @@ function GeneralTab({
 
   return (
     <SectionCard>
-      <StatusBanner fetcher={fetcher} />
+      {/* Success banner (inline) */}
+      {fetcherData?.success && (
+        <div className="mb-6 p-3 rounded-md border text-sm bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300">
+          <div className="flex items-center gap-2">
+            <Check size={16} />
+            {t("settings.general.generalSaved")}
+          </div>
+        </div>
+      )}
+
+      {/* Error dialog (modal) */}
+      {errorMessage && (
+        <ErrorDialog message={errorMessage} onClose={() => setErrorMessage(null)} />
+      )}
 
       <fetcher.Form method="post">
         <input type="hidden" name="_action" value="saveGeneral" />
@@ -659,10 +754,18 @@ function GeneralTab({
           <KeyRound size={16} />
           {t("settings.general.apiKeyPasswordSection")}
         </h3>
+        {!isEncryptionSetup && (
+          <p className="text-xs text-red-500 dark:text-red-400 mb-3">
+            <span className="text-red-500">*</span> {t("settings.general.required")}
+          </p>
+        )}
 
         {/* API Key */}
         <div className="mb-4">
-          <Label htmlFor="geminiApiKey">{t("settings.general.apiKey")}</Label>
+          <Label htmlFor="geminiApiKey">
+            {t("settings.general.apiKey")}
+            {!isEncryptionSetup && <span className="text-red-500 ml-1">*</span>}
+          </Label>
           {hasApiKey && (
             <p className="text-xs text-green-600 dark:text-green-400 mb-1">
               Current key: <code className="font-mono">{maskedKey}</code>
@@ -682,7 +785,10 @@ function GeneralTab({
           /* Initial setup: password + confirm */
           <>
             <div className="mb-4">
-              <Label htmlFor="password">{t("settings.general.password")}</Label>
+              <Label htmlFor="password">
+                {t("settings.general.password")}
+                <span className="text-red-500 ml-1">*</span>
+              </Label>
               <input
                 type="password"
                 id="password"
@@ -695,7 +801,10 @@ function GeneralTab({
               </p>
             </div>
             <div className="mb-6">
-              <Label htmlFor="confirmPassword">{t("settings.general.confirmPassword")}</Label>
+              <Label htmlFor="confirmPassword">
+                {t("settings.general.confirmPassword")}
+                <span className="text-red-500 ml-1">*</span>
+              </Label>
               <input
                 type="password"
                 id="confirmPassword"
