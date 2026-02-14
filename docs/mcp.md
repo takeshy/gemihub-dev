@@ -240,7 +240,7 @@ All MCP server URLs are validated before use. Blocked targets:
 | Loopback | `127.*`, `::1`, `::`, `::0`, `localhost` |
 | Default route | `0.*` |
 | Private networks (IPv4) | `10.*`, `172.16-31.*`, `192.168.*` |
-| Private networks (IPv6) | `fc00:*`, `fd*` |
+| Private networks (IPv6) | `fc00::/7` (`fc*`, `fd*`) |
 | Link-local | `169.254.*`, `fe80:*` |
 | Cloud metadata | `metadata.google.internal`, `169.254.169.254` |
 | Protocol | HTTP blocked in production (HTTPS required) |

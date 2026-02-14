@@ -1,6 +1,6 @@
 import type { Route } from "./+types/api.settings.mcp-test";
 import { requireAuth } from "~/services/session.server";
-import { McpClient } from "~/services/mcp-client.server";
+import { McpClient, McpHttpError } from "~/services/mcp-client.server";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
 import {
   discoverOAuth,
@@ -97,9 +97,9 @@ export async function action({ request }: Route.ActionArgs) {
       // Ignore close errors
     }
 
-    // Check if this looks like a 401 — attempt OAuth discovery
+    // Check if this is a 401 — attempt OAuth discovery
     const errorMsg = error instanceof Error ? error.message : "Connection failed";
-    const is401 = errorMsg.includes("(401)");
+    const is401 = error instanceof McpHttpError && error.statusCode === 401;
 
     if (is401) {
       try {

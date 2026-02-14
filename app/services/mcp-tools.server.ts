@@ -3,7 +3,7 @@
 import { McpClient } from "./mcp-client.server";
 import { isTokenExpired, refreshAccessToken } from "./mcp-oauth.server";
 import { validateMcpServerUrl } from "./url-validator.server";
-import { deriveMcpServerId } from "~/types/settings";
+import { deriveMcpServerId, sanitizeMcpIdentifier } from "~/types/settings";
 import type {
   McpServerConfig,
   McpToolInfo,
@@ -14,14 +14,6 @@ import type { McpAppInfo } from "~/types/chat";
 
 // Cache of MCP clients per session
 const mcpClients = new Map<string, McpClient>();
-
-/**
- * Sanitize MCP server/tool name for use in prefixed tool names.
- * Matches obsidian-gemini-helper: lowercase, replace non-alphanumeric with _, strip leading/trailing _.
- */
-function sanitizeMcpName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
-}
 
 function getClientKey(config: McpServerConfig): string {
   const token = config.oauthTokens?.accessToken || "";
@@ -147,8 +139,8 @@ function mcpToolInfoToDefinition(
   serverDisplayName: string,
   tool: McpToolInfo
 ): ToolDefinition {
-  const safeName = sanitizeMcpName(serverIdentifier);
-  const safeToolName = sanitizeMcpName(tool.name);
+  const safeName = sanitizeMcpIdentifier(serverIdentifier);
+  const safeToolName = sanitizeMcpIdentifier(tool.name);
   const properties: Record<string, ToolPropertyDefinition> = {};
   const required: string[] = [];
 
@@ -199,10 +191,10 @@ function buildToolMap(mcpServers: McpServerConfig[]): Map<string, { server: McpS
 
   for (const server of mcpServers) {
     if (!server.tools) continue;
-    const safeName = sanitizeMcpName(deriveMcpServerId(server));
+    const safeName = sanitizeMcpIdentifier(deriveMcpServerId(server));
 
     for (const tool of server.tools) {
-      const safeToolName = sanitizeMcpName(tool.name);
+      const safeToolName = sanitizeMcpIdentifier(tool.name);
       const prefixedName = `mcp_${safeName}_${safeToolName}`;
       toolMap.set(prefixedName, { server, mcpToolName: tool.name });
     }
@@ -231,7 +223,7 @@ export async function executeMcpTool(
     let sanitizedToolName = "";
 
     for (const s of mcpServers) {
-      const safeName = sanitizeMcpName(deriveMcpServerId(s));
+      const safeName = sanitizeMcpIdentifier(deriveMcpServerId(s));
       const prefix = `mcp_${safeName}_`;
       if (toolName.startsWith(prefix)) {
         server = s;
@@ -250,7 +242,7 @@ export async function executeMcpTool(
       const client = await getOrCreateClient(server);
       const liveTools = await client.listTools(abortSignal);
       server.tools = liveTools;
-      const matched = liveTools.find((t) => sanitizeMcpName(t.name) === sanitizedToolName);
+      const matched = liveTools.find((t) => sanitizeMcpIdentifier(t.name) === sanitizedToolName);
       if (matched) {
         actualToolName = matched.name;
       }

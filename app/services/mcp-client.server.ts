@@ -3,6 +3,16 @@
 import type { McpServerConfig, McpToolInfo, McpAppResult, McpAppUiResource } from "~/types/settings";
 import { validateMcpServerUrl } from "./url-validator.server";
 
+/**
+ * Error thrown when an MCP HTTP request fails with a non-OK status code.
+ * Preserves the HTTP status code for programmatic inspection (e.g. 401 → OAuth discovery).
+ */
+export class McpHttpError extends Error {
+  constructor(public readonly statusCode: number, message: string) {
+    super(message);
+  }
+}
+
 // JSON-RPC types
 interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -122,7 +132,7 @@ export class McpClient {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`MCP request failed (${response.status}): ${text}`);
+      throw new McpHttpError(response.status, `MCP request failed (${response.status}): ${text}`);
     }
 
     // Extract session ID
