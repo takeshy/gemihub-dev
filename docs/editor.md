@@ -7,7 +7,7 @@ File editing system with a WYSIWYG markdown editor, visual workflow editor, HTML
 - **File-Type-Specific Editors**: Automatically selects the best editor based on file extension
 - **Markdown 3-Mode Editing**: Switch between Preview / WYSIWYG / Raw
 - **Visual Workflow Editing**: Display and edit YAML as a Mermaid flowchart
-- **Auto-Save**: Debounced (3 seconds) auto-save to IndexedDB cache
+- **Auto-Save**: Debounced (3 seconds, 1 second for new files) auto-save to IndexedDB cache
 - **Edit History**: Maintain local change history with restore to any version
 - **Diff View**: Compare with any file and view unified diffs
 - **Temp File Sharing**: Generate shareable temporary edit URLs via Temp Upload
@@ -45,7 +45,13 @@ Binary files show Temp Download / Temp Upload buttons for local editing and down
 
 ### Encrypted Files
 
-Files with the `.encrypted` extension are handled by `EncryptedFileViewer`. After entering a password for decryption, the content can be edited as plain text. The password is cached for the session, enabling auto-decryption.
+Files with the `.encrypted` extension are handled by `EncryptedFileViewer`. Additionally, files whose content starts with encrypted YAML frontmatter (`encrypted: true`) are also treated as encrypted, regardless of extension. After entering a password for decryption, the content can be edited as plain text. The password and derived private key are cached for the session (private key takes priority), enabling auto-decryption.
+
+Decrypted binary content (images, videos, audio, PDF) is displayed in a media viewer instead of a text editor.
+
+Auto-save is supported for encrypted text files with a **5-second** debounce (re-encrypt then save to cache). Encrypted binary files do not auto-save.
+
+Diff is not available for encrypted files.
 
 A **Permanent Decrypt** button is available after decryption. This sends the plaintext to the server, removes the `.encrypted` extension from the file name, and stores the file unencrypted on Drive. A confirmation dialog is shown before proceeding.
 
@@ -103,7 +109,7 @@ Workflow files (`.yaml`, `.yml`) have two editing modes.
 
 All editors use a common auto-save pattern.
 
-1. Save to IndexedDB cache after a **3-second** debounce from content change
+1. Save to IndexedDB cache after a **3-second** debounce from content change (1-second for newly created files). Encrypted files use a **5-second** debounce due to re-encryption overhead.
 2. Flush unsaved content when the editor loses focus (blur)
 3. Emit a `file-modified` event on save to update the file tree badge
 4. Record changes in the `editHistory` store (for Sync)

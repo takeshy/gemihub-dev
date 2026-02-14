@@ -69,6 +69,11 @@ export function EncryptedFileViewer({
   const prevContentRef = useRef(encryptedContent);
   const refreshedRef = useRef(false);
 
+  // Auto-save: debounced re-encrypt + saveToCache (5s to account for encryption cost)
+  const autoSaveDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pendingContentRef = useRef<string | null>(null);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+
   // Reset state when file or content changes
   useEffect(() => {
     if (prevFileIdRef.current !== fileId || prevContentRef.current !== encryptedContent) {
@@ -224,6 +229,62 @@ export function EncryptedFileViewer({
     },
     [setActiveSelection]
   );
+
+  // Auto-save: re-encrypt and save to cache on content change.
+  // Uses a Promise chain to serialize saves and prevent out-of-order writes.
+  const doAutoSave = useCallback((plaintext: string) => {
+    saveChainRef.current = saveChainRef.current.then(async () => {
+      try {
+        const reEncrypted = await encryptFileContent(
+          plaintext,
+          encryptionSettings.publicKey,
+          encryptionSettings.encryptedPrivateKey,
+          encryptionSettings.salt
+        );
+        await saveToCache(reEncrypted);
+        prevContentRef.current = reEncrypted;
+      } catch (e) {
+        console.error("[EncryptedFileViewer] auto-save encrypt failed:", e);
+      }
+    });
+  }, [encryptionSettings, saveToCache]);
+
+  // Debounced auto-save effect (only for decrypted text content, not binary)
+  useEffect(() => {
+    if (decryptedContent === null || binaryInfo) return;
+    // Skip if content matches the initial decrypted value (no user edits yet)
+    if (editedContent === decryptedContent) return;
+
+    pendingContentRef.current = editedContent;
+    if (autoSaveDebounceRef.current) clearTimeout(autoSaveDebounceRef.current);
+    const delay = fileId.startsWith("new:") ? 1000 : 5000;
+    autoSaveDebounceRef.current = setTimeout(() => {
+      doAutoSave(editedContent);
+      pendingContentRef.current = null;
+    }, delay);
+    return () => {
+      if (autoSaveDebounceRef.current) clearTimeout(autoSaveDebounceRef.current);
+    };
+  }, [editedContent, decryptedContent, binaryInfo, fileId, doAutoSave]);
+
+  // Flush pending auto-save on unmount or fileId change
+  useEffect(() => {
+    return () => {
+      if (pendingContentRef.current !== null) {
+        if (autoSaveDebounceRef.current) clearTimeout(autoSaveDebounceRef.current);
+        doAutoSave(pendingContentRef.current);
+        pendingContentRef.current = null;
+      }
+    };
+  }, [doAutoSave]);
+
+  const flushOnBlur = useCallback(() => {
+    if (pendingContentRef.current !== null) {
+      if (autoSaveDebounceRef.current) clearTimeout(autoSaveDebounceRef.current);
+      doAutoSave(pendingContentRef.current);
+      pendingContentRef.current = null;
+    }
+  }, [doAutoSave]);
 
   // Encrypt and upload — does NOT require password (only publicKey from settings)
   const handleTempUpload = useCallback(async () => {
@@ -448,7 +509,7 @@ export function EncryptedFileViewer({
 
   // ---------- Decrypted / plain-text editor UI ----------
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+    <div className="relative flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950" onBlur={flushOnBlur}>
       {/* Loading overlay during encryption/upload */}
       {uploading && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 dark:bg-gray-950/70">
