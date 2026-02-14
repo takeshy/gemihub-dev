@@ -210,18 +210,15 @@ export async function action({ request }: Route.ActionArgs) {
       // Return file metadata for both choices so client can update cache
       const resolvedEntry = remoteMeta.files[fileId];
       if (choice === "remote") {
-        const [content, meta] = await Promise.all([
-          readFile(validTokens.accessToken, fileId),
-          getFileMetadata(validTokens.accessToken, fileId),
-        ]);
+        const content = await readFile(validTokens.accessToken, fileId);
         return logAndReturn({
           remoteMeta,
           file: {
             fileId,
             content,
-            md5Checksum: meta.md5Checksum ?? "",
-            modifiedTime: meta.modifiedTime ?? "",
-            fileName: meta.name,
+            md5Checksum: resolvedEntry?.md5Checksum ?? "",
+            modifiedTime: resolvedEntry?.modifiedTime ?? "",
+            fileName: resolvedEntry?.name ?? "",
           },
         });
       }
@@ -329,11 +326,17 @@ export async function action({ request }: Route.ActionArgs) {
 
     case "deleteUntracked": {
       const fileIds = body.fileIds as string[];
+      let deletedCount = 0;
       await parallelProcess(fileIds, async (id) => {
-        await deleteFile(validTokens.accessToken, id);
+        try {
+          await deleteFile(validTokens.accessToken, id);
+          deletedCount++;
+        } catch {
+          // skip files that fail to delete
+        }
       }, 5);
-      logCtx.details = { fileCount: fileIds.length };
-      return logAndReturn({ deleted: fileIds.length });
+      logCtx.details = { fileCount: fileIds.length, deletedCount };
+      return logAndReturn({ deleted: deletedCount });
     }
 
     case "restoreUntracked": {
@@ -393,27 +396,35 @@ export async function action({ request }: Route.ActionArgs) {
         const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
           ?? { lastUpdatedAt: new Date().toISOString(), files: {} };
 
+        let restoredCount = 0;
         for (const fileId of fileIds) {
-          // Move file back to root folder
-          await moveFile(validTokens.accessToken, fileId, validTokens.rootFolderId, trashFolderId);
-          // Rename if requested
-          const newName = renames[fileId];
-          if (newName) {
-            await renameFile(validTokens.accessToken, fileId, newName);
+          try {
+            // Move file back to root folder
+            await moveFile(validTokens.accessToken, fileId, validTokens.rootFolderId, trashFolderId);
+            // Rename if requested
+            const newName = renames[fileId];
+            if (newName) {
+              await renameFile(validTokens.accessToken, fileId, newName);
+            }
+            // Add back to sync meta
+            const meta = await getFileMetadata(validTokens.accessToken, fileId);
+            remoteMeta.files[fileId] = {
+              name: meta.name,
+              mimeType: meta.mimeType,
+              md5Checksum: meta.md5Checksum ?? "",
+              modifiedTime: meta.modifiedTime ?? "",
+            };
+            restoredCount++;
+          } catch {
+            // skip files that fail to restore
           }
-          // Add back to sync meta
-          const meta = await getFileMetadata(validTokens.accessToken, fileId);
-          remoteMeta.files[fileId] = {
-            name: meta.name,
-            mimeType: meta.mimeType,
-            md5Checksum: meta.md5Checksum ?? "",
-            modifiedTime: meta.modifiedTime ?? "",
-          };
         }
 
-        remoteMeta.lastUpdatedAt = new Date().toISOString();
-        await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
-        return logAndReturn({ restored: fileIds.length, remoteMeta });
+        if (restoredCount > 0) {
+          remoteMeta.lastUpdatedAt = new Date().toISOString();
+          await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
+        }
+        return logAndReturn({ restored: restoredCount, remoteMeta });
       } catch {
         return logAndReturn({ restored: 0 });
       }

@@ -71,7 +71,7 @@ export function TrashDialog({ onClose }: TrashDialogProps) {
       setSelected(new Set());
       await loadFiles();
     } catch {
-      // ignore
+      alert(t("trash.deleteFailed"));
     } finally {
       setLoading(false);
     }
@@ -93,11 +93,11 @@ export function TrashDialog({ onClose }: TrashDialogProps) {
       await loadFiles();
       window.dispatchEvent(new Event("sync-complete"));
     } catch {
-      // ignore
+      alert(t("trash.restoreFailed"));
     } finally {
       setLoading(false);
     }
-  }, [selected, loadFiles]);
+  }, [selected, loadFiles, t]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

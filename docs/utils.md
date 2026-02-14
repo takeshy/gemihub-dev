@@ -35,7 +35,7 @@ Right-click a file or folder in the file tree (or tap the `⋯` button on mobile
 
 | Menu Item | Description |
 |-----------|-------------|
-| Clear Cache | Bulk-delete cache for all files in the folder (warns if modified files exist). Shown only when cached files exist in the folder |
+| Clear Cache | Bulk-delete cache for all files in the folder. If any files have unsaved changes, a confirmation dialog warns that changes will be lost; confirming deletes all cached files including modified ones. Shown only when cached files exist in the folder |
 | Rename | Rename the folder |
 | Trash | Move all files in the folder to `trash/` |
 
@@ -116,7 +116,10 @@ Add, edit, and delete commands from Settings > Commands tab. Commands are stored
 
 ### Auto File Context
 
-When no explicit context (`{content}`, `{selection}`, `@file`) is included, the name and ID of the currently open file are automatically appended to the message.
+When no explicit context (`{content}`, `{selection}`, `@file`) is included, the name and ID of the currently open file are automatically appended to the message, subject to the following conditions:
+
+- The currently open file differs from the file referenced in the most recent message in the conversation
+- The user has not dismissed the file context chip in the chat input
 
 ---
 
