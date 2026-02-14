@@ -78,7 +78,7 @@ terraform/
   networking.tf        # Load Balancer (IP, NEG, backend, URL map, SSL, proxies, forwarding rules)
   dns.tf               # Cloud DNS managed zone, A record, optional TXT verification record
   bigquery-logging.tf  # Cloud Logging → BigQuery pipeline
-  cloud-build.tf       # Cloud Build trigger (reference only, created via gcloud)
+  cloud-build.tf       # Cloud Build trigger (reference only, created via Cloud Console)
 ```
 
 ## Environment Variables (Cloud Run)
@@ -143,7 +143,7 @@ The following GCP APIs are enabled via Terraform:
 Managed by Google Cloud DNS. The zone contains:
 
 - **A record**: Points the domain to the global static IP
-- **TXT record**: Google site verification (default token is configured; set `google_site_verification_token = ""` to disable)
+- **TXT record**: Google site verification (disabled by default; set `google_site_verification_token` to your verification token to enable)
 
 Nameservers must be configured at the domain registrar.
 
@@ -158,6 +158,8 @@ The `cloudbuild.yaml` in the project root defines the pipeline:
 The trigger runs automatically on push to the `main` branch (including PR merges). The GitHub connection uses a 2nd-gen Cloud Build repository link.
 
 > **Note:** The Cloud Build trigger is created manually via Cloud Console (GitHub OAuth connection required). The `cloud-build.tf` file contains the resource definition as reference only.
+
+> **Note:** Cloud Run のコンテナイメージは Cloud Build がデプロイごとに更新するため、Terraform の `lifecycle.ignore_changes` で管理対象外としている。イメージの変更は `cloudbuild.yaml` 経由のみで行うこと。
 
 ## Docker
 

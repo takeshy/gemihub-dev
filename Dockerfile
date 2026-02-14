@@ -1,5 +1,5 @@
 FROM node:22-slim AS development-dependencies-env
-COPY . /app
+COPY ./package.json package-lock.json /app/
 WORKDIR /app
 RUN npm ci
 
