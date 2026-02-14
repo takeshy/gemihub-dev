@@ -1408,7 +1408,7 @@ function IDEContent({
 
       {/* Push rejected dialog */}
       {showPushRejected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50">
           <div className="mx-4 w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
             <div className="mb-4 flex items-center gap-2 text-amber-600 dark:text-amber-400">
               <AlertTriangle size={20} />

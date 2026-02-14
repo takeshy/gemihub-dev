@@ -204,7 +204,7 @@ export function SyncStatusBar({
         />
       )}
       {dialogType && dialogLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50">
           <div className="rounded-lg bg-white p-8 shadow-xl dark:bg-gray-900">
             <Loader2 size={ICON.XL} className="animate-spin text-gray-400" />
           </div>

@@ -233,7 +233,7 @@ export function EditHistoryModal({
   );
 
   const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50">
       <div className="mx-4 w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
@@ -382,7 +382,7 @@ export function EditHistoryModal({
 
       {/* Save As dialog */}
       {saveAsDialog.open && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50" onClick={() => setSaveAsDialog((prev) => ({ ...prev, open: false }))}>
+        <div className="fixed inset-0 z-60 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50" onClick={() => setSaveAsDialog((prev) => ({ ...prev, open: false }))}>
           <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
               {t("editHistory.saveAs")}

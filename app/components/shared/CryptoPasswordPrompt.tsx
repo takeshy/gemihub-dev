@@ -42,7 +42,7 @@ export function CryptoPasswordPrompt({
 
   const modal = (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-[70] flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50"
       onClick={() => !loading && onCancel()}
     >
       <div

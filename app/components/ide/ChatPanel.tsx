@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { Plus, Trash2, ChevronDown } from "lucide-react";
+import { Plus, Trash2, ChevronDown, HardDrive, Loader2, Check } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type {
   Message,
@@ -80,6 +80,7 @@ export function ChatPanel({
   const [streamingWebSearchUsed, setStreamingWebSearchUsed] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [chatListOpen, setChatListOpen] = useState(false);
+  const [saveMarkdownState, setSaveMarkdownState] = useState<"idle" | "saving" | "saved">("idle");
   const abortControllerRef = useRef<AbortController | null>(null);
   const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
   const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
@@ -745,6 +746,74 @@ export function ChatPanel({
     abortControllerRef.current?.abort();
   }, []);
 
+  const handleSaveAsMarkdown = useCallback(async () => {
+    if (saveMarkdownState !== "idle" || messages.length === 0) return;
+    setSaveMarkdownState("saving");
+    try {
+      const lines: string[] = [];
+      const title =
+        histories.find((h) => h.id === activeChatId)?.title || "Chat";
+      lines.push(`# ${title}\n`);
+      for (const msg of messages) {
+        const ts = new Date(msg.timestamp).toLocaleString();
+        if (msg.role === "user") {
+          lines.push(`## User (${ts})\n`);
+        } else {
+          lines.push(
+            `## AI${msg.model ? ` [${msg.model}]` : ""} (${ts})\n`
+          );
+        }
+        if (msg.content) lines.push(msg.content + "\n");
+        lines.push("---\n");
+      }
+      const content = lines.join("\n");
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const fileName = `chat-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.md`;
+      const res = await fetch("/api/drive/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          name: fileName,
+          content,
+          mimeType: "text/markdown",
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      const data = await res.json();
+      const file = data.file;
+      // Cache locally so it doesn't appear in Pull diff
+      await setCachedFile({
+        fileId: file.id,
+        content,
+        md5Checksum: file.md5Checksum ?? "",
+        modifiedTime: file.modifiedTime ?? "",
+        cachedAt: Date.now(),
+        fileName: file.name,
+      });
+      try {
+        const localMeta = await getLocalSyncMeta();
+        if (localMeta) {
+          localMeta.files[file.id] = {
+            md5Checksum: file.md5Checksum ?? "",
+            modifiedTime: file.modifiedTime ?? "",
+          };
+          localMeta.lastUpdatedAt = new Date().toISOString();
+          await setLocalSyncMeta(localMeta);
+        }
+      } catch {
+        // Non-critical
+      }
+      setSaveMarkdownState("saved");
+      window.dispatchEvent(new Event("sync-complete"));
+      setTimeout(() => setSaveMarkdownState("idle"), 3000);
+    } catch (e) {
+      console.error("Failed to save chat as markdown:", e);
+      setSaveMarkdownState("idle");
+    }
+  }, [saveMarkdownState, messages, histories, activeChatId]);
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Chat history selector */}
@@ -759,6 +828,16 @@ export function ChatPanel({
               ? histories.find((h) => h.id === activeChatId)?.title ||
                 "Chat"
               : t("chat.newChat")}
+          </button>
+          <button
+            onClick={handleSaveAsMarkdown}
+            disabled={saveMarkdownState === "saving" || messages.length === 0}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+            title={saveMarkdownState === "saved" ? t("chat.savedToDrive") : t("chat.saveToDrive")}
+          >
+            {saveMarkdownState === "idle" && <HardDrive size={ICON.MD} />}
+            {saveMarkdownState === "saving" && <Loader2 size={ICON.MD} className="animate-spin" />}
+            {saveMarkdownState === "saved" && <Check size={ICON.MD} className="text-green-500" />}
           </button>
           <button
             onClick={handleNewChat}

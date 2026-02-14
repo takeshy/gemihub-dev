@@ -13,6 +13,7 @@ export interface TranslationStrings {
   "header.files": string;
   "header.editor": string;
   "header.plugins": string;
+  "header.manual": string;
 
   // Index - unauthenticated
   "index.title": string;
@@ -466,6 +467,7 @@ const en: TranslationStrings = {
   "header.files": "Files",
   "header.editor": "Editor",
   "header.plugins": "Plugins",
+  "header.manual": "Manual",
 
   // Index
   "index.title": "GemiHub",
@@ -918,6 +920,7 @@ const ja: TranslationStrings = {
   "header.files": "ファイル",
   "header.editor": "エディタ",
   "header.plugins": "プラグイン",
+  "header.manual": "マニュアル",
 
   // Index
   "index.title": "GemiHub",

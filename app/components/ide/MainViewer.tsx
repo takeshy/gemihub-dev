@@ -427,7 +427,7 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
 
       {/* Binary temp file preview modal */}
       {tempPreview && createPortal(
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-[60] flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50">
           <div className="mx-4 w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-900 flex flex-col">
             {/* Header */}
             <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">

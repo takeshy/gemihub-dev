@@ -2453,7 +2453,7 @@ export function DriveFileTree({
       )}
 
       {createFileDialog.open && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setCreateFileDialog((prev) => ({ ...prev, open: false }))}>
+        <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50" onClick={() => setCreateFileDialog((prev) => ({ ...prev, open: false }))}>
           <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
               {t("fileTree.newFile")}
