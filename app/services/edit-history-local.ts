@@ -18,6 +18,7 @@ import * as Diff from "diff";
 import {
   getEditHistoryForFile,
   setEditHistoryEntry,
+  deleteEditHistoryEntry,
   getCachedFile,
   type CachedEditHistoryEntry,
   type EditHistoryDiff,
@@ -52,7 +53,7 @@ export async function saveLocalEdit(
   fileId: string,
   filePath: string,
   newContent: string
-): Promise<CachedEditHistoryEntry | null> {
+): Promise<CachedEditHistoryEntry | null | "reverted"> {
   const cached = await getCachedFile(fileId);
   const oldContent = cached?.content ?? "";
 
@@ -85,7 +86,21 @@ export async function saveLocalEdit(
   }
 
   const { diff, stats } = createDiffStr(baseContent, newContent, 3);
-  if (stats.additions === 0 && stats.deletions === 0) return null;
+  if (stats.additions === 0 && stats.deletions === 0) {
+    // Content matches session base — current edit was reverted.
+    // Clean up stale diff entry so the file doesn't appear as a push candidate.
+    if (entry.diffs.length > 0 && entry.diffs[entry.diffs.length - 1].diff !== "") {
+      entry.diffs.pop();
+    }
+    const hasMeaningfulDiffs = entry.diffs.some(d => d.diff !== "");
+    if (!hasMeaningfulDiffs) {
+      await deleteEditHistoryEntry(fileId);
+      return "reverted";
+    } else {
+      await setEditHistoryEntry(entry);
+    }
+    return null;
+  }
 
   const diffEntry: EditHistoryDiff = {
     timestamp: new Date().toISOString(),
@@ -244,4 +259,30 @@ function createDiffStr(
   }
 
   return { diff: lines.join("\n"), stats: { additions, deletions } };
+}
+
+/**
+ * Check if a file has actual content changes compared to its original synced state.
+ * Reconstructs the original content by reverse-applying all editHistory diffs.
+ * Returns false if content has been reverted to original (no net change).
+ */
+export async function hasNetContentChange(fileId: string): Promise<boolean> {
+  const cached = await getCachedFile(fileId);
+  if (!cached) return false;
+
+  const editHistory = await getEditHistoryForFile(fileId);
+  if (!editHistory || editHistory.diffs.length === 0) return false;
+
+  const meaningfulDiffs = editHistory.diffs.filter(d => d.diff !== "");
+  if (meaningfulDiffs.length === 0) return false;
+
+  // Reverse order (newest first) for reconstructContent
+  const diffs: DiffWithOrigin[] = [...meaningfulDiffs]
+    .reverse()
+    .map(d => ({ diff: d.diff, origin: "local" as const }));
+
+  const original = reconstructContent(cached.content, diffs);
+  if (original === null) return true; // Can't reconstruct → assume changed
+
+  return original !== cached.content;
 }

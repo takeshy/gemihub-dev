@@ -52,7 +52,7 @@ import {
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
 import { decryptFileContent, isEncryptedFile } from "~/services/crypto-core";
-import { saveLocalEdit } from "~/services/edit-history-local";
+import { saveLocalEdit, hasNetContentChange } from "~/services/edit-history-local";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
 import { cryptoCache } from "~/services/crypto-cache";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -299,17 +299,28 @@ export function DriveFileTree({
       } catch { /* ignore */ }
       try {
         const ids = await getLocallyModifiedFileIds();
-        setModifiedFiles(ids);
+        const actuallyModified = new Set<string>();
+        for (const id of ids) {
+          if (await hasNetContentChange(id)) actuallyModified.add(id);
+        }
+        setModifiedFiles(actuallyModified);
       } catch { /* ignore */ }
     })();
   }, [treeItems]);
 
   // Listen for file-modified / file-cached events from useFileWithCache
   useEffect(() => {
-    const handleModified = (e: Event) => {
+    const handleModified = async (e: Event) => {
       const fileId = (e as CustomEvent).detail?.fileId;
-      if (fileId) {
+      if (!fileId) return;
+      if (await hasNetContentChange(fileId)) {
         setModifiedFiles((prev) => new Set(prev).add(fileId));
+      } else {
+        setModifiedFiles((prev) => {
+          const next = new Set(prev);
+          next.delete(fileId);
+          return next;
+        });
       }
     };
     const handleCached = (e: Event) => {
@@ -320,7 +331,13 @@ export function DriveFileTree({
     };
     // After push/pull/sync-check, re-read modified files and refresh tree
     const syncHandler = () => {
-      getLocallyModifiedFileIds().then((ids) => setModifiedFiles(ids)).catch(() => {});
+      getLocallyModifiedFileIds().then(async (ids) => {
+        const actuallyModified = new Set<string>();
+        for (const id of ids) {
+          if (await hasNetContentChange(id)) actuallyModified.add(id);
+        }
+        setModifiedFiles(actuallyModified);
+      }).catch(() => {});
       fetchAndCacheTree();
     };
     const workflowHandler = () => {

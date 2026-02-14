@@ -9,6 +9,7 @@ import {
   getLocallyModifiedFileIds,
   getLocalSyncMeta,
 } from "~/services/indexeddb-cache";
+import { hasNetContentChange } from "~/services/edit-history-local";
 import { computeSyncDiff } from "~/services/sync-diff";
 import { SyncDiffDialog } from "./SyncDiffDialog";
 import type { FileListItem } from "./SyncDiffDialog";
@@ -65,6 +66,8 @@ export function SyncStatusBar({
         const localFiles = localMeta?.files ?? {};
 
         for (const id of diff.toPush) {
+          // Skip files whose content was reverted to synced state (no net change)
+          if (!(await hasNetContentChange(id))) continue;
           const name = remoteFiles[id]?.name;
           const isNew = !localFiles[id];
           if (name) {

@@ -239,10 +239,11 @@ export function useFileWithCache(
 
         // 1. Record local edit history BEFORE cache update
         //    (saveLocalEdit reads old cache content for reverse-apply diff)
-        let hasChange = false;
+        let editHistoryModified = false;
         try {
-          const entry = await saveLocalEdit(effectiveFileId, fileName, newContent);
-          hasChange = entry !== null;
+          const result = await saveLocalEdit(effectiveFileId, fileName, newContent);
+          // result: entry (changed), null (no change), "reverted" (cleaned up)
+          editHistoryModified = result !== null;
         } catch {
           // edit history failure is non-critical
         }
@@ -257,8 +258,8 @@ export function useFileWithCache(
           fileName: cached.fileName,
         });
 
-        // Notify file tree only when edit history actually recorded a change
-        if (hasChange) {
+        // Notify file tree when edit history changed (new edit or revert cleanup)
+        if (editHistoryModified) {
           window.dispatchEvent(
             new CustomEvent("file-modified", { detail: { fileId: effectiveFileId } })
           );

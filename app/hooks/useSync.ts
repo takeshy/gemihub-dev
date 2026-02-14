@@ -14,7 +14,7 @@ import {
   deleteEditHistoryEntry,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
-import { addCommitBoundary } from "~/services/edit-history-local";
+import { addCommitBoundary, hasNetContentChange } from "~/services/edit-history-local";
 import { ragRegisterInBackground } from "~/services/rag-sync";
 import {
   isSyncExcludedPath,
@@ -118,6 +118,8 @@ export function useSync() {
         const cached = await getCachedFile(id);
         const name = cached?.fileName || remoteFiles[id]?.name;
         if (name && isSyncExcludedPath(name)) continue;
+        // Skip files whose content was reverted to the synced state (no net change)
+        if (!pushLocalOnly.includes(id) && !(await hasNetContentChange(id))) continue;
         count++;
       }
       setLocalModifiedCount(count);
@@ -250,6 +252,7 @@ export function useSync() {
 
       const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];
       const binarySkippedIds: string[] = [];
+      const revertedIds: string[] = [];
       for (const fid of filteredIds) {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
@@ -258,6 +261,11 @@ export function useSync() {
         // Skip base64-encoded files (binary files already updated on Drive via upload)
         if (cached.encoding === "base64") {
           binarySkippedIds.push(fid);
+          continue;
+        }
+        // Skip files whose content was reverted to synced state (no net change)
+        if (!(await hasNetContentChange(fid))) {
+          revertedIds.push(fid);
           continue;
         }
         filesToPush.push({ fileId: fid, content: cached.content, fileName });
@@ -315,6 +323,10 @@ export function useSync() {
       }
       // Clear edit history for binary files skipped during push (already up-to-date on Drive)
       for (const fileId of binarySkippedIds) {
+        await deleteEditHistoryEntry(fileId);
+      }
+      // Clear edit history for reverted files (content matches synced state, no actual diff)
+      for (const fileId of revertedIds) {
         await deleteEditHistoryEntry(fileId);
       }
       const remainingModified = await getLocallyModifiedFileIds();
