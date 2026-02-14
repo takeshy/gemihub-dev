@@ -5,7 +5,7 @@ import { getTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
-import { DEFAULT_USER_SETTINGS, type UserSettings, type ShortcutKeyBinding } from "~/types/settings";
+import { DEFAULT_USER_SETTINGS, type UserSettings } from "~/types/settings";
 import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus, WifiOff, AlertTriangle } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
@@ -712,39 +712,51 @@ function IDEContent({
 
   // Keyboard shortcut: Ctrl+Shift+F / Cmd+Shift+F to open search, Ctrl+P / Cmd+P to quick open
   // Also handles user-configured shortcut keys from settings
-  const shortcutKeys = settings.shortcutKeys as ShortcutKeyBinding[] | undefined;
+  const shortcutKeys = settings.shortcutKeys ?? [];
+  const activeFileIdRef = useRef(activeFileId);
+  activeFileIdRef.current = activeFileId;
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
         e.preventDefault();
         setShowSearch(true);
+        return;
       }
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "P" || e.key === "p")) {
         e.preventDefault();
         setShowQuickOpen(true);
+        return;
       }
 
       // User-configured shortcut keys
-      if (shortcutKeys) {
-        for (const binding of shortcutKeys) {
-          if (!binding.key) continue;
-          const keyMatch = e.key.toLowerCase() === binding.key.toLowerCase();
-          const ctrlMatch = binding.ctrlOrMeta ? (e.ctrlKey || e.metaKey) : !(e.ctrlKey || e.metaKey);
-          const shiftMatch = binding.shift ? e.shiftKey : !e.shiftKey;
-          const altMatch = binding.alt ? e.altKey : !e.altKey;
+      for (const binding of shortcutKeys) {
+        if (!binding.key) continue;
+        const keyMatch = e.key.toLowerCase() === binding.key.toLowerCase();
+        const ctrlMatch = binding.ctrlOrMeta ? (e.ctrlKey || e.metaKey) : !(e.ctrlKey || e.metaKey);
+        const shiftMatch = binding.shift ? e.shiftKey : !e.shiftKey;
+        const altMatch = binding.alt ? e.altKey : !e.altKey;
 
-          if (keyMatch && ctrlMatch && shiftMatch && altMatch) {
-            e.preventDefault();
-            if (binding.action === "executeWorkflow") {
-              window.dispatchEvent(new Event("shortcut-execute-workflow"));
+        if (keyMatch && ctrlMatch && shiftMatch && altMatch) {
+          e.preventDefault();
+          if (binding.action === "executeWorkflow") {
+            const targetId = binding.targetFileId;
+            const targetName = binding.targetFileName;
+            // Force-open the target workflow if it's not the active file
+            if (targetId && targetName && activeFileIdRef.current !== targetId) {
+              handleSelectFile(targetId, targetName, "text/yaml");
             }
+            window.dispatchEvent(
+              new CustomEvent("shortcut-execute-workflow", {
+                detail: { fileId: targetId },
+              })
+            );
           }
         }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [shortcutKeys]);
+  }, [shortcutKeys, handleSelectFile]);
 
   // Mobile view state: which panel is shown full-screen
   const [mobileView, setMobileView] = useState<MobileView>("editor");

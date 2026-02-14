@@ -413,6 +413,10 @@ export interface TranslationStrings {
   "settings.shortcuts.pressKey": string;
   "settings.shortcuts.actionExecuteWorkflow": string;
   "settings.shortcuts.duplicate": string;
+  "settings.shortcuts.requireModifier": string;
+  "settings.shortcuts.builtinConflict": string;
+  "settings.shortcuts.targetWorkflow": string;
+  "settings.shortcuts.selectWorkflow": string;
   "settings.shortcuts.save": string;
 
   // Offline
@@ -832,6 +836,10 @@ const en: TranslationStrings = {
   "settings.shortcuts.pressKey": "Press a key...",
   "settings.shortcuts.actionExecuteWorkflow": "Execute Workflow",
   "settings.shortcuts.duplicate": "This key combination is already assigned.",
+  "settings.shortcuts.requireModifier": "Ctrl/Cmd or Alt modifier is required. Shift alone is not sufficient. Function keys (F1–F12) can be used alone.",
+  "settings.shortcuts.builtinConflict": "This key combination is reserved by the application.",
+  "settings.shortcuts.targetWorkflow": "Target Workflow",
+  "settings.shortcuts.selectWorkflow": "Select a workflow…",
   "settings.shortcuts.save": "Save Shortcut Settings",
 
   // Offline
@@ -1251,6 +1259,10 @@ const ja: TranslationStrings = {
   "settings.shortcuts.pressKey": "キーを押してください...",
   "settings.shortcuts.actionExecuteWorkflow": "ワークフロー実行",
   "settings.shortcuts.duplicate": "このキーの組み合わせは既に割り当てられています。",
+  "settings.shortcuts.requireModifier": "Ctrl/Cmd または Alt 修飾キーが必要です。Shift のみでは不十分です。ファンクションキー（F1〜F12）は単独で使用できます。",
+  "settings.shortcuts.builtinConflict": "このキーの組み合わせはアプリケーションで予約されています。",
+  "settings.shortcuts.targetWorkflow": "対象ワークフロー",
+  "settings.shortcuts.selectWorkflow": "ワークフローを選択…",
   "settings.shortcuts.save": "ショートカット設定を保存",
 
   // Offline
