@@ -413,12 +413,20 @@ export function DriveFileTree({
         fetchAndCacheTree();
       }
     };
+    // When a binary file is uploaded directly to Drive (images), update tree from meta without network call
+    const handleTreeMetaUpdated = (e: Event) => {
+      const { meta } = (e as CustomEvent).detail;
+      if (meta) {
+        updateTreeFromMeta(meta);
+      }
+    };
     window.addEventListener("file-modified", handleModified);
     window.addEventListener("file-cached", handleCached);
     window.addEventListener("sync-complete", syncHandler);
     window.addEventListener("workflow-completed", workflowHandler);
     window.addEventListener("file-id-migrated", handleMigrated);
     window.addEventListener("file-decrypted", handleDecrypted);
+    window.addEventListener("tree-meta-updated", handleTreeMetaUpdated);
     return () => {
       window.removeEventListener("file-modified", handleModified);
       window.removeEventListener("file-cached", handleCached);
@@ -426,6 +434,7 @@ export function DriveFileTree({
       window.removeEventListener("workflow-completed", workflowHandler);
       window.removeEventListener("file-id-migrated", handleMigrated);
       window.removeEventListener("file-decrypted", handleDecrypted);
+      window.removeEventListener("tree-meta-updated", handleTreeMetaUpdated);
     };
   }, [fetchAndCacheTree, updateTreeFromMeta]);
 

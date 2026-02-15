@@ -11,7 +11,7 @@ import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus, WifiO
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
-import { setCachedFile, getCachedFile, getCachedLoaderData, setCachedLoaderData } from "~/services/indexeddb-cache";
+import { setCachedFile, getCachedFile, getCachedLoaderData, setCachedLoaderData, getLocalSyncMeta, setLocalSyncMeta } from "~/services/indexeddb-cache";
 import { attachDriveFileHandlers } from "~/utils/drive-file-sse";
 import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
 
@@ -741,7 +741,36 @@ function IDEContent({
       }),
     });
     if (!res.ok) throw new Error("Upload failed");
-    const { file: driveFile } = await res.json();
+    const { file: driveFile, meta } = await res.json();
+
+    // Cache binary in IndexedDB so it's marked as synced
+    await setCachedFile({
+      fileId: driveFile.id,
+      content: base64,
+      md5Checksum: driveFile.md5Checksum,
+      modifiedTime: driveFile.modifiedTime,
+      cachedAt: Date.now(),
+      fileName: driveFile.name,
+      encoding: "base64",
+    });
+
+    // Update localSyncMeta so the file doesn't appear as a pull candidate
+    const localMeta = await getLocalSyncMeta();
+    if (localMeta) {
+      localMeta.files[driveFile.id] = {
+        md5Checksum: driveFile.md5Checksum,
+        modifiedTime: driveFile.modifiedTime,
+      };
+      localMeta.lastUpdatedAt = meta?.lastUpdatedAt || new Date().toISOString();
+      await setLocalSyncMeta(localMeta);
+    }
+
+    // Update tree + remote meta cache without a network call
+    if (meta) {
+      window.dispatchEvent(new CustomEvent("tree-meta-updated", { detail: { meta } }));
+    }
+    window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: driveFile.id } }));
+
     return `/api/drive/files?action=raw&fileId=${driveFile.id}`;
   }, []);
 

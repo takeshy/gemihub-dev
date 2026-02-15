@@ -7,6 +7,7 @@ import { ICON } from "~/utils/icon-sizes";
 import type { Message, Attachment, GeneratedImage, ToolCall } from "~/types/chat";
 import { useI18n } from "~/i18n/context";
 import { McpAppRenderer } from "./McpAppRenderer";
+import { setCachedFile, getLocalSyncMeta, setLocalSyncMeta } from "~/services/indexeddb-cache";
 
 interface MessageBubbleProps {
   message: Message;
@@ -193,8 +194,36 @@ function GeneratedImageDisplay({ image }: { image: GeneratedImage }) {
         }),
       });
       if (!res.ok) throw new Error("Failed to save");
+      const { file: driveFile, meta } = await res.json();
       setSaveState("saved");
-      window.dispatchEvent(new Event("sync-complete"));
+
+      // Cache binary in IndexedDB so it's marked as synced
+      await setCachedFile({
+        fileId: driveFile.id,
+        content: image.data,
+        md5Checksum: driveFile.md5Checksum,
+        modifiedTime: driveFile.modifiedTime,
+        cachedAt: Date.now(),
+        fileName: driveFile.name,
+        encoding: "base64",
+      });
+
+      // Update localSyncMeta so the file doesn't appear as a pull candidate
+      const localMeta = await getLocalSyncMeta();
+      if (localMeta) {
+        localMeta.files[driveFile.id] = {
+          md5Checksum: driveFile.md5Checksum,
+          modifiedTime: driveFile.modifiedTime,
+        };
+        localMeta.lastUpdatedAt = meta?.lastUpdatedAt || new Date().toISOString();
+        await setLocalSyncMeta(localMeta);
+      }
+
+      // Update tree + remote meta cache without a network call
+      if (meta) {
+        window.dispatchEvent(new CustomEvent("tree-meta-updated", { detail: { meta } }));
+      }
+      window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: driveFile.id } }));
     } catch (e) {
       console.error("Failed to save image to Drive:", e);
       setSaveState("idle");
