@@ -63,6 +63,7 @@ export interface TranslationStrings {
   "settings.tab.rag": string;
   // General tab
   "settings.general.apiKey": string;
+  "settings.general.apiKeyGetLink": string;
   "settings.general.apiKeyPlaceholder": string;
   "settings.general.apiKeyKeep": string;
   "settings.general.apiPlan": string;
@@ -568,6 +569,7 @@ const en: TranslationStrings = {
 
   // General tab
   "settings.general.apiKey": "Gemini API Key",
+  "settings.general.apiKeyGetLink": "Get your API key",
   "settings.general.apiKeyPlaceholder": "AIza...",
   "settings.general.apiKeyKeep": "Leave blank to keep current key",
   "settings.general.apiPlan": "API Plan",
@@ -1073,6 +1075,7 @@ const ja: TranslationStrings = {
 
   // General tab
   "settings.general.apiKey": "Gemini APIキー",
+  "settings.general.apiKeyGetLink": "APIキーを取得",
   "settings.general.apiKeyPlaceholder": "AIza...",
   "settings.general.apiKeyKeep": "現在のキーを保持する場合は空欄",
   "settings.general.apiPlan": "APIプラン",

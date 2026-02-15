@@ -766,10 +766,20 @@ function GeneralTab({
 
         {/* API Key */}
         <div className="mb-4">
-          <Label htmlFor="geminiApiKey">
-            {t("settings.general.apiKey")}
-            {!isEncryptionSetup && <span className="text-red-500 ml-1">*</span>}
-          </Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="geminiApiKey">
+              {t("settings.general.apiKey")}
+              {!isEncryptionSetup && <span className="text-red-500 ml-1">*</span>}
+            </Label>
+            <a
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {t("settings.general.apiKeyGetLink")} ↗
+            </a>
+          </div>
           {hasApiKey && (
             <p className="text-xs text-green-600 dark:text-green-400 mb-1">
               Current key: <code className="font-mono">{maskedKey}</code>
