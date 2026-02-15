@@ -260,8 +260,10 @@ export function useSync() {
         remoteMeta?.files,
         localMeta?.files
       );
+      const localFiles = localMeta?.files ?? {};
+      // Include tracked files + new/untracked files (not yet in localMeta, e.g. after migration)
       const filteredIds = trackedIds.size > 0
-        ? new Set([...modifiedIds].filter((id) => trackedIds.has(id)))
+        ? new Set([...modifiedIds].filter((id) => trackedIds.has(id) || !localFiles[id]))
         : modifiedIds;
 
       const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];

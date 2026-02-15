@@ -7,8 +7,6 @@ import {
   getEditHistoryForFile,
   setEditHistoryEntry,
   deleteEditHistoryEntry,
-  getLocalSyncMeta,
-  setLocalSyncMeta,
 } from "~/services/indexeddb-cache";
 
 /**
@@ -112,20 +110,11 @@ export function usePendingFileMigration(isOffline: boolean) {
               fileName: file.name,
             });
 
-            // Update localSyncMeta so push/pull recognizes this file
-            try {
-              const localMeta = await getLocalSyncMeta();
-              if (localMeta) {
-                localMeta.files[file.id] = {
-                  md5Checksum: finalMd5,
-                  modifiedTime: finalModifiedTime,
-                };
-                localMeta.lastUpdatedAt = new Date().toISOString();
-                await setLocalSyncMeta(localMeta);
-              }
-            } catch {
-              // Non-critical — next pull will fix the inconsistency
-            }
+            // Don't add to localSyncMeta here — localMeta represents the "last synced state"
+            // and this file hasn't been pushed through the sync system yet.
+            // Adding it would cause computeSyncDiff to misclassify it as editDeleteConflict
+            // (in localMeta but missing from remoteMeta / _sync-meta.json).
+            // The file will be properly registered in both metas after the first push.
 
             // Notify tree, _index, and useFileWithCache to update IDs
             window.dispatchEvent(
