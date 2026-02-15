@@ -698,6 +698,13 @@ function GeneralTab({
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
   const availableModels = getAvailableModels(apiPlan);
 
+  // Sensitive field state (controlled to survive re-renders after fetcher submission)
+  const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+
   // Encryption state
   const [encryptChatHistory, setEncryptChatHistory] = useState(settings.encryption.encryptChatHistory);
   const [encryptWorkflowHistory, setEncryptWorkflowHistory] = useState(settings.encryption.encryptWorkflowHistory);
@@ -721,6 +728,12 @@ function GeneralTab({
   useEffect(() => {
     if (!fetcherData) return;
     if (fetcherData.success) {
+      // Clear sensitive fields on success
+      setGeminiApiKey("");
+      setPassword("");
+      setConfirmPassword("");
+      setCurrentPassword("");
+      setNewPassword("");
       invalidateIndexCache();
       if (fetcherData.apiKeyUpdated) {
         window.location.href = "/";
@@ -796,6 +809,8 @@ function GeneralTab({
             type="password"
             id="geminiApiKey"
             name="geminiApiKey"
+            value={geminiApiKey}
+            onChange={(e) => setGeminiApiKey(e.target.value)}
             placeholder={hasApiKey ? t("settings.general.apiKeyKeep") : t("settings.general.apiKeyPlaceholder")}
             className={inputClass}
           />
@@ -814,6 +829,8 @@ function GeneralTab({
                 type="password"
                 id="password"
                 name="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder={t("settings.general.password")}
                 className={inputClass}
               />
@@ -830,6 +847,8 @@ function GeneralTab({
                 type="password"
                 id="confirmPassword"
                 name="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder={t("settings.general.confirmPassword")}
                 className={inputClass}
               />
@@ -860,6 +879,8 @@ function GeneralTab({
                     type="password"
                     id="currentPassword"
                     name="currentPassword"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder={t("settings.general.currentPassword")}
                     className={inputClass}
                   />
@@ -870,6 +891,8 @@ function GeneralTab({
                     type="password"
                     id="newPassword"
                     name="newPassword"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
                     placeholder={t("settings.general.newPassword")}
                     className={inputClass}
                   />
@@ -880,13 +903,20 @@ function GeneralTab({
                     type="password"
                     id="confirmPassword"
                     name="confirmPassword"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder={t("settings.general.confirmPassword")}
                     className={inputClass}
                   />
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowPasswordChange(false)}
+                  onClick={() => {
+                    setShowPasswordChange(false);
+                    setCurrentPassword("");
+                    setNewPassword("");
+                    setConfirmPassword("");
+                  }}
                   className="text-sm text-gray-500 dark:text-gray-400 hover:underline"
                 >
                   {t("common.cancel")}
