@@ -302,7 +302,7 @@ export async function action({ request }: Route.ActionArgs) {
         baseSession.set("selectedModel", updatedSettings.selectedModel);
 
         return jsonWithCookie(
-          { success: true, message: "General settings saved." },
+          { success: true, message: "General settings saved.", apiKeyUpdated: !!effectiveApiKey },
           { headers: { "Set-Cookie": await commitSession(baseSession) } }
         );
       }
@@ -709,12 +709,15 @@ function GeneralTab({
     }
   }, [apiPlan, selectedModel]);
 
-  // Show error dialog or success banner based on fetcher result
-  const fetcherData = fetcher.data as { success?: boolean; message?: string } | undefined;
+  // Show error dialog, reload confirm (API key change), or success banner
+  const fetcherData = fetcher.data as { success?: boolean; message?: string; apiKeyUpdated?: boolean } | undefined;
   useEffect(() => {
     if (!fetcherData) return;
     if (fetcherData.success) {
       invalidateIndexCache();
+      if (fetcherData.apiKeyUpdated) {
+        window.location.href = "/";
+      }
     } else if (fetcherData.message) {
       const key = `settings.general.${fetcherData.message}` as Parameters<typeof t>[0];
       const translated = t(key);
@@ -732,8 +735,8 @@ function GeneralTab({
 
   return (
     <SectionCard>
-      {/* Success banner (inline) */}
-      {fetcherData?.success && (
+      {/* Success banner (non-API-key saves only; API key saves redirect) */}
+      {fetcherData?.success && !fetcherData.apiKeyUpdated && (
         <div className="mb-6 p-3 rounded-md border text-sm bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300">
           <div className="flex items-center gap-2">
             <Check size={16} />
