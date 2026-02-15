@@ -723,7 +723,11 @@ function GeneralTab({
     }
   }, [apiPlan, selectedModel]);
 
-  // Show error dialog, reload confirm (API key change), or success banner
+  // Show error dialog, reload confirm (API key change), or success banner.
+  // Use a ref for `t` so the effect only re-runs when fetcher.data changes,
+  // preventing stale error data from being reprocessed when `t` updates.
+  const tRef = useRef(t);
+  tRef.current = t;
   const fetcherData = fetcher.data as { success?: boolean; message?: string; apiKeyUpdated?: boolean } | undefined;
   useEffect(() => {
     if (!fetcherData) return;
@@ -740,10 +744,10 @@ function GeneralTab({
       }
     } else if (fetcherData.message) {
       const key = `settings.general.${fetcherData.message}` as Parameters<typeof t>[0];
-      const translated = t(key);
+      const translated = tRef.current(key);
       setErrorMessage(translated !== key ? translated : fetcherData.message);
     }
-  }, [fetcherData, t]);
+  }, [fetcherData]);
 
   const handleResetEncryption = useCallback(() => {
     // Reset encryption by submitting with cleared values
