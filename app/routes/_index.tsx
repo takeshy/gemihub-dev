@@ -88,8 +88,24 @@ export async function loader({ request }: Route.LoaderArgs) {
 // Client-side loader cache (with offline fallback via IndexedDB)
 // ---------------------------------------------------------------------------
 
+function getLocalStorageLanguage(): import("~/types/settings").Language | null {
+  try {
+    const v = localStorage.getItem("gemihub-language");
+    if (v === "ja" || v === "en") return v;
+  } catch { /* localStorage unavailable */ }
+  return null;
+}
+
 type LoaderData = Awaited<ReturnType<Route.ClientLoaderArgs["serverLoader"]>>;
 let cachedLoaderData: LoaderData | null = null;
+
+function applyLocalStorageLanguage(d: LoaderData): LoaderData {
+  const lsLang = getLocalStorageLanguage();
+  if (lsLang && d.settings.language !== lsLang) {
+    return { ...d, settings: { ...d.settings, language: lsLang } };
+  }
+  return d;
+}
 
 export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
   if (cachedLoaderData) return cachedLoaderData;
@@ -101,23 +117,23 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
     if (loaderData.isOffline) {
       const cached = await getCachedLoaderData();
       if (cached) {
-        cachedLoaderData = {
+        cachedLoaderData = applyLocalStorageLanguage({
           ...loaderData,
           settings: cached.settings as typeof loaderData.settings,
           hasGeminiApiKey: cached.hasGeminiApiKey,
           hasEncryptedApiKey: cached.hasEncryptedApiKey,
           rootFolderId: cached.rootFolderId,
           isOffline: true,
-        };
+        });
         return cachedLoaderData;
       }
       // No IndexedDB cache — use default settings from server response
-      cachedLoaderData = loaderData;
-      return loaderData;
+      cachedLoaderData = applyLocalStorageLanguage(loaderData);
+      return cachedLoaderData;
     }
 
     // Online — cache for future offline use
-    cachedLoaderData = loaderData;
+    cachedLoaderData = applyLocalStorageLanguage(loaderData);
     setCachedLoaderData({
       id: "current",
       settings: loaderData.settings,
@@ -126,30 +142,30 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
       rootFolderId: loaderData.rootFolderId,
       cachedAt: Date.now(),
     }).catch(() => {});
-    return loaderData;
+    return cachedLoaderData;
   } catch {
     // Server completely unreachable (SW served cached HTML) — try IndexedDB
     const cached = await getCachedLoaderData();
     if (cached) {
-      cachedLoaderData = {
+      cachedLoaderData = applyLocalStorageLanguage({
         settings: cached.settings as LoaderData["settings"],
         hasGeminiApiKey: cached.hasGeminiApiKey,
         hasEncryptedApiKey: cached.hasEncryptedApiKey,
         rootFolderId: cached.rootFolderId,
         isOffline: true,
-      };
+      });
       return cachedLoaderData;
     }
     // Never loaded online before — return minimal offline data instead of
     // redirecting to /lp (which also fails offline and shows a blank page)
     if (!navigator.onLine) {
-      cachedLoaderData = {
+      cachedLoaderData = applyLocalStorageLanguage({
         settings: { ...DEFAULT_USER_SETTINGS, language: resolveLanguage(null, navigator.language) } as LoaderData["settings"],
         hasGeminiApiKey: false,
         hasEncryptedApiKey: false,
         rootFolderId: "",
         isOffline: true,
-      };
+      });
       return cachedLoaderData;
     }
     throw redirect("/lp");

@@ -447,7 +447,14 @@ export default function Settings() {
   const { settings, hasApiKey, maskedKey } = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<TabId>("general");
 
-  const effectiveLang = settings.language ?? "en";
+  const effectiveLang = (() => {
+    const serverLang = settings.language ?? "en";
+    try {
+      const ls = localStorage.getItem("gemihub-language");
+      if (ls === "ja" || ls === "en") return ls as Language;
+    } catch { /* localStorage unavailable */ }
+    return serverLang;
+  })();
   useApplySettings(effectiveLang, settings.fontSize, settings.theme);
 
   // Detect OAuth redirect return from mobile flow

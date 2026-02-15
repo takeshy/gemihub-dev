@@ -84,6 +84,10 @@ export async function getSettings(
     settingsCache.set(cacheKey, { settings, fileId, cachedAt: Date.now() });
     return settings;
   } catch {
+    // Prefer expired cache over defaults — preserves the user's saved
+    // language/settings even when Drive is temporarily unreachable.
+    const expired = settingsCache.get(cacheKey);
+    if (expired) return expired.settings;
     return DEFAULT_USER_SETTINGS;
   }
 }
