@@ -442,6 +442,13 @@ export interface TranslationStrings {
   "settings.sync.conflictsTitle": string;
   "settings.sync.conflictsDescription": string;
   "settings.sync.manage": string;
+  "settings.sync.backupToken": string;
+  "settings.sync.backupTokenDescription": string;
+  "settings.sync.backupTokenGenerate": string;
+  "settings.sync.backupTokenCopy": string;
+  "settings.sync.backupTokenCopied": string;
+  "settings.sync.backupTokenWarning": string;
+  "settings.sync.backupTokenHide": string;
   "trash.tabTrash": string;
   "trash.tabConflicts": string;
   "trash.noFiles": string;
@@ -948,6 +955,13 @@ const en: TranslationStrings = {
   "settings.sync.conflictsTitle": "Conflict Backups",
   "settings.sync.conflictsDescription": "Manage conflict backup files from sync resolution.",
   "settings.sync.manage": "Manage",
+  "settings.sync.backupToken": "Backup Token",
+  "settings.sync.backupTokenDescription": "Generate a token for external backup tools to access your Google Drive files.",
+  "settings.sync.backupTokenGenerate": "Generate Token",
+  "settings.sync.backupTokenCopy": "Copy",
+  "settings.sync.backupTokenCopied": "Copied!",
+  "settings.sync.backupTokenWarning": "This token grants full access to your GemHub files in Google Drive. It expires in about 1 hour. Generate a new token if it expires during backup.",
+  "settings.sync.backupTokenHide": "Hide Token",
   "trash.tabTrash": "Trash",
   "trash.tabConflicts": "Conflicts",
   "trash.noFiles": "No files in trash.",
@@ -1454,6 +1468,13 @@ const ja: TranslationStrings = {
   "settings.sync.conflictsTitle": "コンフリクトバックアップ",
   "settings.sync.conflictsDescription": "同期コンフリクト解決時のバックアップファイルを管理します。",
   "settings.sync.manage": "管理",
+  "settings.sync.backupToken": "バックアップトークン",
+  "settings.sync.backupTokenDescription": "外部バックアップツールがGoogle Driveファイルにアクセスするためのトークンを生成します。",
+  "settings.sync.backupTokenGenerate": "トークンを生成",
+  "settings.sync.backupTokenCopy": "コピー",
+  "settings.sync.backupTokenCopied": "コピーしました！",
+  "settings.sync.backupTokenWarning": "このトークンはGoogle DriveのGemHubファイルへのフルアクセス権を付与します。約1時間で失効します。バックアップ中に失効した場合は再生成してください。",
+  "settings.sync.backupTokenHide": "トークンを非表示",
   "trash.tabTrash": "ゴミ箱",
   "trash.tabConflicts": "コンフリクト",
   "trash.noFiles": "ゴミ箱にファイルはありません。",

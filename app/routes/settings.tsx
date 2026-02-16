@@ -430,6 +430,16 @@ export async function action({ request }: Route.ActionArgs) {
         return jsonWithCookie({ success: true, message: "Shortcut settings saved." });
       }
 
+      case "generateBackupToken": {
+        const payload = JSON.stringify({ a: validTokens.accessToken, r: validTokens.rootFolderId });
+        const buf = Buffer.from(payload);
+        for (let i = 0; i < buf.length; i++) buf[i] ^= 0x5a;
+        return jsonWithCookie({
+          success: true,
+          backupToken: buf.toString("hex"),
+        });
+      }
+
       default:
         return jsonWithCookie({ success: false, message: "Unknown action." });
     }
@@ -1132,6 +1142,8 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [pruneMsg, setPruneMsg] = useState<string | null>(null);
   const [historyStats, setHistoryStats] = useState<Record<string, unknown> | null>(null);
+  const [backupToken, setBackupToken] = useState<string | null>(null);
+  const [backupCopied, setBackupCopied] = useState(false);
 
   // Load lastUpdatedAt from IndexedDB
   useEffect(() => {
@@ -1405,6 +1417,35 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
     }
   }, []);
 
+  const handleGenerateBackupToken = useCallback(async () => {
+    setActionLoading("backupToken");
+    try {
+      const form = new FormData();
+      form.set("_action", "generateBackupToken");
+      const res = await fetch("/settings", { method: "POST", body: form });
+      const json = await res.json();
+      if (json.backupToken) {
+        setBackupToken(json.backupToken);
+        setBackupCopied(false);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
+  const handleCopyBackupToken = useCallback(async () => {
+    if (!backupToken) return;
+    try {
+      await navigator.clipboard.writeText(backupToken);
+      setBackupCopied(true);
+      setTimeout(() => setBackupCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  }, [backupToken]);
+
   const actionBtnClass = "inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm disabled:opacity-50";
   const dangerBtnClass = "inline-flex items-center gap-2 px-3 py-1.5 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 text-sm disabled:opacity-50";
 
@@ -1435,6 +1476,49 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
             <span className="italic text-gray-400">{t("settings.sync.notSynced")}</span>
           )}
         </div>
+      </SectionCard>
+
+      {/* Backup Token */}
+      <SectionCard>
+        <div className="flex items-center gap-2 mb-3">
+          <KeyRound size={16} className="text-gray-600 dark:text-gray-400" />
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+            {t("settings.sync.backupToken")}
+          </h3>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          {t("settings.sync.backupTokenDescription")}
+        </p>
+        {!backupToken ? (
+          <button
+            type="button"
+            onClick={handleGenerateBackupToken}
+            disabled={actionLoading === "backupToken"}
+            className={actionBtnClass}
+          >
+            {actionLoading === "backupToken" ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+            {t("settings.sync.backupTokenGenerate")}
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <code className="block p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded break-all select-all">
+              {backupToken}
+            </code>
+            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+              <AlertCircle size={14} className="shrink-0" />
+              <span>{t("settings.sync.backupTokenWarning")}</span>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={handleCopyBackupToken} className={actionBtnClass}>
+                {backupCopied ? <Check size={14} /> : <Copy size={14} />}
+                {backupCopied ? t("settings.sync.backupTokenCopied") : t("settings.sync.backupTokenCopy")}
+              </button>
+              <button type="button" onClick={() => { setBackupToken(null); setBackupCopied(false); }} className={actionBtnClass}>
+                {t("settings.sync.backupTokenHide")}
+              </button>
+            </div>
+          </div>
+        )}
       </SectionCard>
 
       {/* Data Management */}
