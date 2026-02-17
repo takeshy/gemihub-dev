@@ -476,15 +476,15 @@ export default function Settings() {
   const { settings, hasApiKey, maskedKey } = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<TabId>("general");
 
-  const effectiveLang = (() => {
+  const [currentLang, setCurrentLang] = useState<Language>(() => {
     const serverLang = settings.language ?? "en";
     try {
       const ls = localStorage.getItem("gemihub-language");
       if (ls === "ja" || ls === "en") return ls as Language;
     } catch { /* localStorage unavailable */ }
     return serverLang;
-  })();
-  useApplySettings(effectiveLang, settings.fontSize, settings.theme);
+  });
+  useApplySettings(currentLang, settings.fontSize, settings.theme);
 
   // Detect OAuth redirect return from mobile flow
   useEffect(() => {
@@ -499,14 +499,15 @@ export default function Settings() {
   }, []);
 
   return (
-    <I18nProvider language={effectiveLang}>
-      <PluginProvider pluginConfigs={settings.plugins || []} language={effectiveLang}>
+    <I18nProvider language={currentLang}>
+      <PluginProvider pluginConfigs={settings.plugins || []} language={currentLang}>
         <SettingsInner
           settings={settings}
           hasApiKey={hasApiKey}
           maskedKey={maskedKey}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+          onLanguageChange={setCurrentLang}
         />
       </PluginProvider>
     </I18nProvider>
@@ -519,12 +520,14 @@ function SettingsInner({
   maskedKey,
   activeTab,
   setActiveTab,
+  onLanguageChange,
 }: {
   settings: UserSettings;
   hasApiKey: boolean;
   maskedKey: string | null;
   activeTab: TabId;
   setActiveTab: (tab: TabId) => void;
+  onLanguageChange: (lang: Language) => void;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -575,7 +578,7 @@ function SettingsInner({
       {/* Tab content */}
       <main className="max-w-5xl mx-auto px-4 py-4 sm:py-8">
         {activeTab === "general" && (
-          <GeneralTab settings={settings} hasApiKey={hasApiKey} maskedKey={maskedKey} />
+          <GeneralTab settings={settings} hasApiKey={hasApiKey} maskedKey={maskedKey} onLanguageChange={onLanguageChange} />
         )}
         {activeTab === "sync" && <SyncTab settings={settings} />}
         {activeTab === "mcp" && <McpTab settings={settings} />}
@@ -708,21 +711,22 @@ function GeneralTab({
   settings,
   hasApiKey,
   maskedKey,
+  onLanguageChange,
 }: {
   settings: UserSettings;
   hasApiKey: boolean;
   maskedKey: string | null;
+  onLanguageChange: (lang: Language) => void;
 }) {
   const fetcher = useFetcher();
   const loading = fetcher.state !== "idle";
-  const { t } = useI18n();
+  const { t, language } = useI18n();
 
   const [apiPlan, setApiPlan] = useState<ApiPlan>(settings.apiPlan);
   const [selectedModel, setSelectedModel] = useState<ModelType | "">(
     settings.selectedModel || ""
   );
   const [systemPrompt, setSystemPrompt] = useState(settings.systemPrompt);
-  const [language, setLanguage] = useState<Language>(settings.language ?? "en");
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
   const availableModels = getAvailableModels(apiPlan);
@@ -1094,7 +1098,7 @@ function GeneralTab({
             id="language"
             name="language"
             value={language}
-            onChange={(e) => setLanguage(e.target.value as Language)}
+            onChange={(e) => onLanguageChange(e.target.value as Language)}
             className={inputClass + " max-w-[300px]"}
           >
             {SUPPORTED_LANGUAGES.map((lang) => (
