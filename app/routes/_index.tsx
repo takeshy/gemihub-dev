@@ -108,7 +108,7 @@ function applyLocalStorageLanguage(d: LoaderData): LoaderData {
 }
 
 export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
-  if (cachedLoaderData) return cachedLoaderData;
+  if (cachedLoaderData) return applyLocalStorageLanguage(cachedLoaderData);
 
   try {
     const loaderData = await serverLoader();
