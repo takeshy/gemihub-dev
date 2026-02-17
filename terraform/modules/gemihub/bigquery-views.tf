@@ -47,7 +47,7 @@ resource "google_bigquery_table" "v_daily_summary" {
   view {
     query = <<-SQL
       SELECT
-        DATE(timestamp) AS date,
+        DATE(timestamp, 'Asia/Tokyo') AS date,
         COUNT(DISTINCT jsonPayload.userId) AS dau,
         COUNT(*) AS total_requests,
         COUNTIF(CAST(jsonPayload.statusCode AS INT64) >= 400) AS error_count,
@@ -80,7 +80,7 @@ resource "google_bigquery_table" "v_feature_usage" {
   view {
     query = <<-SQL
       SELECT
-        DATE(timestamp) AS date,
+        DATE(timestamp, 'Asia/Tokyo') AS date,
         jsonPayload.route  AS route,
         jsonPayload.action AS action,
         jsonPayload.method AS method,
@@ -111,7 +111,7 @@ resource "google_bigquery_table" "v_performance" {
   view {
     query = <<-SQL
       SELECT
-        DATE(timestamp) AS date,
+        DATE(timestamp, 'Asia/Tokyo') AS date,
         jsonPayload.route  AS route,
         jsonPayload.action AS action,
         COUNT(*) AS request_count,
