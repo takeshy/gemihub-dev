@@ -6,11 +6,15 @@ const SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
 ];
 
-function getOAuth2Client() {
+function getOAuth2Client(request?: Request) {
+  const url = request ? new URL(request.url) : null;
+  const redirectUri = url
+    ? `${url.protocol}//${url.host}/auth/google/callback`
+    : process.env.GOOGLE_REDIRECT_URI;
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    redirectUri
   );
 }
 
@@ -24,7 +28,7 @@ export async function getAuthUrl(request: Request): Promise<{ url: string; setCo
   session.set("oauthState", state);
   const setCookieHeader = await commitSession(session);
 
-  const oauth2Client = getOAuth2Client();
+  const oauth2Client = getOAuth2Client(request);
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: SCOPES,
@@ -34,12 +38,12 @@ export async function getAuthUrl(request: Request): Promise<{ url: string; setCo
   return { url, setCookieHeader };
 }
 
-export async function exchangeCode(code: string): Promise<{
+export async function exchangeCode(code: string, request: Request): Promise<{
   accessToken: string;
   refreshToken: string;
   expiryTime: number;
 }> {
-  const oauth2Client = getOAuth2Client();
+  const oauth2Client = getOAuth2Client(request);
   const { tokens } = await oauth2Client.getToken(code);
 
   if (!tokens.access_token || !tokens.refresh_token) {

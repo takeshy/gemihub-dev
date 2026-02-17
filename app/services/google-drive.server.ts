@@ -2,7 +2,7 @@ import type { SessionTokens } from "./session.server";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
-const ROOT_FOLDER_NAME = "gemihub";
+const ROOT_FOLDER_NAME = process.env.ROOT_FOLDER_NAME || "gemihub";
 const HISTORY_FOLDER = "history";
 
 /** Escape a value for use in Drive API query strings (single-quote contexts). */

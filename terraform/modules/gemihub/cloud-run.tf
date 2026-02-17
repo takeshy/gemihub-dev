@@ -24,7 +24,7 @@ resource "google_cloud_run_v2_service" "app" {
           memory = "2Gi"
           cpu    = "1"
         }
-        cpu_idle = true
+        cpu_idle = var.cpu_idle
       }
 
       env {
@@ -60,6 +60,14 @@ resource "google_cloud_run_v2_service" "app" {
       env {
         name  = "GOOGLE_REDIRECT_URI"
         value = "https://${var.domain}/auth/google/callback"
+      }
+
+      dynamic "env" {
+        for_each = var.root_folder_name != "gemihub" ? [var.root_folder_name] : []
+        content {
+          name  = "ROOT_FOLDER_NAME"
+          value = env.value
+        }
       }
 
       startup_probe {

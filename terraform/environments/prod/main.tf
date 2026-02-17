@@ -74,6 +74,7 @@ module "gemihub" {
   google_client_secret           = var.google_client_secret
   session_secret                 = var.session_secret
   google_site_verification_token = var.google_site_verification_token
+  cpu_idle                       = false
 }
 
 # --------------- Outputs ---------------

@@ -162,6 +162,7 @@ export interface TranslationStrings {
   "settings.general.invalidApiKey": string;
   "settings.general.apiKeyRequired": string;
   "settings.general.passwordRequiredError": string;
+  "settings.general.currentPasswordRequired": string;
   "settings.general.required": string;
   "settings.general.errorTitle": string;
   "settings.general.generalSaved": string;
@@ -675,6 +676,7 @@ const en: TranslationStrings = {
   "settings.general.invalidApiKey": "Invalid API key. Please check your Gemini API key and try again.",
   "settings.general.apiKeyRequired": "API key is required for initial setup.",
   "settings.general.passwordRequiredError": "Password is required for initial setup.",
+  "settings.general.currentPasswordRequired": "Current password is required to change the API key.",
   "settings.general.required": "Required",
   "settings.general.errorTitle": "Save Error",
   "settings.general.generalSaved": "General settings saved.",
@@ -1188,6 +1190,7 @@ const ja: TranslationStrings = {
   "settings.general.invalidApiKey": "無効なAPIキーです。Gemini APIキーを確認して再度お試しください。",
   "settings.general.apiKeyRequired": "初回設定にはAPIキーが必要です。",
   "settings.general.passwordRequiredError": "初回設定にはパスワードが必要です。",
+  "settings.general.currentPasswordRequired": "APIキーを変更するには現在のパスワードが必要です。",
   "settings.general.required": "必須",
   "settings.general.errorTitle": "保存エラー",
   "settings.general.generalSaved": "一般設定を保存しました。",

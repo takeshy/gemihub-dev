@@ -8,6 +8,8 @@ locals {
 # ---------- v_requests: base view flattening jsonPayload ----------
 
 resource "google_bigquery_table" "v_requests" {
+  count = var.manage_bigquery_views ? 1 : 0
+
   dataset_id = google_bigquery_dataset.app_logs.dataset_id
   table_id   = "v_requests"
 
@@ -37,6 +39,8 @@ resource "google_bigquery_table" "v_requests" {
 # ---------- v_daily_summary: DAU, request count, error rate ----------
 
 resource "google_bigquery_table" "v_daily_summary" {
+  count = var.manage_bigquery_views ? 1 : 0
+
   dataset_id = google_bigquery_dataset.app_logs.dataset_id
   table_id   = "v_daily_summary"
 
@@ -68,6 +72,8 @@ resource "google_bigquery_table" "v_daily_summary" {
 # ---------- v_feature_usage: route/action breakdown ----------
 
 resource "google_bigquery_table" "v_feature_usage" {
+  count = var.manage_bigquery_views ? 1 : 0
+
   dataset_id = google_bigquery_dataset.app_logs.dataset_id
   table_id   = "v_feature_usage"
 
@@ -97,6 +103,8 @@ resource "google_bigquery_table" "v_feature_usage" {
 # ---------- v_performance: latency percentiles per endpoint ----------
 
 resource "google_bigquery_table" "v_performance" {
+  count = var.manage_bigquery_views ? 1 : 0
+
   dataset_id = google_bigquery_dataset.app_logs.dataset_id
   table_id   = "v_performance"
 
@@ -128,6 +136,8 @@ resource "google_bigquery_table" "v_performance" {
 # ---------- v_errors: requests with status >= 400 ----------
 
 resource "google_bigquery_table" "v_errors" {
+  count = var.manage_bigquery_views ? 1 : 0
+
   dataset_id = google_bigquery_dataset.app_logs.dataset_id
   table_id   = "v_errors"
 

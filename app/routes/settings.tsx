@@ -230,6 +230,11 @@ export async function action({ request }: Route.ActionArgs) {
 
         const isInitialSetup = !currentSettings.encryptedApiKey && geminiApiKey && password;
         const isPasswordChange = !!currentSettings.encryptedApiKey && currentPassword && newPassword;
+        const isApiKeyChangeOnly = !!currentSettings.encryptedApiKey && geminiApiKey && !newPassword;
+
+        if (isApiKeyChangeOnly && !currentPassword) {
+          return jsonWithCookie({ success: false, message: "currentPasswordRequired" });
+        }
 
         if (isInitialSetup) {
           // Initial setup: encrypt API key + generate RSA key pair
@@ -285,6 +290,20 @@ export async function action({ request }: Route.ActionArgs) {
                 salt: rsaSalt,
               };
             }
+          } catch {
+            return jsonWithCookie({ success: false, message: "Current password is incorrect." });
+          }
+        } else if (isApiKeyChangeOnly) {
+          // API key change only: re-encrypt new API key with current password
+          try {
+            // Verify current password by decrypting existing key
+            await decryptPrivateKey(
+              currentSettings.encryptedApiKey, currentSettings.apiKeySalt, currentPassword
+            );
+
+            const { encryptedPrivateKey: encApiKey, salt: apiSalt } = await encryptPrivateKey(geminiApiKey, currentPassword);
+            updatedSettings.encryptedApiKey = encApiKey;
+            updatedSettings.apiKeySalt = apiSalt;
           } catch {
             return jsonWithCookie({ success: false, message: "Current password is incorrect." });
           }
@@ -869,12 +888,27 @@ function GeneralTab({
             </div>
           </>
         ) : (
-          /* Already setup: show configured status and password change option */
+          /* Already setup: show configured status, current password, and password change option */
           <div className="mb-6">
             <div className="mb-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
               <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
                 <Check size={16} />
                 {t("settings.general.configured")}
+              </p>
+            </div>
+            <div className="mb-4">
+              <Label htmlFor="currentPassword">{t("settings.general.currentPassword")}</Label>
+              <input
+                type="password"
+                id="currentPassword"
+                name="currentPassword"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder={t("settings.general.currentPassword")}
+                className={inputClass}
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t("settings.general.currentPasswordRequired")}
               </p>
             </div>
             {!showPasswordChange ? (
@@ -887,18 +921,6 @@ function GeneralTab({
               </button>
             ) : (
               <div className="space-y-3 p-4 border border-gray-200 dark:border-gray-700 rounded-md">
-                <div>
-                  <Label htmlFor="currentPassword">{t("settings.general.currentPassword")}</Label>
-                  <input
-                    type="password"
-                    id="currentPassword"
-                    name="currentPassword"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder={t("settings.general.currentPassword")}
-                    className={inputClass}
-                  />
-                </div>
                 <div>
                   <Label htmlFor="newPassword">{t("settings.general.newPassword")}</Label>
                   <input
