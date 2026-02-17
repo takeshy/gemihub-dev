@@ -18,7 +18,7 @@ export interface NodePropertyContext {
   mcpServerIds?: string[];
 }
 
-export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodePropertyContext): NodePropertyDef[] {
+function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePropertyContext): NodePropertyDef[] {
   switch (type) {
     case "variable":
       return [
@@ -191,4 +191,12 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
     default:
       return [];
   }
+}
+
+export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodePropertyContext): NodePropertyDef[] {
+  const defs = getTypeSpecificPropertyDefs(type, context);
+  return [
+    ...defs,
+    { key: "comment", label: "Comment", required: false, multiline: true },
+  ];
 }

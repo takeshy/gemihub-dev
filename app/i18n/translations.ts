@@ -390,6 +390,7 @@ export interface TranslationStrings {
   "quickOpen.selectFile": string;
 
   // Workflow
+  "workflow.nodeComment": string;
   "workflow.pushRequired": string;
   "workflow.referenceHistory": string;
   "workflow.historySelect.title": string;
@@ -904,6 +905,7 @@ const en: TranslationStrings = {
   "quickOpen.selectFile": "Select a file...",
 
   // Workflow
+  "workflow.nodeComment": "Comment",
   "workflow.pushRequired": "Push to sync changes with server before executing",
   "workflow.referenceHistory": "Reference Execution History",
   "workflow.historySelect.title": "Select Execution Steps",
@@ -1418,6 +1420,7 @@ const ja: TranslationStrings = {
   "quickOpen.selectFile": "ファイルを選択...",
 
   // Workflow
+  "workflow.nodeComment": "コメント",
   "workflow.pushRequired": "Pushしてサーバー側に反映しないと実行できません",
   "workflow.referenceHistory": "実行履歴を参照",
   "workflow.historySelect.title": "実行ステップを選択",

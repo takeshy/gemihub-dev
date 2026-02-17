@@ -133,6 +133,37 @@ function formatValue(value: unknown): string {
   }
 }
 
+function NodeComment({ comment }: { comment: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const lines = comment.split("\n");
+  const isMultiLine = lines.length > 1;
+
+  if (!isMultiLine) {
+    return (
+      <p className="mt-0.5 truncate text-[11px] italic text-yellow-600 dark:text-yellow-400">
+        {comment}
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-0.5">
+      <button
+        onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+        className="flex items-center gap-0.5 text-[11px] italic text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300"
+      >
+        {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        <span className={expanded ? "" : "truncate max-w-[180px] inline-block align-bottom"}>{lines[0]}</span>
+      </button>
+      {expanded && (
+        <pre className="mt-0.5 whitespace-pre-wrap text-[11px] italic text-yellow-600 dark:text-yellow-400 pl-3.5">
+          {lines.slice(1).join("\n")}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function WorkflowNodeListView({
   fileId,
   fileName,
@@ -862,6 +893,10 @@ function WorkflowNodeListView({
                     <p className="mt-0.5 truncate text-[11px] text-gray-500 dark:text-gray-400">
                       {summary}
                     </p>
+                  )}
+                  {/* Comment */}
+                  {node.properties.comment && (
+                    <NodeComment comment={node.properties.comment} />
                   )}
                 </div>
                 {/* Outgoing edges */}
