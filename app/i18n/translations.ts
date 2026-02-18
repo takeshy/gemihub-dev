@@ -444,22 +444,13 @@ export interface TranslationStrings {
   "settings.sync.conflictsTitle": string;
   "settings.sync.conflictsDescription": string;
   "settings.sync.manage": string;
-  "settings.sync.backupToken": string;
-  "settings.sync.backupTokenDescription": string;
-  "settings.sync.backupTokenGenerate": string;
+  "settings.sync.migrationTool": string;
+  "settings.sync.migrationToolDescription": string;
+  "settings.sync.migrationTokenGenerate": string;
+  "settings.sync.migrationTokenWarning": string;
   "settings.sync.backupTokenCopy": string;
   "settings.sync.backupTokenCopied": string;
-  "settings.sync.backupTokenWarning": string;
   "settings.sync.backupTokenHide": string;
-  "settings.sync.obsidianSync": string;
-  "settings.sync.obsidianSyncDescription": string;
-  "settings.sync.obsidianExport": string;
-  "settings.sync.obsidianExportSuccess": string;
-  "settings.sync.obsidianEncryptionRequired": string;
-  "settings.sync.obsidianTokenLabel": string;
-  "settings.sync.obsidianTokenCopy": string;
-  "settings.sync.obsidianTokenCopied": string;
-  "settings.sync.obsidianTokenWarning": string;
   "trash.tabTrash": string;
   "trash.tabConflicts": string;
   "trash.noFiles": string;
@@ -968,22 +959,13 @@ const en: TranslationStrings = {
   "settings.sync.conflictsTitle": "Conflict Backups",
   "settings.sync.conflictsDescription": "Manage conflict backup files from sync resolution.",
   "settings.sync.manage": "Manage",
-  "settings.sync.backupToken": "Backup Token",
-  "settings.sync.backupTokenDescription": "Generate a token for external backup tools to access your Google Drive files.",
-  "settings.sync.backupTokenGenerate": "Generate Token",
+  "settings.sync.migrationTool": "Migration Tool",
+  "settings.sync.migrationToolDescription": "Generate a token for Obsidian Gemini Helper or external backup tools. If encryption is enabled, authentication credentials are also exported to Google Drive.",
+  "settings.sync.migrationTokenGenerate": "Generate Token",
+  "settings.sync.migrationTokenWarning": "This token grants access to your GemHub files in Google Drive. It expires in about 1 hour.",
   "settings.sync.backupTokenCopy": "Copy",
   "settings.sync.backupTokenCopied": "Copied!",
-  "settings.sync.backupTokenWarning": "This token grants full access to your GemHub files in Google Drive. It expires in about 1 hour. Generate a new token if it expires during backup.",
   "settings.sync.backupTokenHide": "Hide Token",
-  "settings.sync.obsidianSync": "Obsidian Sync",
-  "settings.sync.obsidianSyncDescription": "Export encrypted authentication to Google Drive for use with the Obsidian Gemini Helper plugin. Uses your existing encryption key pair.",
-  "settings.sync.obsidianExport": "Export to Drive",
-  "settings.sync.obsidianExportSuccess": "Auth exported! Paste this token in Obsidian to complete setup:",
-  "settings.sync.obsidianEncryptionRequired": "Encryption must be enabled in the General tab before exporting.",
-  "settings.sync.obsidianTokenLabel": "Backup token (paste in Obsidian):",
-  "settings.sync.obsidianTokenCopy": "Copy",
-  "settings.sync.obsidianTokenCopied": "Copied!",
-  "settings.sync.obsidianTokenWarning": "This token expires in about 1 hour. Use it promptly in Obsidian settings.",
   "trash.tabTrash": "Trash",
   "trash.tabConflicts": "Conflicts",
   "trash.noFiles": "No files in trash.",
@@ -1492,22 +1474,13 @@ const ja: TranslationStrings = {
   "settings.sync.conflictsTitle": "コンフリクトバックアップ",
   "settings.sync.conflictsDescription": "同期コンフリクト解決時のバックアップファイルを管理します。",
   "settings.sync.manage": "管理",
-  "settings.sync.backupToken": "バックアップトークン",
-  "settings.sync.backupTokenDescription": "外部バックアップツールがGoogle Driveファイルにアクセスするためのトークンを生成します。",
-  "settings.sync.backupTokenGenerate": "トークンを生成",
+  "settings.sync.migrationTool": "移行ツール",
+  "settings.sync.migrationToolDescription": "Obsidian Gemini Helper や外部バックアップツール用のトークンを生成します。暗号化が有効な場合、認証情報も Google Drive にエクスポートされます。",
+  "settings.sync.migrationTokenGenerate": "トークンを生成",
+  "settings.sync.migrationTokenWarning": "このトークンは Google Drive の GemHub ファイルへのアクセス権を付与します。約1時間で失効します。",
   "settings.sync.backupTokenCopy": "コピー",
   "settings.sync.backupTokenCopied": "コピーしました！",
-  "settings.sync.backupTokenWarning": "このトークンはGoogle DriveのGemHubファイルへのフルアクセス権を付与します。約1時間で失効します。バックアップ中に失効した場合は再生成してください。",
   "settings.sync.backupTokenHide": "トークンを非表示",
-  "settings.sync.obsidianSync": "Obsidian 同期",
-  "settings.sync.obsidianSyncDescription": "Obsidian Gemini Helper プラグインで使用するため、暗号化された認証情報を Google Drive にエクスポートします。既存の暗号化キーペアを使用します。",
-  "settings.sync.obsidianExport": "Drive にエクスポート",
-  "settings.sync.obsidianExportSuccess": "認証情報をエクスポートしました！このトークンを Obsidian に貼り付けてセットアップを完了してください：",
-  "settings.sync.obsidianEncryptionRequired": "エクスポートするには、General タブで暗号化を有効にしてください。",
-  "settings.sync.obsidianTokenLabel": "バックアップトークン（Obsidian に貼り付け）：",
-  "settings.sync.obsidianTokenCopy": "コピー",
-  "settings.sync.obsidianTokenCopied": "コピーしました！",
-  "settings.sync.obsidianTokenWarning": "このトークンは約1時間で失効します。速やかに Obsidian の設定に貼り付けてください。",
   "trash.tabTrash": "ゴミ箱",
   "trash.tabConflicts": "コンフリクト",
   "trash.noFiles": "ゴミ箱にファイルはありません。",
