@@ -179,18 +179,16 @@ export function useSync() {
       const data = await res.json();
       const remoteMeta = data.remoteMeta as SyncMeta | null;
 
-      // Cache remoteMeta in IndexedDB for pull to use
+      // Cache remoteMeta in IndexedDB for pull dialog to use
       if (remoteMeta) {
         const existingCached = await getCachedRemoteMeta();
-        if (existingCached?.rootFolderId) {
-          await setCachedRemoteMeta({
-            id: "current",
-            rootFolderId: existingCached.rootFolderId,
-            lastUpdatedAt: remoteMeta.lastUpdatedAt,
-            files: remoteMeta.files,
-            cachedAt: Date.now(),
-          });
-        }
+        await setCachedRemoteMeta({
+          id: "current",
+          rootFolderId: existingCached?.rootFolderId ?? "",
+          lastUpdatedAt: remoteMeta.lastUpdatedAt,
+          files: remoteMeta.files,
+          cachedAt: Date.now(),
+        });
       }
 
       // Recompute both push and pull counts from the fresh remoteMeta
@@ -237,15 +235,13 @@ export function useSync() {
         // Update cached remoteMeta so subsequent pull uses the fresh data
         if (remoteMeta) {
           const existingCached = await getCachedRemoteMeta();
-          if (existingCached?.rootFolderId) {
-            await setCachedRemoteMeta({
-              id: "current",
-              rootFolderId: existingCached.rootFolderId,
-              lastUpdatedAt: remoteMeta.lastUpdatedAt,
-              files: remoteMeta.files,
-              cachedAt: Date.now(),
-            });
-          }
+          await setCachedRemoteMeta({
+            id: "current",
+            rootFolderId: existingCached?.rootFolderId ?? "",
+            lastUpdatedAt: remoteMeta.lastUpdatedAt,
+            files: remoteMeta.files,
+            cachedAt: Date.now(),
+          });
           // Recompute both push and pull counts from the fresh remoteMeta
           await refreshSyncCounts(remoteMeta);
         }

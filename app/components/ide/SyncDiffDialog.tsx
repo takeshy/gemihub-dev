@@ -76,6 +76,15 @@ export function SyncDiffDialog({
       return;
     }
 
+    // Prevent duplicate requests while loading
+    if (current?.loading) {
+      setDiffStates((prev) => ({
+        ...prev,
+        [fileId]: { ...prev[fileId], expanded: !prev[fileId].expanded },
+      }));
+      return;
+    }
+
     setDiffStates((prev) => ({
       ...prev,
       [fileId]: { loading: true, diff: null, error: false, expanded: true },
