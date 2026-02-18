@@ -459,6 +459,48 @@ export async function action({ request }: Route.ActionArgs) {
         });
       }
 
+      case "exportObsidianAuth": {
+        const obsidianPassword = formData.get("obsidianPassword") as string;
+        if (!obsidianPassword || obsidianPassword.length < 4) {
+          return jsonWithCookie({ success: false, message: "Password must be at least 4 characters." });
+        }
+
+        // Encrypt { refreshToken, apiOrigin } with user password
+        const url = new URL(request.url);
+        const apiOrigin = `${url.protocol}//${url.host}`;
+        const authPayload = JSON.stringify({
+          refreshToken: validTokens.refreshToken,
+          apiOrigin,
+        });
+        const { encryptedPrivateKey: encrypted, salt } = await encryptPrivateKey(authPayload, obsidianPassword);
+
+        // Save to Drive as _encrypted-auth.json
+        const authFileContent = JSON.stringify({ encrypted, salt }, null, 2);
+        const { findFileByExactName, createFile, updateFile } = await import("~/services/google-drive.server");
+        const existingFile = await findFileByExactName(
+          validTokens.accessToken, "_encrypted-auth.json", validTokens.rootFolderId
+        );
+        if (existingFile) {
+          await updateFile(validTokens.accessToken, existingFile.id, authFileContent, "application/json");
+        } else {
+          await createFile(
+            validTokens.accessToken, "_encrypted-auth.json", authFileContent,
+            validTokens.rootFolderId, "application/json"
+          );
+        }
+
+        // Also generate backup token for Obsidian initial setup
+        const btPayload = JSON.stringify({ a: validTokens.accessToken, r: validTokens.rootFolderId });
+        const btBuf = Buffer.from(btPayload);
+        for (let i = 0; i < btBuf.length; i++) btBuf[i] ^= 0x5a;
+
+        return jsonWithCookie({
+          success: true,
+          message: "Obsidian auth exported to Google Drive.",
+          backupToken: btBuf.toString("hex"),
+        });
+      }
+
       default:
         return jsonWithCookie({ success: false, message: "Unknown action." });
     }
@@ -1170,6 +1212,9 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   const [historyStats, setHistoryStats] = useState<Record<string, unknown> | null>(null);
   const [backupToken, setBackupToken] = useState<string | null>(null);
   const [backupCopied, setBackupCopied] = useState(false);
+  const [obsidianPassword, setObsidianPassword] = useState("");
+  const [obsidianToken, setObsidianToken] = useState<string | null>(null);
+  const [obsidianCopied, setObsidianCopied] = useState(false);
 
   // Load lastUpdatedAt from IndexedDB
   useEffect(() => {
@@ -1472,6 +1517,39 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
     }
   }, [backupToken]);
 
+  const handleExportObsidianAuth = useCallback(async () => {
+    if (!obsidianPassword || obsidianPassword.length < 4) return;
+    setActionLoading("obsidianExport");
+    try {
+      const form = new FormData();
+      form.set("_action", "exportObsidianAuth");
+      form.set("obsidianPassword", obsidianPassword);
+      const res = await fetch("/settings", { method: "POST", body: form });
+      const json = await res.json();
+      if (json.success && json.backupToken) {
+        setObsidianToken(json.backupToken);
+        setObsidianCopied(false);
+        setObsidianPassword("");
+      }
+      if (json.message) setActionMsg(json.message);
+    } catch {
+      setActionMsg("Failed to export auth.");
+    } finally {
+      setActionLoading(null);
+    }
+  }, [obsidianPassword]);
+
+  const handleCopyObsidianToken = useCallback(async () => {
+    if (!obsidianToken) return;
+    try {
+      await navigator.clipboard.writeText(obsidianToken);
+      setObsidianCopied(true);
+      setTimeout(() => setObsidianCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  }, [obsidianToken]);
+
   const actionBtnClass = "inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm disabled:opacity-50";
   const dangerBtnClass = "inline-flex items-center gap-2 px-3 py-1.5 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 text-sm disabled:opacity-50";
 
@@ -1540,6 +1618,67 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
                 {backupCopied ? t("settings.sync.backupTokenCopied") : t("settings.sync.backupTokenCopy")}
               </button>
               <button type="button" onClick={() => { setBackupToken(null); setBackupCopied(false); }} className={actionBtnClass}>
+                {t("settings.sync.backupTokenHide")}
+              </button>
+            </div>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Obsidian Sync */}
+      <SectionCard>
+        <div className="flex items-center gap-2 mb-3">
+          <KeyRound size={16} className="text-gray-600 dark:text-gray-400" />
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+            {t("settings.sync.obsidianSync")}
+          </h3>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          {t("settings.sync.obsidianSyncDescription")}
+        </p>
+        {!obsidianToken ? (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                {t("settings.sync.obsidianPassword")}
+              </label>
+              <input
+                type="password"
+                value={obsidianPassword}
+                onChange={(e) => setObsidianPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full max-w-[300px] px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleExportObsidianAuth}
+              disabled={actionLoading === "obsidianExport" || obsidianPassword.length < 4}
+              className={actionBtnClass}
+            >
+              {actionLoading === "obsidianExport" ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+              {t("settings.sync.obsidianExport")}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-green-600 dark:text-green-400">{t("settings.sync.obsidianExportSuccess")}</p>
+            <div>
+              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">{t("settings.sync.obsidianTokenLabel")}</label>
+              <code className="block p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded break-all select-all">
+                {obsidianToken}
+              </code>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+              <AlertCircle size={14} className="shrink-0" />
+              <span>{t("settings.sync.obsidianTokenWarning")}</span>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={handleCopyObsidianToken} className={actionBtnClass}>
+                {obsidianCopied ? <Check size={14} /> : <Copy size={14} />}
+                {obsidianCopied ? t("settings.sync.obsidianTokenCopied") : t("settings.sync.obsidianTokenCopy")}
+              </button>
+              <button type="button" onClick={() => { setObsidianToken(null); setObsidianCopied(false); }} className={actionBtnClass}>
                 {t("settings.sync.backupTokenHide")}
               </button>
             </div>

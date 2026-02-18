@@ -45,4 +45,5 @@ export default [
   route("public/file/:fileId/:fileName", "routes/public.file.$fileId.$fileName.tsx"),
   route("api/plugins", "routes/api.plugins.tsx"),
   route("api/plugins/:id", "routes/api.plugins.$id.tsx"),
+  route("api/obsidian/token", "routes/api.obsidian.token.tsx"),
 ] satisfies RouteConfig;

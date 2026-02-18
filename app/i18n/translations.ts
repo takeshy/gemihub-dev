@@ -451,6 +451,15 @@ export interface TranslationStrings {
   "settings.sync.backupTokenCopied": string;
   "settings.sync.backupTokenWarning": string;
   "settings.sync.backupTokenHide": string;
+  "settings.sync.obsidianSync": string;
+  "settings.sync.obsidianSyncDescription": string;
+  "settings.sync.obsidianPassword": string;
+  "settings.sync.obsidianExport": string;
+  "settings.sync.obsidianExportSuccess": string;
+  "settings.sync.obsidianTokenLabel": string;
+  "settings.sync.obsidianTokenCopy": string;
+  "settings.sync.obsidianTokenCopied": string;
+  "settings.sync.obsidianTokenWarning": string;
   "trash.tabTrash": string;
   "trash.tabConflicts": string;
   "trash.noFiles": string;
@@ -966,6 +975,15 @@ const en: TranslationStrings = {
   "settings.sync.backupTokenCopied": "Copied!",
   "settings.sync.backupTokenWarning": "This token grants full access to your GemHub files in Google Drive. It expires in about 1 hour. Generate a new token if it expires during backup.",
   "settings.sync.backupTokenHide": "Hide Token",
+  "settings.sync.obsidianSync": "Obsidian Sync",
+  "settings.sync.obsidianSyncDescription": "Export encrypted authentication to Google Drive for use with the Obsidian Gemini Helper plugin.",
+  "settings.sync.obsidianPassword": "Encryption password",
+  "settings.sync.obsidianExport": "Export to Drive",
+  "settings.sync.obsidianExportSuccess": "Auth exported! Paste this token in Obsidian to complete setup:",
+  "settings.sync.obsidianTokenLabel": "Backup token (paste in Obsidian):",
+  "settings.sync.obsidianTokenCopy": "Copy",
+  "settings.sync.obsidianTokenCopied": "Copied!",
+  "settings.sync.obsidianTokenWarning": "This token expires in about 1 hour. Use it promptly in Obsidian settings.",
   "trash.tabTrash": "Trash",
   "trash.tabConflicts": "Conflicts",
   "trash.noFiles": "No files in trash.",
@@ -1481,6 +1499,15 @@ const ja: TranslationStrings = {
   "settings.sync.backupTokenCopied": "コピーしました！",
   "settings.sync.backupTokenWarning": "このトークンはGoogle DriveのGemHubファイルへのフルアクセス権を付与します。約1時間で失効します。バックアップ中に失効した場合は再生成してください。",
   "settings.sync.backupTokenHide": "トークンを非表示",
+  "settings.sync.obsidianSync": "Obsidian 同期",
+  "settings.sync.obsidianSyncDescription": "Obsidian Gemini Helper プラグインで使用するため、暗号化された認証情報を Google Drive にエクスポートします。",
+  "settings.sync.obsidianPassword": "暗号化パスワード",
+  "settings.sync.obsidianExport": "Drive にエクスポート",
+  "settings.sync.obsidianExportSuccess": "認証情報をエクスポートしました！このトークンを Obsidian に貼り付けてセットアップを完了してください：",
+  "settings.sync.obsidianTokenLabel": "バックアップトークン（Obsidian に貼り付け）：",
+  "settings.sync.obsidianTokenCopy": "コピー",
+  "settings.sync.obsidianTokenCopied": "コピーしました！",
+  "settings.sync.obsidianTokenWarning": "このトークンは約1時間で失効します。速やかに Obsidian の設定に貼り付けてください。",
   "trash.tabTrash": "ゴミ箱",
   "trash.tabConflicts": "コンフリクト",
   "trash.noFiles": "ゴミ箱にファイルはありません。",
