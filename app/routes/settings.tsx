@@ -167,7 +167,6 @@ export async function action({ request }: Route.ActionArgs) {
 
   const formData = await request.formData();
   const _action = formData.get("_action") as string;
-
   try {
     switch (_action) {
       case "saveGeneral": {
@@ -1191,6 +1190,7 @@ function GeneralTab({
 
 function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   const { t } = useI18n();
+  const migrationFetcher = useFetcher<{ success?: boolean; migrationToken?: string; message?: string }>();
 
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
@@ -1477,23 +1477,24 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
     }
   }, []);
 
-  const handleGenerateMigrationToken = useCallback(async () => {
-    setActionLoading("migrationToken");
-    try {
-      const form = new FormData();
-      form.set("_action", "generateMigrationToken");
-      const res = await fetch("/settings", { method: "POST", body: form });
-      const json = await res.json();
-      if (json.migrationToken) {
-        setBackupToken(json.migrationToken);
+  const handleGenerateMigrationToken = useCallback(() => {
+    migrationFetcher.submit(
+      { _action: "generateMigrationToken" },
+      { method: "POST", action: "/settings" }
+    );
+  }, [migrationFetcher]);
+
+  useEffect(() => {
+    if (migrationFetcher.state === "idle" && migrationFetcher.data) {
+      const d = migrationFetcher.data;
+      if (d.migrationToken) {
+        setBackupToken(d.migrationToken);
         setBackupCopied(false);
+      } else if (d.message) {
+        setActionMsg(d.message);
       }
-    } catch {
-      setActionMsg("Failed to generate token.");
-    } finally {
-      setActionLoading(null);
     }
-  }, []);
+  }, [migrationFetcher.state, migrationFetcher.data]);
 
   const handleCopyBackupToken = useCallback(async () => {
     if (!backupToken) return;
@@ -1553,10 +1554,10 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           <button
             type="button"
             onClick={handleGenerateMigrationToken}
-            disabled={actionLoading === "migrationToken"}
+            disabled={migrationFetcher.state !== "idle"}
             className={actionBtnClass}
           >
-            {actionLoading === "migrationToken" ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+            {migrationFetcher.state !== "idle" ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
             {t("settings.sync.migrationTokenGenerate")}
           </button>
         ) : (
