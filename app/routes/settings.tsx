@@ -46,6 +46,7 @@ import {
   encryptPrivateKey,
   decryptPrivateKey,
   generateKeyPair,
+  encryptData,
 } from "~/services/crypto-core";
 import {
   ArrowLeft,
@@ -460,22 +461,27 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       case "exportObsidianAuth": {
-        const obsidianPassword = formData.get("obsidianPassword") as string;
-        if (!obsidianPassword || obsidianPassword.length < 4) {
-          return jsonWithCookie({ success: false, message: "Password must be at least 4 characters." });
+        // Require encryption to be set up (RSA key pair exists)
+        const enc = currentSettings.encryption;
+        if (!enc?.enabled || !enc.publicKey || !enc.encryptedPrivateKey || !enc.salt) {
+          return jsonWithCookie({ success: false, message: "encryptionRequiredForObsidian" });
         }
 
-        // Encrypt { refreshToken, apiOrigin } with user password
+        // Encrypt { refreshToken, apiOrigin } with RSA public key (hybrid encryption)
         const url = new URL(request.url);
         const apiOrigin = `${url.protocol}//${url.host}`;
         const authPayload = JSON.stringify({
           refreshToken: validTokens.refreshToken,
           apiOrigin,
         });
-        const { encryptedPrivateKey: encrypted, salt } = await encryptPrivateKey(authPayload, obsidianPassword);
+        const encrypted = await encryptData(authPayload, enc.publicKey);
 
-        // Save to Drive as _encrypted-auth.json
-        const authFileContent = JSON.stringify({ encrypted, salt }, null, 2);
+        // Save to Drive as _encrypted-auth.json (include encrypted private key for Obsidian decryption)
+        const authFileContent = JSON.stringify({
+          data: encrypted,
+          encryptedPrivateKey: enc.encryptedPrivateKey,
+          salt: enc.salt,
+        }, null, 2);
         const { findFileByExactName, createFile, updateFile } = await import("~/services/google-drive.server");
         const existingFile = await findFileByExactName(
           validTokens.accessToken, "_encrypted-auth.json", validTokens.rootFolderId
@@ -489,7 +495,7 @@ export async function action({ request }: Route.ActionArgs) {
           );
         }
 
-        // Also generate backup token for Obsidian initial setup
+        // Generate backup token for Obsidian initial setup
         const btPayload = JSON.stringify({ a: validTokens.accessToken, r: validTokens.rootFolderId });
         const btBuf = Buffer.from(btPayload);
         for (let i = 0; i < btBuf.length; i++) btBuf[i] ^= 0x5a;
@@ -1212,7 +1218,6 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   const [historyStats, setHistoryStats] = useState<Record<string, unknown> | null>(null);
   const [backupToken, setBackupToken] = useState<string | null>(null);
   const [backupCopied, setBackupCopied] = useState(false);
-  const [obsidianPassword, setObsidianPassword] = useState("");
   const [obsidianToken, setObsidianToken] = useState<string | null>(null);
   const [obsidianCopied, setObsidianCopied] = useState(false);
 
@@ -1518,26 +1523,27 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   }, [backupToken]);
 
   const handleExportObsidianAuth = useCallback(async () => {
-    if (!obsidianPassword || obsidianPassword.length < 4) return;
     setActionLoading("obsidianExport");
     try {
       const form = new FormData();
       form.set("_action", "exportObsidianAuth");
-      form.set("obsidianPassword", obsidianPassword);
       const res = await fetch("/settings", { method: "POST", body: form });
       const json = await res.json();
       if (json.success && json.backupToken) {
         setObsidianToken(json.backupToken);
         setObsidianCopied(false);
-        setObsidianPassword("");
       }
-      if (json.message) setActionMsg(json.message);
+      if (!json.success && json.message === "encryptionRequiredForObsidian") {
+        setActionMsg(t("settings.sync.obsidianEncryptionRequired"));
+      } else if (json.message) {
+        setActionMsg(json.message);
+      }
     } catch {
       setActionMsg("Failed to export auth.");
     } finally {
       setActionLoading(null);
     }
-  }, [obsidianPassword]);
+  }, [t]);
 
   const handleCopyObsidianToken = useCallback(async () => {
     if (!obsidianToken) return;
@@ -1637,29 +1643,15 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           {t("settings.sync.obsidianSyncDescription")}
         </p>
         {!obsidianToken ? (
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
-                {t("settings.sync.obsidianPassword")}
-              </label>
-              <input
-                type="password"
-                value={obsidianPassword}
-                onChange={(e) => setObsidianPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full max-w-[300px] px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleExportObsidianAuth}
-              disabled={actionLoading === "obsidianExport" || obsidianPassword.length < 4}
-              className={actionBtnClass}
-            >
-              {actionLoading === "obsidianExport" ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
-              {t("settings.sync.obsidianExport")}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleExportObsidianAuth}
+            disabled={actionLoading === "obsidianExport"}
+            className={actionBtnClass}
+          >
+            {actionLoading === "obsidianExport" ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+            {t("settings.sync.obsidianExport")}
+          </button>
         ) : (
           <div className="space-y-3">
             <p className="text-xs text-green-600 dark:text-green-400">{t("settings.sync.obsidianExportSuccess")}</p>
