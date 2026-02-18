@@ -1227,27 +1227,25 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
     try {
       const {
         setLocalSyncMeta,
-        getLocallyModifiedFileIds,
+        getAllCachedFiles,
         getCachedFile,
         setCachedFile,
+        deleteCachedFile,
         getCachedRemoteMeta,
         clearAllEditHistory,
-        deleteEditHistoryEntry,
       } = await import("~/services/indexeddb-cache");
       const { ragRegisterInBackground } = await import("~/services/rag-sync");
-      const allModifiedIds = await getLocallyModifiedFileIds();
+      const allCached = await getAllCachedFiles();
       const cachedRemote = await getCachedRemoteMeta();
-      const eligibleModifiedIds = new Set<string>();
 
       const pushedFiles: Array<{ fileId: string; content: string; fileName: string }> = [];
-      for (const fid of allModifiedIds) {
-        const cached = await getCachedFile(fid);
-        if (!cached) continue;
-        const fileName = cached.fileName ?? cachedRemote?.files?.[fid]?.name ?? fid;
+      for (const cached of allCached) {
+        // Skip binary (base64-encoded) files — they are uploaded directly to Drive
+        if (cached.encoding === "base64") continue;
+        const fileName = cached.fileName ?? cachedRemote?.files?.[cached.fileId]?.name ?? cached.fileId;
         if (isSyncExcludedPath(fileName)) continue;
-        eligibleModifiedIds.add(fid);
         pushedFiles.push({
-          fileId: fid,
+          fileId: cached.fileId,
           content: cached.content,
           fileName,
         });
@@ -1259,7 +1257,8 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "pushFiles",
-            files: pushedFiles.map(({ fileId, content }) => ({ fileId, content })),
+            files: pushedFiles.map(({ fileId, content, fileName }) => ({ fileId, content, fileName })),
+            forceRecreate: true,
           }),
         });
         if (!res.ok) throw new Error("Full push failed");
@@ -1269,16 +1268,31 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           : 0;
 
         const pushedResultIds = new Set<string>();
-        for (const r of data.results as Array<{ fileId: string; md5Checksum: string; modifiedTime: string }>) {
+        for (const r of data.results as Array<{ fileId: string; newFileId?: string; md5Checksum: string; modifiedTime: string }>) {
           pushedResultIds.add(r.fileId);
-          const cached = await getCachedFile(r.fileId);
-          if (cached) {
-            await setCachedFile({
-              ...cached,
-              md5Checksum: r.md5Checksum,
-              modifiedTime: r.modifiedTime,
-              cachedAt: Date.now(),
-            });
+          if (r.newFileId) {
+            // File was recreated with a new ID — remove old cache entry, create new one
+            const oldCached = await getCachedFile(r.fileId);
+            await deleteCachedFile(r.fileId);
+            if (oldCached) {
+              await setCachedFile({
+                ...oldCached,
+                fileId: r.newFileId,
+                md5Checksum: r.md5Checksum,
+                modifiedTime: r.modifiedTime,
+                cachedAt: Date.now(),
+              });
+            }
+          } else {
+            const cached = await getCachedFile(r.fileId);
+            if (cached) {
+              await setCachedFile({
+                ...cached,
+                md5Checksum: r.md5Checksum,
+                modifiedTime: r.modifiedTime,
+                cachedAt: Date.now(),
+              });
+            }
           }
         }
 
@@ -1301,22 +1315,17 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         } else {
           setLastUpdatedAt(new Date().toISOString());
         }
-        if (pushedResultIds.size === eligibleModifiedIds.size) {
-          await clearAllEditHistory();
-        } else {
-          for (const fileId of pushedResultIds) {
-            await deleteEditHistoryEntry(fileId);
-          }
-        }
+        // Full push covers all cached files — clear all edit history
+        await clearAllEditHistory();
         const successfulFiles = pushedFiles.filter((f) => pushedResultIds.has(f.fileId));
         ragRegisterInBackground(successfulFiles);
         const fullPushCompletion = getSyncCompletionStatus(skippedCount, "Full push");
         setActionMsg(fullPushCompletion.error ?? "Full push completed.");
-      } else if (allModifiedIds.size === 0) {
+      } else if (allCached.length === 0) {
         await clearAllEditHistory();
-        setActionMsg("No modified files to push.");
+        setActionMsg("No cached files to push.");
       } else {
-        setActionMsg("No sync-eligible modified files to push.");
+        setActionMsg("No sync-eligible cached files to push.");
       }
       window.dispatchEvent(new Event("sync-complete"));
     } catch (err) {

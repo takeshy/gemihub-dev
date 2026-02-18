@@ -226,11 +226,14 @@ export function useSync() {
       const diff = computeSyncDiff(localMeta, remoteMeta, modifiedIds);
 
       // 4. Reject push when remote has pending changes (pull first)
+      const localMetaFiles = localMeta?.files ?? {};
+      const remoteDeletedCount = diff.localOnly.filter(id => id in localMetaFiles).length;
       if (
         diff.conflicts.length > 0
         || diff.editDeleteConflicts.length > 0
         || diff.toPull.length > 0
         || diff.remoteOnly.length > 0
+        || remoteDeletedCount > 0
       ) {
         // Update cached remoteMeta so subsequent pull uses the fresh data
         if (remoteMeta) {

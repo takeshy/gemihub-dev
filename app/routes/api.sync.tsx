@@ -389,10 +389,15 @@ export async function action({ request }: Route.ActionArgs) {
 
     case "deleteUntracked": {
       const fileIds = body.fileIds as string[];
+      const trashFolderId = await ensureSubFolder(
+        validTokens.accessToken,
+        validTokens.rootFolderId,
+        "trash"
+      );
       let deletedCount = 0;
       await parallelProcess(fileIds, async (id) => {
         try {
-          await deleteFile(validTokens.accessToken, id);
+          await moveFile(validTokens.accessToken, id, trashFolderId, validTokens.rootFolderId);
           deletedCount++;
         } catch {
           // skip files that fail to delete
@@ -564,23 +569,27 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     case "pushFiles": {
-      const files = body.files as Array<{ fileId: string; content: string }>;
+      const files = body.files as Array<{ fileId: string; content: string; fileName?: string }>;
       if (!Array.isArray(files) || files.length === 0) {
         return logAndReturn({ error: "Missing or empty files array" }, { status: 400 });
       }
+      const forceRecreate = body.forceRecreate === true;
 
       const isNotFoundError = (err: unknown) =>
         err instanceof Error && /\b404\b/.test(err.message);
 
       // Use client-provided remoteMeta/syncMetaFileId to avoid redundant Drive API calls
+      // When forceRecreate, start from empty meta so it gets fully rebuilt from push results
       const clientRemoteMeta = body.remoteMeta as SyncMeta | undefined;
       const syncMetaFileId = (body.syncMetaFileId as string) ?? null;
-      const pushRemoteMeta: SyncMeta = clientRemoteMeta
-        ?? (await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId))
-        ?? { lastUpdatedAt: new Date().toISOString(), files: {} as SyncMeta["files"] };
+      const pushRemoteMeta: SyncMeta = forceRecreate
+        ? { lastUpdatedAt: new Date().toISOString(), files: {} as SyncMeta["files"] }
+        : clientRemoteMeta
+          ?? (await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId))
+          ?? { lastUpdatedAt: new Date().toISOString(), files: {} as SyncMeta["files"] };
 
       // Update files in parallel: read old content, skip upload if unchanged
-      const pushResults = await parallelProcess(files, async ({ fileId, content }) => {
+      const pushResults = await parallelProcess(files, async ({ fileId, content, fileName }) => {
         let oldContent: string | null = null;
         try {
           oldContent = await readFile(validTokens.accessToken, fileId);
@@ -595,9 +604,10 @@ export async function action({ request }: Route.ActionArgs) {
             ok: true as const,
             uploaded: false,
             fileId,
+            newFileId: undefined,
             md5Checksum: existingMeta?.md5Checksum ?? "",
             modifiedTime: existingMeta?.modifiedTime ?? "",
-            name: existingMeta?.name ?? "",
+            name: existingMeta?.name ?? fileName ?? "",
             mimeType: existingMeta?.mimeType ?? "",
             oldContent,
             newContent: content,
@@ -612,6 +622,7 @@ export async function action({ request }: Route.ActionArgs) {
             ok: true as const,
             uploaded: true,
             fileId,
+            newFileId: undefined,
             md5Checksum: updated.md5Checksum ?? "",
             modifiedTime: updated.modifiedTime ?? "",
             name: updated.name,
@@ -620,6 +631,29 @@ export async function action({ request }: Route.ActionArgs) {
             newContent: content,
           };
         } catch (err) {
+          // When forceRecreate is enabled and the file is 404, recreate it
+          if (isNotFoundError(err) && forceRecreate && fileName) {
+            try {
+              const created = await createFile(
+                validTokens.accessToken, fileName, content,
+                validTokens.rootFolderId, "text/plain",
+              );
+              return {
+                ok: true as const,
+                uploaded: true,
+                fileId,
+                newFileId: created.id,
+                md5Checksum: created.md5Checksum ?? "",
+                modifiedTime: created.modifiedTime ?? "",
+                name: created.name,
+                mimeType: created.mimeType,
+                oldContent: null,
+                newContent: content,
+              };
+            } catch {
+              return { ok: false as const, fileId };
+            }
+          }
           // Skip files that no longer exist on Drive.
           if (isNotFoundError(err)) {
             return {
@@ -631,24 +665,28 @@ export async function action({ request }: Route.ActionArgs) {
         }
       }, 5);
 
-      const successful = pushResults.filter((r): r is {
+      type PushSuccess = {
         ok: true;
         uploaded: boolean;
         fileId: string;
+        newFileId?: string;
         md5Checksum: string;
         modifiedTime: string;
         name: string;
         mimeType: string;
         oldContent: string | null;
         newContent: string;
-      } => r.ok);
+      };
+      const successful = pushResults.filter((r) => r.ok) as PushSuccess[];
       const skippedFileIds = pushResults.filter((r) => !r.ok).map((r) => r.fileId);
       const actuallyUploaded = successful.filter((r) => r.uploaded);
 
       // Update meta entries only for files that were actually uploaded
+      // For recreated files, use the newFileId as the meta key
       for (const r of actuallyUploaded) {
-        const existing = pushRemoteMeta.files[r.fileId];
-        pushRemoteMeta.files[r.fileId] = {
+        const metaFileId = r.newFileId ?? r.fileId;
+        const existing = pushRemoteMeta.files[metaFileId];
+        pushRemoteMeta.files[metaFileId] = {
           ...existing,
           name: r.name || existing?.name || "",
           mimeType: r.mimeType || existing?.mimeType || "",
@@ -660,7 +698,7 @@ export async function action({ request }: Route.ActionArgs) {
       if (actuallyUploaded.length > 0) {
         pushRemoteMeta.lastUpdatedAt = new Date().toISOString();
         // Write sync meta once, using fileId directly if available to skip findFileByExactName
-        if (syncMetaFileId) {
+        if (syncMetaFileId && !forceRecreate) {
           await updateFile(validTokens.accessToken, syncMetaFileId,
             JSON.stringify(pushRemoteMeta, null, 2), "application/json");
         } else {
@@ -696,6 +734,7 @@ export async function action({ request }: Route.ActionArgs) {
       return logAndReturn({
         results: successful.map((r) => ({
           fileId: r.fileId,
+          newFileId: r.newFileId,
           md5Checksum: r.md5Checksum,
           modifiedTime: r.modifiedTime,
         })),

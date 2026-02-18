@@ -371,7 +371,7 @@ export async function moveFile(
   return res.json();
 }
 
-// Delete a file
+// Delete a file permanently (use for temp/system files only; user files should use soft delete via trash/ folder)
 export async function deleteFile(
   accessToken: string,
   fileId: string
