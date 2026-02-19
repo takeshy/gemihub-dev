@@ -8,8 +8,9 @@ const SCOPES = [
 
 function getOAuth2Client(request?: Request) {
   const url = request ? new URL(request.url) : null;
+  const proto = request?.headers.get("x-forwarded-proto") || url?.protocol.replace(":", "");
   const redirectUri = url
-    ? `${url.protocol}//${url.host}/auth/google/callback`
+    ? `${proto}://${url.host}/auth/google/callback`
     : process.env.GOOGLE_REDIRECT_URI;
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
