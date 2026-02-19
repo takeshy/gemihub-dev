@@ -5,6 +5,7 @@ export interface TranslationStrings {
   "common.save": string;
   "common.cancel": string;
   "common.close": string;
+  "common.ok": string;
   "common.settings": string;
   "common.logout": string;
 
@@ -272,6 +273,19 @@ export interface TranslationStrings {
   "settings.sync.rebuild": string;
   "settings.sync.dangerZone": string;
   "settings.sync.dangerZoneDescription": string;
+  "settings.sync.fullPushCompleted": string;
+  "settings.sync.fullPushSkipped": string;
+  "settings.sync.noCachedFiles": string;
+  "settings.sync.noSyncEligibleFiles": string;
+  "settings.sync.fullPushFailed": string;
+  "settings.sync.fullPullCompleted": string;
+  "settings.sync.fullPullFailed": string;
+  "settings.sync.detectionFailed": string;
+  "settings.sync.rebuildFailed": string;
+  "settings.sync.rebuildCompleted": string;
+  "settings.sync.pruneFailed": string;
+  "settings.sync.pruneError": string;
+  "settings.sync.failedToLoadStats": string;
 
   // Temp diff modal
   "tempDiff.title": string;
@@ -521,6 +535,7 @@ const en: TranslationStrings = {
   "common.save": "Save",
   "common.cancel": "Cancel",
   "common.close": "Close",
+  "common.ok": "OK",
   "common.settings": "Settings",
   "common.logout": "Logout",
 
@@ -787,6 +802,19 @@ const en: TranslationStrings = {
   "settings.sync.rebuild": "Rebuild",
   "settings.sync.dangerZone": "Danger Zone",
   "settings.sync.dangerZoneDescription": "These operations may cause data loss and cannot be undone.",
+  "settings.sync.fullPushCompleted": "Full push completed.",
+  "settings.sync.fullPushSkipped": "Full push completed with warning: skipped {count} file(s).",
+  "settings.sync.noCachedFiles": "No cached files to push.",
+  "settings.sync.noSyncEligibleFiles": "No sync-eligible cached files to push.",
+  "settings.sync.fullPushFailed": "Full push failed.",
+  "settings.sync.fullPullCompleted": "Full pull completed. Downloaded {count} file(s).",
+  "settings.sync.fullPullFailed": "Full pull failed.",
+  "settings.sync.detectionFailed": "Detection failed.",
+  "settings.sync.rebuildFailed": "Rebuild failed.",
+  "settings.sync.rebuildCompleted": "Sync meta rebuilt.",
+  "settings.sync.pruneFailed": "Prune failed.",
+  "settings.sync.pruneError": "Prune error.",
+  "settings.sync.failedToLoadStats": "Failed to load stats.",
 
   // Temp diff modal
   "tempDiff.title": "Temp File Comparison",
@@ -1036,6 +1064,7 @@ const ja: TranslationStrings = {
   "common.save": "保存",
   "common.cancel": "キャンセル",
   "common.close": "閉じる",
+  "common.ok": "OK",
   "common.settings": "設定",
   "common.logout": "ログアウト",
 
@@ -1302,6 +1331,19 @@ const ja: TranslationStrings = {
   "settings.sync.rebuild": "再構築",
   "settings.sync.dangerZone": "危険な操作",
   "settings.sync.dangerZoneDescription": "これらの操作はデータ損失を引き起こす可能性があり、元に戻せません。",
+  "settings.sync.fullPushCompleted": "完全Pushが完了しました。",
+  "settings.sync.fullPushSkipped": "完全Pushが完了しましたが、{count}件のファイルをスキップしました。",
+  "settings.sync.noCachedFiles": "Pushするキャッシュファイルがありません。",
+  "settings.sync.noSyncEligibleFiles": "同期対象のキャッシュファイルがありません。",
+  "settings.sync.fullPushFailed": "完全Pushに失敗しました。",
+  "settings.sync.fullPullCompleted": "完全Pullが完了しました。{count}件のファイルをダウンロードしました。",
+  "settings.sync.fullPullFailed": "完全Pullに失敗しました。",
+  "settings.sync.detectionFailed": "検出に失敗しました。",
+  "settings.sync.rebuildFailed": "再構築に失敗しました。",
+  "settings.sync.rebuildCompleted": "同期メタデータを再構築しました。",
+  "settings.sync.pruneFailed": "整理に失敗しました。",
+  "settings.sync.pruneError": "整理中にエラーが発生しました。",
+  "settings.sync.failedToLoadStats": "統計の読み込みに失敗しました。",
 
   // Temp diff modal
   "tempDiff.title": "一時ファイルの比較",

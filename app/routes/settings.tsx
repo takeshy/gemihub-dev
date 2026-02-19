@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { data, useLoaderData, useFetcher, useNavigate } from "react-router";
 import type { Route } from "./+types/settings";
 import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } from "~/services/session.server";
@@ -686,15 +687,18 @@ function SaveButton({ loading }: { loading?: boolean }) {
   );
 }
 
-function ErrorDialog({
+function NotifyDialog({
   message,
+  variant = "info",
   onClose,
 }: {
   message: string;
+  variant?: "info" | "error";
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  return (
+  const isError = variant === "error";
+  const dialog = (
     <div
       className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50"
       onClick={onClose}
@@ -704,9 +708,9 @@ function ErrorDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-          <h3 className="text-sm font-semibold text-red-600 dark:text-red-400 flex items-center gap-2">
-            <AlertCircle size={16} />
-            {t("settings.general.errorTitle")}
+          <h3 className={`text-sm font-semibold flex items-center gap-2 ${isError ? "text-red-600 dark:text-red-400" : "text-blue-600 dark:text-blue-400"}`}>
+            {isError ? <AlertCircle size={16} /> : <Check size={16} />}
+            {isError ? t("settings.general.errorTitle") : t("common.ok")}
           </h3>
           <button
             onClick={onClose}
@@ -729,6 +733,10 @@ function ErrorDialog({
       </div>
     </div>
   );
+  if (typeof document !== "undefined") {
+    return createPortal(dialog, document.body);
+  }
+  return dialog;
 }
 
 const inputClass =
@@ -837,7 +845,7 @@ function GeneralTab({
 
       {/* Error dialog (modal) */}
       {errorMessage && (
-        <ErrorDialog message={errorMessage} onClose={() => setErrorMessage(null)} />
+        <NotifyDialog message={errorMessage} variant="error" onClose={() => setErrorMessage(null)} />
       )}
 
       <fetcher.Form method="post">
@@ -1203,6 +1211,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   const [pruneMsg, setPruneMsg] = useState<string | null>(null);
   const [historyStats, setHistoryStats] = useState<Record<string, unknown> | null>(null);
   const [backupToken, setBackupToken] = useState<string | null>(null);
+  const [notifyDialog, setNotifyDialog] = useState<{ message: string; variant: "info" | "error" } | null>(null);
   const [backupCopied, setBackupCopied] = useState(false);
 
   // Load lastUpdatedAt from IndexedDB
@@ -1319,16 +1328,20 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         const successfulFiles = pushedFiles.filter((f) => pushedResultIds.has(f.fileId));
         ragRegisterInBackground(successfulFiles);
         const fullPushCompletion = getSyncCompletionStatus(skippedCount, "Full push");
-        setActionMsg(fullPushCompletion.error ?? "Full push completed.");
+        if (fullPushCompletion.error) {
+          setNotifyDialog({ message: t("settings.sync.fullPushSkipped").replace("{count}", String(skippedCount)), variant: "error" });
+        } else {
+          setNotifyDialog({ message: t("settings.sync.fullPushCompleted"), variant: "info" });
+        }
       } else if (allCached.length === 0) {
         await clearAllEditHistory();
-        setActionMsg("No cached files to push.");
+        setNotifyDialog({ message: t("settings.sync.noCachedFiles"), variant: "info" });
       } else {
-        setActionMsg("No sync-eligible cached files to push.");
+        setNotifyDialog({ message: t("settings.sync.noSyncEligibleFiles"), variant: "info" });
       }
       window.dispatchEvent(new Event("sync-complete"));
     } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : "Full push failed.");
+      setNotifyDialog({ message: err instanceof Error ? err.message : t("settings.sync.fullPushFailed"), variant: "error" });
     } finally {
       setActionLoading(null);
     }
@@ -1350,7 +1363,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "fullPull", skipHashes }),
       });
-      if (!res.ok) throw new Error("Full pull failed");
+      if (!res.ok) throw new Error(t("settings.sync.fullPullFailed"));
       const data = await res.json();
 
       const updatedMeta = {
@@ -1394,9 +1407,9 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       if (pulledIds.length > 0) {
         window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: pulledIds } }));
       }
-      setActionMsg(`Full pull completed. Downloaded ${data.files.length} file(s).`);
+      setNotifyDialog({ message: t("settings.sync.fullPullCompleted").replace("{count}", String(data.files.length)), variant: "info" });
     } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : "Full pull failed.");
+      setNotifyDialog({ message: err instanceof Error ? err.message : t("settings.sync.fullPullFailed"), variant: "error" });
     } finally {
       setActionLoading(null);
     }
@@ -1411,15 +1424,15 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "detectUntracked" }),
       });
-      if (!res.ok) throw new Error("Detection failed");
+      if (!res.ok) throw new Error(t("settings.sync.detectionFailed"));
       const data = await res.json();
       setUntrackedFiles(data.untrackedFiles);
     } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : "Detection failed.");
+      setActionMsg(err instanceof Error ? err.message : t("settings.sync.detectionFailed"));
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  }, [t]);
 
   const handleRebuildTree = useCallback(async () => {
     setActionLoading("rebuildTree");
@@ -1430,16 +1443,16 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       const res = await fetch("/settings", { method: "POST", body: fd });
       const resData = await res.json();
       if (res.ok && resData.success) {
-        setActionMsg(resData.message);
+        setActionMsg(t("settings.sync.rebuildCompleted"));
       } else {
-        setActionMsg(resData.message || "Rebuild failed.");
+        setActionMsg(resData.message || t("settings.sync.rebuildFailed"));
       }
     } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : "Rebuild failed.");
+      setActionMsg(err instanceof Error ? err.message : t("settings.sync.rebuildFailed"));
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  }, [t]);
 
   const handlePrune = useCallback(async () => {
     if (!window.confirm(t("settings.editHistory.pruneConfirm"))) return;
@@ -1449,7 +1462,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       const res = await fetch("/api/settings/edit-history-prune", { method: "POST" });
       const resData = await res.json();
       if (!res.ok) {
-        setPruneMsg(resData.error || "Prune failed.");
+        setPruneMsg(resData.error || t("settings.sync.pruneFailed"));
         return;
       }
       const { deletedCount, remainingEntries, totalFiles } = resData as {
@@ -1466,7 +1479,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           .replace("{files}", String(totalFiles)));
       }
     } catch (err) {
-      setPruneMsg(err instanceof Error ? err.message : "Prune error.");
+      setPruneMsg(err instanceof Error ? err.message : t("settings.sync.pruneError"));
     } finally {
       setActionLoading(null);
     }
@@ -1479,11 +1492,11 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       const data = await res.json();
       setHistoryStats(data);
     } catch {
-      setHistoryStats({ error: "Failed to load stats." });
+      setHistoryStats({ error: t("settings.sync.failedToLoadStats") });
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  }, [t]);
 
   const handleGenerateMigrationToken = useCallback(() => {
     migrationFetcher.submit(
@@ -1520,6 +1533,15 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
 
   return (
     <div className="space-y-6">
+      {/* Notify dialog (portal) */}
+      {notifyDialog && (
+        <NotifyDialog
+          message={notifyDialog.message}
+          variant={notifyDialog.variant}
+          onClose={() => setNotifyDialog(null)}
+        />
+      )}
+
       {/* Status message */}
       {actionMsg && (
         <div className="p-3 rounded-md border text-sm bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
