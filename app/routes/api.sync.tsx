@@ -7,7 +7,9 @@ import {
   readFile,
   readFileBase64,
   createFile,
+  createFileBinary,
   updateFile,
+  updateFileBinary,
   getFileMetadata,
   deleteFile,
   moveFile,
@@ -29,6 +31,27 @@ import { parallelProcess } from "~/utils/parallel";
 import { saveEdit } from "~/services/edit-history.server";
 import { handleRagAction } from "~/services/sync-rag.server";
 import { createLogContext, emitLog } from "~/services/logger.server";
+
+function guessMimeType(fileName: string): string {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".json")) return "application/json";
+  if (lower.endsWith(".md")) return "text/markdown";
+  if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
+  if (lower.endsWith(".csv")) return "text/csv";
+  if (lower.endsWith(".xml")) return "application/xml";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".zip")) return "application/zip";
+  if (lower.endsWith(".mp3")) return "audio/mpeg";
+  if (lower.endsWith(".mp4")) return "video/mp4";
+  if (lower.endsWith(".webm")) return "video/webm";
+  return "text/plain";
+}
 
 // GET: Fetch remote sync meta + current file list
 export async function loader({ request }: Route.LoaderArgs) {
@@ -569,7 +592,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     case "pushFiles": {
-      const files = body.files as Array<{ fileId: string; content: string; fileName?: string }>;
+      const files = body.files as Array<{ fileId: string; content: string; fileName?: string; encoding?: "base64" }>;
       if (!Array.isArray(files) || files.length === 0) {
         return logAndReturn({ error: "Missing or empty files array" }, { status: 400 });
       }
@@ -589,7 +612,58 @@ export async function action({ request }: Route.ActionArgs) {
           ?? { lastUpdatedAt: new Date().toISOString(), files: {} as SyncMeta["files"] };
 
       // Update files in parallel: read old content, skip upload if unchanged
-      const pushResults = await parallelProcess(files, async ({ fileId, content, fileName }) => {
+      const pushResults = await parallelProcess(files, async ({ fileId, content, fileName, encoding }) => {
+        const isBinary = encoding === "base64";
+
+        // --- Binary file path: decode base64 → use binary upload/create ---
+        if (isBinary) {
+          const buf = Buffer.from(content, "base64");
+          const mimeType = fileName ? guessMimeType(fileName) : "application/octet-stream";
+          try {
+            const updated = await updateFileBinary(validTokens.accessToken, fileId, buf, mimeType);
+            return {
+              ok: true as const,
+              uploaded: true,
+              fileId,
+              newFileId: undefined,
+              md5Checksum: updated.md5Checksum ?? "",
+              modifiedTime: updated.modifiedTime ?? "",
+              name: updated.name,
+              mimeType: updated.mimeType,
+              oldContent: null,
+              newContent: null,
+            };
+          } catch (err) {
+            if (isNotFoundError(err) && forceRecreate && fileName) {
+              try {
+                const created = await createFileBinary(
+                  validTokens.accessToken, fileName, buf,
+                  validTokens.rootFolderId, mimeType,
+                );
+                return {
+                  ok: true as const,
+                  uploaded: true,
+                  fileId,
+                  newFileId: created.id,
+                  md5Checksum: created.md5Checksum ?? "",
+                  modifiedTime: created.modifiedTime ?? "",
+                  name: created.name,
+                  mimeType: created.mimeType,
+                  oldContent: null,
+                  newContent: null,
+                };
+              } catch {
+                return { ok: false as const, fileId };
+              }
+            }
+            if (isNotFoundError(err)) {
+              return { ok: false as const, fileId };
+            }
+            throw err;
+          }
+        }
+
+        // --- Text file path ---
         let oldContent: string | null = null;
         try {
           oldContent = await readFile(validTokens.accessToken, fileId);
@@ -598,7 +672,8 @@ export async function action({ request }: Route.ActionArgs) {
         }
 
         // Skip upload if content is identical to remote
-        if (oldContent !== null && oldContent === content) {
+        // When forceRecreate, always upload so meta gets rebuilt with valid md5/modifiedTime
+        if (!forceRecreate && oldContent !== null && oldContent === content) {
           const existingMeta = pushRemoteMeta.files[fileId];
           return {
             ok: true as const,
@@ -615,7 +690,7 @@ export async function action({ request }: Route.ActionArgs) {
         }
 
         const existingMeta = pushRemoteMeta.files[fileId];
-        const mimeType = existingMeta?.mimeType || "text/plain";
+        const mimeType = existingMeta?.mimeType || (fileName ? guessMimeType(fileName) : "text/plain");
         try {
           const updated = await updateFile(validTokens.accessToken, fileId, content, mimeType);
           return {
@@ -636,7 +711,7 @@ export async function action({ request }: Route.ActionArgs) {
             try {
               const created = await createFile(
                 validTokens.accessToken, fileName, content,
-                validTokens.rootFolderId, "text/plain",
+                validTokens.rootFolderId, guessMimeType(fileName),
               );
               return {
                 ok: true as const,
@@ -675,7 +750,7 @@ export async function action({ request }: Route.ActionArgs) {
         name: string;
         mimeType: string;
         oldContent: string | null;
-        newContent: string;
+        newContent: string | null;
       };
       const successful = pushResults.filter((r) => r.ok) as PushSuccess[];
       const skippedFileIds = pushResults.filter((r) => !r.ok).map((r) => r.fileId);
@@ -720,7 +795,7 @@ export async function action({ request }: Route.ActionArgs) {
               await saveEdit(validTokens.accessToken, validTokens.rootFolderId, settings.editHistory, {
                 path: r.name,
                 oldContent: r.oldContent!,
-                newContent: r.newContent,
+                newContent: r.newContent!,
                 source: "manual",
               });
             }, 5);

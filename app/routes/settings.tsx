@@ -1238,16 +1238,15 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       const allCached = await getAllCachedFiles();
       const cachedRemote = await getCachedRemoteMeta();
 
-      const pushedFiles: Array<{ fileId: string; content: string; fileName: string }> = [];
+      const pushedFiles: Array<{ fileId: string; content: string; fileName: string; encoding?: "base64" }> = [];
       for (const cached of allCached) {
-        // Skip binary (base64-encoded) files — they are uploaded directly to Drive
-        if (cached.encoding === "base64") continue;
         const fileName = cached.fileName ?? cachedRemote?.files?.[cached.fileId]?.name ?? cached.fileId;
         if (isSyncExcludedPath(fileName)) continue;
         pushedFiles.push({
           fileId: cached.fileId,
           content: cached.content,
           fileName,
+          ...(cached.encoding === "base64" ? { encoding: "base64" as const } : {}),
         });
       }
 
@@ -1257,7 +1256,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "pushFiles",
-            files: pushedFiles.map(({ fileId, content, fileName }) => ({ fileId, content, fileName })),
+            files: pushedFiles,
             forceRecreate: true,
           }),
         });
