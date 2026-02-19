@@ -75,7 +75,7 @@ module "gemihub" {
   session_secret                 = var.session_secret
   google_site_verification_token = var.google_site_verification_token
   manage_bigquery_views          = false
-  root_folder_name               = "gemihub-stg"
+  root_folder_name               = "gemihub"
 }
 
 # --------------- Outputs ---------------
