@@ -117,7 +117,7 @@ export async function action({ request }: Route.ActionArgs) {
     "pullDirect", "resolve", "fullPull",
     "clearConflicts", "detectUntracked", "deleteUntracked", "restoreUntracked",
     "listTrash", "restoreTrash", "listConflicts", "restoreConflict",
-    "pushFiles",
+    "pushFiles", "rebuildTree",
     "ragRegister", "ragSave", "ragDeleteDoc", "ragRetryPending",
   ]);
   if (!actionType || !VALID_ACTIONS.has(actionType)) {
@@ -816,6 +816,11 @@ export async function action({ request }: Route.ActionArgs) {
         skippedFileIds,
         remoteMeta: pushRemoteMeta,
       });
+    }
+
+    case "rebuildTree": {
+      await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+      return logAndReturn({ success: true, message: "Sync meta rebuilt." });
     }
 
     case "ragRegister":
