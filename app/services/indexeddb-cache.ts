@@ -19,7 +19,7 @@ export interface CachedFile {
 export interface LocalSyncMeta {
   id: "current"; // primary key (fixed key, always 1 record)
   lastUpdatedAt: string;
-  files: Record<string, { md5Checksum: string; modifiedTime: string }>;
+  files: Record<string, { md5Checksum: string; modifiedTime: string; name?: string }>;
 }
 
 export interface EditHistoryDiff {
