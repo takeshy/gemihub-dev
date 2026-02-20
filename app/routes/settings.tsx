@@ -461,7 +461,8 @@ export async function action({ request }: Route.ActionArgs) {
         const enc = currentSettings.encryption;
         if (enc?.enabled && enc.publicKey && enc.encryptedPrivateKey && enc.salt) {
           const url = new URL(request.url);
-          const apiOrigin = `${url.protocol}//${url.host}`;
+          const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
+          const apiOrigin = `${proto}://${url.host}`;
           const authPayload = JSON.stringify({
             refreshToken: validTokens.refreshToken,
             apiOrigin,
