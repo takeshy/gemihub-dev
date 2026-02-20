@@ -528,6 +528,12 @@ export interface TranslationStrings {
   // Offline
   "offline.indicator": string;
   "offline.banner": string;
+
+  // Root folder mismatch
+  "rootMismatch.title": string;
+  "rootMismatch.description": string;
+  "rootMismatch.migrating": string;
+  "rootMismatch.confirm": string;
 }
 
 const en: TranslationStrings = {
@@ -1057,6 +1063,12 @@ const en: TranslationStrings = {
   // Offline
   "offline.indicator": "Offline",
   "offline.banner": "You are in offline mode. Some features are unavailable.",
+
+  // Root folder mismatch
+  "rootMismatch.title": "New gemihub folder detected",
+  "rootMismatch.description": "Your local cached files will be moved to conflicts. You can restore them from Settings > Conflicts.",
+  "rootMismatch.migrating": "Migrating...",
+  "rootMismatch.confirm": "OK",
 };
 
 const ja: TranslationStrings = {
@@ -1586,6 +1598,12 @@ const ja: TranslationStrings = {
   // Offline
   "offline.indicator": "オフライン",
   "offline.banner": "オフラインモードです。一部の機能は利用できません。",
+
+  // Root folder mismatch
+  "rootMismatch.title": "新しいgemihubフォルダを検出しました",
+  "rootMismatch.description": "ローカルキャッシュのファイルをコンフリクトに移動します。設定のコンフリクト管理から復元できます。",
+  "rootMismatch.migrating": "移行中...",
+  "rootMismatch.confirm": "OK",
 };
 
 const translations: Record<Language, TranslationStrings> = { en, ja };

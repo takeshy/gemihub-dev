@@ -1,5 +1,5 @@
 import type { Route } from "./+types/api.sync";
-import { requireAuth } from "~/services/session.server";
+import { requireAuth, setTokens, commitSession } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import {
@@ -117,7 +117,7 @@ export async function action({ request }: Route.ActionArgs) {
     "pullDirect", "resolve", "fullPull",
     "clearConflicts", "detectUntracked", "deleteUntracked", "restoreUntracked",
     "listTrash", "restoreTrash", "listConflicts", "restoreConflict",
-    "pushFiles", "rebuildTree",
+    "pushFiles", "rebuildTree", "migrateRootFolder",
     "ragRegister", "ragSave", "ragDeleteDoc", "ragRetryPending",
   ]);
   if (!actionType || !VALID_ACTIONS.has(actionType)) {
@@ -816,6 +816,45 @@ export async function action({ request }: Route.ActionArgs) {
         skippedFileIds,
         remoteMeta: pushRemoteMeta,
       });
+    }
+
+    case "migrateRootFolder": {
+      const newRootFolderId = body.newRootFolderId as string;
+      const files = body.files as Array<{ fileName: string; content: string }> | undefined;
+
+      if (!newRootFolderId) {
+        return logAndReturn({ error: "Missing newRootFolderId" }, { status: 400 });
+      }
+
+      // Save cached files to sync_conflicts/ in the new root folder
+      if (files && files.length > 0) {
+        const newSettings = await getSettings(validTokens.accessToken, newRootFolderId);
+        const conflictFolder = newSettings.syncConflictFolder || "sync_conflicts";
+        await parallelProcess(files, async ({ fileName, content }) => {
+          try {
+            await saveConflictBackup(
+              validTokens.accessToken,
+              newRootFolderId,
+              conflictFolder,
+              fileName,
+              content
+            );
+          } catch {
+            // Best-effort: skip files that fail to save
+          }
+        }, 5);
+      }
+
+      // Update session with new rootFolderId
+      const updatedTokens = { ...validTokens, rootFolderId: newRootFolderId };
+      const session = await setTokens(request, updatedTokens);
+      const cookie = await commitSession(session);
+      logCtx.details = { migratedCount: files?.length ?? 0, newRootFolderId };
+      emitLog(logCtx, 200);
+      return Response.json(
+        { success: true, migratedCount: files?.length ?? 0 },
+        { headers: { "Set-Cookie": cookie } }
+      );
     }
 
     case "rebuildTree": {
