@@ -574,7 +574,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   systemPrompt: "",
   maxFunctionCalls: 20,
   functionCallWarningThreshold: 5,
-  rootFolderName: "GeminiHub",
+  rootFolderName: "gemihub",
   language: null,
   fontSize: 16,
   theme: "system",
