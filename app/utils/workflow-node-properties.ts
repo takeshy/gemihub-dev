@@ -57,6 +57,7 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
         { key: "contentType", label: "Content Type", required: false, options: ["json", "text", "form-data", "binary"], defaultValue: "json" },
         { key: "headers", label: "Headers", required: false, multiline: true, placeholder: '{"Authorization": "Bearer ..."}' },
         { key: "body", label: "Body", required: false, multiline: true },
+        { key: "responseType", label: "Response Type", required: false, options: ["auto", "text", "binary"], defaultValue: "auto" },
         { key: "saveTo", label: "Save To", required: false, placeholder: "response" },
         { key: "saveStatus", label: "Save Status To", required: false, placeholder: "statusCode" },
         { key: "throwOnError", label: "Throw On Error", required: false, options: ["false", "true"], defaultValue: "false" },

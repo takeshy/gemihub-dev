@@ -47,7 +47,7 @@ export interface TranslationStrings {
   "chat.mcpToolsLabel": string;
   "chat.toolModeLockGemma": string;
   "chat.toolModeLockWebSearch": string;
-  "chat.toolModeLockFlashLiteRag": string;
+  "chat.toolModeLockRag": string;
   "chat.toolModeLocked": string;
   "chat.unpushWarning.title": string;
   "chat.unpushWarning.description": string;
@@ -575,7 +575,7 @@ const en: TranslationStrings = {
   "chat.mcpToolsLabel": "MCP Tools",
   "chat.toolModeLockGemma": "Gemma models don't support function calling",
   "chat.toolModeLockWebSearch": "Drive tools are disabled during Web Search",
-  "chat.toolModeLockFlashLiteRag": "Drive tools are disabled when Flash Lite uses RAG",
+  "chat.toolModeLockRag": "Drive tools are disabled when RAG is enabled",
   "chat.toolModeLocked": "Auto (locked)",
   "chat.unpushWarning.title": "Unpushed Changes",
   "chat.unpushWarning.description": "The following files have local changes not yet pushed to Drive. The AI may see outdated content.",
@@ -1104,7 +1104,7 @@ const ja: TranslationStrings = {
   "chat.mcpToolsLabel": "MCPツール",
   "chat.toolModeLockGemma": "Gemmaモデルはファンクションコールに対応していません",
   "chat.toolModeLockWebSearch": "Web Search中はDriveツールは無効です",
-  "chat.toolModeLockFlashLiteRag": "Flash LiteでRAG使用時はDriveツールは無効です",
+  "chat.toolModeLockRag": "RAG使用時はDriveツールは無効です",
   "chat.toolModeLocked": "自動（ロック中）",
   "chat.unpushWarning.title": "未プッシュの変更",
   "chat.unpushWarning.description": "以下のファイルにはDriveにプッシュされていないローカル変更があります。AIは古い内容を参照する可能性があります。",
