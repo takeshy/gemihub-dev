@@ -17,6 +17,7 @@ import { cryptoCache } from "~/services/crypto-cache";
 import { deleteCachedFile } from "~/services/indexeddb-cache";
 import { TempDiffModal } from "./TempDiffModal";
 import { EditorToolbarActions } from "./EditorToolbarActions";
+import { unescapeMarkdown } from "wysimark-lite";
 
 interface EncryptedFileViewerProps {
   fileId: string;
@@ -46,10 +47,10 @@ export function EncryptedFileViewer({
   const [password, setPassword] = useState("");
   // If content is plain text, skip password — go straight to editor
   const [decryptedContent, setDecryptedContent] = useState<string | null>(
-    contentIsEncrypted ? null : encryptedContent
+    contentIsEncrypted ? null : unescapeMarkdown(encryptedContent)
   );
   const [editedContent, setEditedContent] = useState(
-    contentIsEncrypted ? "" : encryptedContent
+    contentIsEncrypted ? "" : unescapeMarkdown(encryptedContent)
   );
   const [decrypting, setDecrypting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,8 +79,8 @@ export function EncryptedFileViewer({
   useEffect(() => {
     if (prevFileIdRef.current !== fileId || prevContentRef.current !== encryptedContent) {
       const encrypted = isEncryptedFile(encryptedContent);
-      setDecryptedContent(encrypted ? null : encryptedContent);
-      setEditedContent(encrypted ? "" : encryptedContent);
+      setDecryptedContent(encrypted ? null : unescapeMarkdown(encryptedContent));
+      setEditedContent(encrypted ? "" : unescapeMarkdown(encryptedContent));
       setError(null);
       setPassword("");
       if (prevFileIdRef.current !== fileId) {
@@ -122,8 +123,9 @@ export function EncryptedFileViewer({
     doDecrypt
       .then((plain) => {
         if (cancelled) return;
-        setDecryptedContent(plain);
-        setEditedContent(plain);
+        const unescaped = unescapeMarkdown(plain);
+        setDecryptedContent(unescaped);
+        setEditedContent(unescaped);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -201,8 +203,9 @@ export function EncryptedFileViewer({
       cryptoCache.setPassword(password);
       cryptoCache.setPrivateKey(pk);
       const plain = await decryptData(parsed.data, pk);
-      setDecryptedContent(plain);
-      setEditedContent(plain);
+      const unescaped = unescapeMarkdown(plain);
+      setDecryptedContent(unescaped);
+      setEditedContent(unescaped);
     } catch (e) {
       console.error("[EncryptedFileViewer] decrypt failed:", e);
       const msg = e instanceof Error ? e.message : String(e);
